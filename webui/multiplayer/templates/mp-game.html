@@ -70,6 +70,7 @@ body.p1-turn{background:#1a2e1a}
 <body>
 
 <div id="controls">
+  <span id="actions-counter" style="color:#4fc3f7;font-size:12px;padding:4px 8px;background:#0f3460;border-radius:3px;margin-right:8px">Acciones: -</span>
   <span class="phase-actions">
     <button class="btn primary" onclick="doAction('play')">Jugar carta</button>
     <button class="btn" onclick="doAction('link')">Vincular</button>
@@ -259,6 +260,8 @@ function loadState(s) {
   const isAttack = s.phase === 'attack';
   updateControls(s);
   document.body.className = 'p' + s.active_player + '-turn';
+  
+  document.getElementById('actions-counter').textContent = 'Acciones: ' + (s.actions !== undefined ? s.actions : '-');
   
   const indicator = document.getElementById('player-indicator');
   indicator.textContent = myTurn ? 'TU TURNO' : 'Turno de: Jugador ' + (s.active_player + 1);

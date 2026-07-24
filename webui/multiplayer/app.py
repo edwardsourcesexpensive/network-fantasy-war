@@ -83,24 +83,24 @@ def filtered_state(game, player_id):
                 "members": members,
             })
     
-    # Links
+    # Links — use position-based keys matching DOM data-cid format
     links = {}
     links_pairs = []
     for cid, c in game.all_cards.items():
         if c.position:
+            owner_p, owner_li, owner_m = c.position
+            pos_key = f"{owner_p},{owner_li},{owner_m}"
             linked = list(game.network.links.get(cid, set()))
             if linked:
-                links[cid] = linked
+                links[pos_key] = [f"{game.all_cards[lid].position[0]},{game.all_cards[lid].position[1]},{game.all_cards[lid].position[2]}" for lid in linked if game.all_cards.get(lid) and game.all_cards[lid].position]
                 for lid in linked:
                     if cid < lid:
                         tc = game.all_cards.get(lid)
                         if tc and tc.position:
-                            _, fl, fm = c.position
-                            _, tl, tm = tc.position
+                            tp, tl, tm = tc.position
                             links_pairs.append({
-                                "from": cid, "to": lid,
-                                "p0": c.owner, "l0": fl, "m0": fm,
-                                "p1": tc.owner, "l1": tl, "m1": tm,
+                                "from": f"{owner_p},{owner_li},{owner_m}",
+                                "to": f"{tp},{tl},{tm}",
                             })
     
     return {
@@ -110,6 +110,7 @@ def filtered_state(game, player_id):
         "winner": game.winner,
         "seals": game.seals[:],
         "turn": game.turn_number,
+        "actions": game.actions_remaining,
         "hand": hand,
         "opponent_hand_size": opp_hand_size,
         "player_id": player_id,
