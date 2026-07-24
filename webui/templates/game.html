@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network Fantasy War</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#e0e0e0;font-family:monospace;font-size:11px;overflow-x:hidden;transition:background .3s}
+body.p0-turn{background:#1a1a2e}
+body.p1-turn{background:#1a2e1a}
+#app{max-width:1400px;margin:0 auto;padding:8px;position:relative}
+.header{background:#16213e;padding:8px 16px;border-radius:4px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.header h1{color:#e94560;font-size:16px}
+.status{display:flex;gap:16px;font-size:12px}
+.status span{padding:4px 8px;background:#0f3460;border-radius:3px}
+.status .active{background:#e94560;color:#fff}
+
+#board-container{position:relative;margin-bottom:8px}
+#board-container svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20}
+#board-container svg line{stroke:#ffd700;stroke-width:1.5;opacity:0.6}
+#board-container svg line.cross{stroke:#e94560;stroke-width:1;stroke-dasharray:3,3;opacity:0.4}
+
+.territory{display:flex;flex-direction:column;gap:1px}
+.territory-label{font-size:10px;color:#888;padding:2px 0}
+.row{display:flex;gap:2px;justify-content:center}
+.cell{width:110px;height:60px;background:#0f3460;border-radius:2px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;text-align:center;position:relative;transition:all .15s;z-index:10;overflow:hidden;white-space:nowrap;font-weight:bold}
+.cell:hover{background:#1a4a8a}
+.cell.occupied{background:#16213e;border:1px solid #333;font-size:13px}
+.cell.occupied:hover{border-color:#e94560}
+.cell.foreign{background:#3d1620;border-color:#602030}
+.cell.selected{border:2px solid #e94560!important;box-shadow:0 0 8px #e94560}
+.cell.play-target{border:2px dashed #4fc3f7!important;box-shadow:0 0 6px #4fc3f7;background:#0a2a4a}
+.cell.linked-selected{border:1px dashed #ffd700}
+.cell .hp{position:absolute;bottom:1px;right:2px;font-size:7px;color:#888}
+.cell .vused{position:absolute;top:1px;right:2px;font-size:7px;color:#4fc3f7}
+.frontier{background:#2d1f0a;padding:4px 8px;border-radius:2px;text-align:center;font-size:10px;margin:2px 0;position:relative;z-index:10}
+.frontier .spy{display:inline-block;padding:2px 6px;background:#602030;border-radius:2px;margin:0 2px;cursor:pointer}
+.frontier .spy:hover{background:#803040}
+
+#card-detail{position:fixed;bottom:8px;right:8px;background:#16213e;border:1px solid #e94560;border-radius:4px;padding:12px;max-width:280px;z-index:50;display:none;font-size:11px}
+#card-detail h3{color:#e94560;margin-bottom:4px}
+#card-detail .stat{color:#4fc3f7}
+#card-detail .ability{color:#aaa;margin:2px 0;padding-left:8px;border-left:2px solid #333}
+#card-detail .close{position:absolute;top:4px;right:8px;cursor:pointer;color:#888}
+#card-detail .close:hover{color:#e94560}
+
+#hand{background:#16213e;padding:8px;border-radius:4px;margin-bottom:8px;min-height:60px}
+#hand h3{font-size:11px;margin-bottom:4px;color:#888}
+.hand-cards{display:flex;gap:4px;flex-wrap:wrap}
+.hand-card{padding:4px 8px;background:#0f3460;border-radius:3px;cursor:pointer;font-size:10px;min-width:160px;max-width:220px;text-align:center}
+.hand-card:hover{background:#1a4a8a}
+.hand-card.selected{border:2px solid #e94560}
+.hand-card .name{font-weight:bold}
+.hand-card .stats{font-size:8px;color:#aaa}
+.hand-card .abilities{font-size:7px;color:#888;margin-top:2px;text-align:left}
+
+#controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+#player-indicator{padding:6px 12px;background:#e94560;color:#fff;border-radius:3px;font-size:11px;display:none}
+.btn{padding:6px 12px;background:#0f3460;color:#e0e0e0;border:none;border-radius:3px;cursor:pointer;font-family:monospace;font-size:11px}
+.btn:hover{background:#1a4a8a}
+.btn.primary{background:#e94560}
+.btn.primary:hover{background:#ff6b81}
+.btn:disabled{opacity:.4;cursor:default}
+
+#log{background:#16213e;padding:8px;border-radius:4px;max-height:120px;overflow-y:auto;font-size:10px}
+#log .entry{padding:2px 0;border-bottom:1px solid #0f3460}
+
+#deck-select{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;z-index:100}
+#deck-select>div{background:#16213e;padding:24px;border-radius:8px;max-width:500px;text-align:center}
+#deck-select>div.p2-pick{background:#1a3a1a;border:2px solid #4caf50}
+#deck-select h2{color:#e94560;margin-bottom:16px}
+#deck-select .p2-pick h2{color:#4caf50}
+.deck-option{display:block;width:100%;padding:8px 12px;margin:4px 0;background:#0f3460;color:#e0e0e0;border:none;border-radius:4px;cursor:pointer;text-align:left;font-family:monospace;font-size:12px}
+.deck-option:hover{background:#1a4a8a}
+
+#victory-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:200}
+#victory-overlay>div{background:#16213e;padding:32px;border-radius:8px;text-align:center;border:2px solid #e94560}
+#victory-overlay h1{color:#e94560;font-size:28px;margin-bottom:16px}
+#victory-overlay .vstat{color:#aaa;font-size:14px;margin:4px 0}
+#victory-overlay .vbtn{display:inline-block;margin-top:16px;padding:10px 24px;background:#e94560;color:#fff;border:none;border-radius:4px;cursor:pointer;font-family:monospace;font-size:14px}
+#victory-overlay .vbtn:hover{background:#ff6b81}
+
+#squads-panel{background:#16213e;padding:8px;border-radius:4px;margin-bottom:8px;font-size:10px}
+.squad-entry{padding:4px 8px;background:#0f3460;border-radius:3px;margin:2px 0;cursor:pointer}
+.squad-entry:hover{background:#1a4a8a}
+.squad-entry .type{color:#e94560;font-weight:bold}
+
+.phase-actions .phase-attack{display:none}
+body.phase-attack .phase-actions{display:none}
+body.phase-attack .phase-attack{display:flex}
+</style>
+</head>
+<body class="phase-actions">
+<div id="app">
+ <div class="header">
+  <h1>⚔️ Network Fantasy War</h1>
+  <div class="status" id="status-bar"></div>
+ </div>
+ <div id="player-indicator">Turno de: Jugador 1</div>
+ <div id="board-container">
+  <svg id="link-svg"></svg>
+  <div id="board-inner"></div>
+ </div>
+ <div id="card-detail">
+  <span class="close" onclick="document.getElementById('card-detail').style.display='none'">✕</span>
+  <h3 id="detail-name"></h3>
+  <div id="detail-stats"></div>
+  <div id="detail-abilities"></div>
+ </div>
+ <div id="hand"><h3>Tu mano</h3><div class="hand-cards" id="hand-cards"></div></div>
+ <div id="controls">
+  <button class="btn" onclick="action('play')">▶ Jugar carta</button>
+  <button class="btn" onclick="action('link')">🔗 Vincular</button>
+  <button class="btn" onclick="action('ascend')">⬆ Ascender</button>
+  <span class="phase-actions">
+   <button class="btn primary" onclick="action('next_phase')">⚔️ Atacar →</button>
+  </span>
+  <span class="phase-attack">
+   <button class="btn" onclick="action('next_phase')">🏁 Finalizar ataque</button>
+  </span>
+  <button class="btn" onclick="action('end_turn')">⏩ Fin Turno</button>
+  <button class="btn" onclick="refresh()">🔄 Refresh</button>
+  <button class="btn" onclick="flipBoard()">🔄 Flip</button>
+ </div>
+ <div id="squads-panel" class="phase-attack"></div>
+ <div id="log"></div>
+</div>
+
+<div id="victory-overlay">
+ <div>
+  <h1 id="victory-title">🏆</h1>
+  <div class="vstat" id="victory-stats"></div>
+  <button class="vbtn" onclick="location.reload()">Nueva partida</button>
+ </div>
+</div>
+
+<div id="deck-select">
+ <div id="mode-select">
+  <h2>Network Fantasy War</h2>
+  <p style="color:#aaa;margin-bottom:12px">Elige el modo de juego</p>
+  <button class="deck-option" onclick="chooseMode('ai')" style="font-size:14px;padding:12px;text-align:center">🤖 1 Jugador vs IA</button>
+  <button class="deck-option" onclick="chooseMode('pvp')" style="font-size:14px;padding:12px;text-align:center">👥 2 Jugadores (hotseat)</button>
+ </div>
+ <div id="deck-pick" style="display:none">
+  <h2 id="deck-pick-title">Selecciona tu mazo</h2>
+  <div id="deck-options">Cargando...</div>
+ </div>
+</div>
+
+<script>
+let state = null;
+let selectedBoard = null;
+let selectedHand = null;
+let linkTarget = null;
+let playerDeck1 = null;
+let playerDeck2 = null;
+let gameMode = null;
+let decksData = null;
+let playTarget = null;
+let flipped = false;  // board orientation
+
+async function api(url, body) {
+  const opts = body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {};
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+async function chooseMode(mode) {
+  gameMode = mode;
+  document.getElementById('mode-select').style.display = 'none';
+  document.getElementById('deck-pick').style.display = 'block';
+  try {
+    decksData = await api('/api/decks');
+    const keys = Object.keys(decksData);
+    if (!keys.length) {
+      document.getElementById('deck-options').innerHTML = '<p style="color:#e94560">Error al cargar mazos.</p>';
+      return;
+    }
+    if (mode === 'ai') {
+      document.getElementById('deck-pick-title').textContent = 'Selecciona tu mazo (J1)';
+      renderDeckPicker(keys, (k) => {
+        playerDeck1 = k;
+        playerDeck2 = keys.filter(x => x !== k)[Math.floor(Math.random()*(keys.length-1))];
+        startMatch();
+      });
+    } else {
+      document.getElementById('deck-pick-title').textContent = 'Jugador 1 — Selecciona tu mazo';
+      renderDeckPicker(keys, (k1) => {
+        playerDeck1 = k1;
+        document.getElementById('deck-pick-title').textContent = 'Jugador 2 — Selecciona tu mazo';
+        document.getElementById('deck-pick').classList.add('p2-pick');
+        renderDeckPicker(keys, (k2) => {
+          playerDeck2 = k2;
+          startMatch();
+        });
+      });
+    }
+  } catch(e) {
+    document.getElementById('deck-options').innerHTML = '<p style="color:#e94560">Error: ' + e.message + '</p>';
+  }
+}
+
+function renderDeckPicker(keys, onPick) {
+  const div = document.getElementById('deck-options');
+  div.innerHTML = '';
+  for (const k of keys) {
+    const v = decksData[k];
+    const btn = document.createElement('button');
+    btn.className = 'deck-option';
+    btn.textContent = '[' + v.count + '] ' + v.name;
+    btn.onclick = () => onPick(k);
+    div.appendChild(btn);
+  }
+}
+
+async function startMatch() {
+  document.getElementById('deck-select').style.display = 'none';
+  try {
+    const r = await api('/api/new_game', {deck1: playerDeck1, deck2: playerDeck2});
+    loadState(r.state);
+  } catch(e) {
+    alert('Error al iniciar: ' + e.message + '. ¿Está corriendo el servidor? python -m webui.app');
+  }
+}
+
+function loadState(s) {
+  state = s;
+  document.body.className = 'phase-' + s.phase + ' p' + s.active_player + '-turn';
+  renderBoard(s);
+  renderLinks(s);
+  renderHand(s);
+  renderStatus(s);
+  renderSquads(s);
+  renderLog(s);
+  updatePlayerIndicator(s);
+}
+
+function updatePlayerIndicator(s) {
+  const el = document.getElementById('player-indicator');
+  if (!s.game_over) {
+    el.style.display = 'block';
+    el.textContent = gameMode === 'ai' && s.active_player === 1 ? 'IA está pensando...' : 'Turno de: Jugador ' + (s.active_player + 1);
+  } else {
+    el.style.display = 'block';
+    el.textContent = '🏆 ¡Jugador ' + (s.winner + 1) + ' gana!';
+    showVictory(s);
+  }
+}
+
+function showVictory(s) {
+  document.getElementById('victory-title').textContent = '🏆 ¡Jugador ' + (s.winner + 1) + ' gana!';
+  document.getElementById('victory-stats').innerHTML = 
+    'Turnos: ' + s.turn + '<br>' +
+    'Sellos finales — J1: ' + s.seals[0] + ' | J2: ' + s.seals[1] + '<br>' +
+    'Cartas en mano — J1: ' + s.hand_sizes[0] + ' | J2: ' + s.hand_sizes[1];
+  document.getElementById('victory-overlay').style.display = 'flex';
+}
+
+// ═══ RENDER BOARD ═══
+function renderBoard(s) {
+  const c = document.getElementById('board-inner');
+  const top = flipped ? 0 : 1;   // flipped: J1 on top
+  const bot = flipped ? 1 : 0;
+  let h = '';
+  h += territoryHtml(top, s.seals[top], s);
+  h += frontierHtml(s);
+  h += territoryHtml(bot, s.seals[bot], s);
+  
+  c.innerHTML = h;
+  if (selectedBoard && s.links[selectedBoard]) {
+    s.links[selectedBoard].forEach(cid => {
+      const el = document.querySelector('[data-cid="' + cid + '"]');
+      if (el) el.classList.add('linked-selected');
+    });
+  }
+}
+
+function territoryHtml(player, seals, s) {
+  let h = '<div class="territory"><div class="territory-label">J' + (player+1) + ' — Sellos: ' + seals + '</div>';
+  for (let dl = 1; dl <= 3; dl++) {
+    h += '<div class="row">';
+    for (let m = 0; m < 15; m++) h += cellHtml(player, dl, m, s);
+    h += '</div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function frontierHtml(s) {
+  let h = '<div class="frontier">══ FRONTERA ══ ';
+  if (s.board.frontier.length) {
+    s.board.frontier.forEach(sp => {
+      h += '<span class="spy" onclick="selectBoard(' + sp.id + ')">' + sp.name.substring(0,10) + ' (J' + (sp.owner+1) + ')</span>';
+    });
+  }
+  h += '</div>';
+  return h;
+}
+
+function cellHtml(player, layer, m, s) {
+  const pkey = 'p' + player;
+  // Layer mapping depends on player position on screen:
+  // When player is at TOP of screen: displayLayer 1=L1, 2=L2, 3=L3
+  // When player is at BOTTOM: displayLayer 1=L3, 2=L2, 3=L1
+  // Player at top = (player==1 && !flipped) || (player==0 && flipped)
+  const playerAtTop = flipped ? player === 0 : player === 1;
+  const gameLayer = playerAtTop ? layer : 4 - layer;
+  const actualLayer = gameLayer - 1;
+  const cell = s.board[pkey][actualLayer][m];
+  const isPT = playTarget && playTarget.player === player && playTarget.gameLayer === gameLayer && playTarget.meridian === m;
+  if (!cell) {
+    const cls = isPT ? 'cell play-target' : 'cell';
+    return '<div class="' + cls + '" onclick="selectBoardCell(' + player + ',' + gameLayer + ',' + m + ')" title="J' + (player+1) + ' L' + gameLayer + ':' + m + '"></div>';
+  }
+  const cls = cell.foreign ? 'cell occupied foreign' : 'cell occupied';
+  const sel = selectedBoard === cell.id ? ' selected' : '';
+  const hpPct = cell.max_hp > 0 ? Math.round(cell.hp/cell.max_hp*100) : 100;
+  return '<div class="' + cls + sel + '" data-cid="' + cell.id + '" onclick="showCardDetail(' + cell.id + ')" title="' + cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + cell.d + ' | V:' + cell.v_used + '/' + cell.v + '">' + cell.short + '<span class="vused">' + cell.v_used + '/' + cell.v + '</span><span class="hp" style="color:' + (hpPct<50?'#e94560':'#888') + '">' + cell.hp + '</span></div>';
+}
+
+// ═══ SVG LINKS ═══
+function renderLinks(s) {
+  const svg = document.getElementById('link-svg');
+  const container = document.getElementById('board-container');
+  if (!s.links_pairs || !s.links_pairs.length) { svg.innerHTML = ''; return; }
+  
+  function draw() {
+    const rect = container.getBoundingClientRect();
+    const boardInner = document.getElementById('board-inner');
+    if (!boardInner) return;
+    const innerRect = boardInner.getBoundingClientRect();
+    
+    svg.setAttribute('width', innerRect.width);
+    svg.setAttribute('height', innerRect.height);
+    svg.style.top = (innerRect.top - rect.top) + 'px';
+    svg.style.left = (innerRect.left - rect.left) + 'px';
+    
+    let lines = '';
+    s.links_pairs.forEach(lp => {
+      const elA = document.querySelector('[data-cid="' + lp.from + '"]');
+      const elB = document.querySelector('[data-cid="' + lp.to + '"]');
+      if (!elA || !elB) return;
+      const ra = elA.getBoundingClientRect();
+      const rb = elB.getBoundingClientRect();
+      const x1 = ra.left + ra.width/2 - innerRect.left;
+      const y1 = ra.top + ra.height/2 - innerRect.top;
+      const x2 = rb.left + rb.width/2 - innerRect.left;
+      const y2 = rb.top + rb.height/2 - innerRect.top;
+      const cls = lp.p0 !== lp.p1 ? ' cross' : '';
+      lines += '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" class="' + cls + '"/>';
+    });
+    svg.innerHTML = lines;
+  }
+  
+  // Draw after DOM settles, and redraw on resize
+  setTimeout(draw, 50);
+  window._lastDrawFn = draw;
+}
+
+// Redraw links on window resize/zoom
+window.addEventListener('resize', () => {
+  if (window._lastDrawFn) window._lastDrawFn();
+});
+
+// ═══ CARD DETAIL PANEL ═══
+function showCardDetail(cid) {
+  selectBoard(cid);
+  const panel = document.getElementById('card-detail');
+  // Find card in board data
+  let card = null;
+  for (const pk of ['p0','p1']) {
+    for (const row of state.board[pk]) {
+      for (const c of row) {
+        if (c && c.id === cid) { card = c; break; }
+      }
+      if (card) break;
+    }
+    if (card) break;
+  }
+  if (!card) { panel.style.display = 'none'; return; }
+  
+  document.getElementById('detail-name').textContent = card.name;
+  document.getElementById('detail-stats').innerHTML = 
+    '<span class="stat">' + card.color + '</span> | HP:' + card.hp + '/' + card.max_hp + 
+    ' | D:' + card.d + ' | V:' + card.v_used + '/' + card.v;
+  
+  const abDiv = document.getElementById('detail-abilities');
+  if (card.abilities && card.abilities.length) {
+    abDiv.innerHTML = card.abilities.map(a => '<div class="ability">' + a + '</div>').join('');
+  } else {
+    abDiv.innerHTML = '<div class="ability" style="color:#555">Sin habilidades</div>';
+  }
+  panel.style.display = 'block';
+}
+
+// ═══ HAND ═══
+function renderHand(s) {
+  const p = s.active_player;
+  const hand = s.hands[p];
+  const div = document.getElementById('hand-cards');
+  div.innerHTML = '';
+  hand.forEach(c => {
+    const cls = selectedHand === c.index ? 'hand-card selected' : 'hand-card';
+    const spyTag = c.is_spy ? ' 🕵️' : '';
+    const logiTag = c.is_logistron ? ' 🔌' : '';
+    const abs = c.abilities && c.abilities.length ? '<div class="abilities">' + c.abilities.map(a => '• ' + a).join('<br>') + '</div>' : '';
+    const hoverInfo = c.name + ' | ' + c.color + ' | HP:' + c.hp + ' D:' + c.d + ' V:' + c.v + ' | L:' + c.layers.join(',') + ' | ' + c.forms.join('/');
+    div.innerHTML += '<div class="' + cls + '" onclick="showHandDetail(' + c.index + ')" title="' + hoverInfo + '"><div class="name">' + c.name + spyTag + logiTag + '</div><div class="stats">' + c.color + ' | HP:' + c.hp + ' D:' + c.d + ' V:' + c.v + ' | L:' + c.layers.join(',') + ' | ' + c.forms.join('/') + '</div>' + abs + '</div>';
+  });
+  }
+
+function showHandDetail(idx) {
+  selectHand(idx);
+  const hand = state.hands[state.active_player];
+  const c = hand[idx];
+  if (!c) return;
+  const panel = document.getElementById('card-detail');
+  document.getElementById('detail-name').textContent = c.name;
+  document.getElementById('detail-stats').innerHTML = 
+    '<span class="stat">' + c.color + '</span> | HP:' + c.hp + ' | D:' + c.d + ' | V:' + c.v + ' | L:' + c.layers.join(',') + ' | ' + c.forms.join('/');
+  const abDiv = document.getElementById('detail-abilities');
+  if (c.abilities && c.abilities.length) {
+    abDiv.innerHTML = c.abilities.map(a => '<div class="ability">' + a + '</div>').join('');
+  } else {
+    abDiv.innerHTML = '<div class="ability" style="color:#555">Sin habilidades</div>';
+  }
+  panel.style.display = 'block';
+}
+
+function selectHand(idx) {
+  selectedHand = (selectedHand === idx) ? null : idx;
+  document.querySelectorAll('.hand-card.selected').forEach(el => el.classList.remove('selected'));
+  if (selectedHand !== null) {
+    document.querySelectorAll('.hand-card')[idx]?.classList.add('selected');
+  }
+}
+
+function selectBoardCell(player, gameLayer, m) {
+  selectedBoard = null;
+  linkTarget = null;
+  document.getElementById('card-detail').style.display = 'none';
+  if (playTarget && playTarget.player === player && playTarget.gameLayer === gameLayer && playTarget.meridian === m) {
+    playTarget = null;
+  } else {
+    playTarget = {player, gameLayer, meridian: m};
+  }
+  renderBoard(state);
+}
+
+function selectBoard(cid) {
+  if (selectedBoard === cid) {
+    // Deselect
+    selectedBoard = null;
+    linkTarget = null;
+    document.getElementById('card-detail').style.display = 'none';
+    renderBoard(state);
+    return;
+  }
+  if (linkTarget) {
+    // Second card picked — complete the link
+    if (cid !== linkTarget) {
+      action('link', {card_a: linkTarget, card_b: cid});
+    }
+    linkTarget = null;
+    selectedBoard = null;
+    document.getElementById('card-detail').style.display = 'none';
+    return;
+  }
+  selectedBoard = cid;
+  linkTarget = null;
+  renderBoard(state);
+}
+
+function renderStatus(s) {
+  document.getElementById('status-bar').innerHTML = '<span>Turno ' + s.turn + '</span><span class="active">J' + (s.active_player+1) + '</span><span>Fase: ' + s.phase + '</span><span>Acciones: ' + s.actions + '</span><span>🃏 J1:' + s.hand_sizes[0] + ' J2:' + s.hand_sizes[1] + '</span>' + (s.game_over ? '<span class="active">🏆 J' + (s.winner+1) + ' GANA!</span>' : '');
+}
+
+function renderSquads(s) {
+  const div = document.getElementById('squads-panel');
+  const p = s.active_player;
+  
+  // Defense prompt: pending attack for defender
+  if (s.pending_attack) {
+    const def = 1 - s.pending_attack.attacker;
+    const defSquads = s.squads['p' + def];
+    let h = '<div style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:150">';
+    h += '<div style="background:#16213e;padding:20px;border-radius:8px;border:2px solid #e94560;max-width:500px;text-align:center">';
+    h += '<h3 style="color:#e94560;margin-bottom:8px">🛡️ ¡' + s.pending_attack.squad_type.toUpperCase() + ' enemigo ataca!</h3>';
+    h += '<p style="color:#aaa;font-size:11px">J' + (s.pending_attack.attacker+1) + ': ' + s.pending_attack.squad_type + ' | daño base: ' + s.pending_attack.squad_damage + '</p>';
+    h += '<p style="color:#aaa;font-size:10px">' + (s.pending_attack.members || []).map(function(m){return m.substring(0,14)}).join(', ') + '</p>';
+    h += '<hr style="border-color:#333;margin:8px 0">';
+    h += '<p style="color:#4fc3f7;font-weight:bold;margin-bottom:8px">J' + (def+1) + ' — Elige escuadrón defensor:</p>';
+    if (defSquads && defSquads.length) {
+      defSquads.forEach(function(sq, i) {
+        h += '<div class="squad-entry" onclick="defend(' + i + ')" style="margin:3px 0">🛡️ [' + i + '] ' + sq.type + ' | daño:' + sq.damage + ' | ' + sq.members.map(function(m){return m.name.substring(0,12)}).join(', ') + '</div>';
+      });
+    } else {
+      h += '<div style="color:#888;margin:8px 0">Sin escuadrones disponibles</div>';
+    }
+    h += '<div class="squad-entry" onclick="defend(-1)" style="color:#e94560;margin:8px 0">✕ Sin defensor (daño directo al grimorio)</div>';
+    h += '</div></div>';
+    div.innerHTML = h;
+    div.style.display = 'block';
+    return;
+  }
+  
+  // Normal attack phase: show attacker squads
+  if (s.phase === 'attack') {
+    div.style.display = 'block';
+    const squads = s.squads['p' + p];
+    div.innerHTML = '<strong>⚔️ Tus escuadrones:</strong>';
+    squads.forEach(function(sq, i) {
+      div.innerHTML += '<div class="squad-entry" onclick="attackSquad(' + i + ')"><span class="type">[' + i + '] ' + sq.type + '</span> | daño:' + sq.damage + ' | ' + sq.members.map(function(m){return m.name.substring(0,12)}).join(', ') + '</div>';
+    });
+    return;
+  }
+  
+  div.style.display = 'none';
+}
+
+function defend(idx) {
+  action('defend', {defender_squad_index: idx});
+}
+
+function attackSquad(idx) { action('attack', {squad_index: idx, target: 'grimoire'}); }
+
+function renderLog(s) {
+  const div = document.getElementById('log');
+  if (!s.log || !s.log.length) { div.innerHTML = ''; return; }
+  div.innerHTML = s.log.map(e => '<div class="entry">' + e + '</div>').join('');
+  div.scrollTop = div.scrollHeight;
+}
+
+async function action(act, args={}) {
+  if (gameMode === 'ai' && state && state.active_player === 1) { return; }
+  if (act === 'play') {
+    if (selectedHand === null) { alert('Selecciona una carta de tu mano primero'); return; }
+    if (!playTarget) { alert('Click en celda vacía del tablero'); return; }
+    args = {hand_index: selectedHand, layer: playTarget.gameLayer, meridian: playTarget.meridian};
+    playTarget = null;
+  }
+  if (act === 'ascend') {
+    if (selectedBoard === null) { alert('Selecciona una carta en el tablero'); return; }
+    args = {card_id: selectedBoard};
+  }
+  if (act === 'link') {
+    if (!args.card_a && selectedBoard) {
+      linkTarget = selectedBoard;
+      // selectedBoard stays set so the card remains visually selected
+      renderBoard(state);
+      return;
+    }
+  }
+  selectedBoard = null; selectedHand = null;
+  const r = await api('/api/action', {action: act, args});
+  if (r.error) alert(r.error);
+  if (r.state) loadState(r.state);
+  // AI auto-defend when pending attack targets AI
+  if (gameMode === 'ai' && r.state && r.state.pending_attack && r.state.pending_attack.attacker === 0) {
+    setTimeout(async () => {
+      const r2 = await api('/api/action', {action: 'defend', args: {defender_squad_index: -1}});
+      if (r2.state) loadState(r2.state);
+    }, 300);
+  }
+  if (gameMode === 'ai' && r.state && !r.state.game_over && !r.state.pending_attack && r.state.active_player === 1) {
+    setTimeout(runAITurn, 500);
+  }
+}
+
+async function runAITurn() {
+  const r = await api('/api/action', {action: 'ai_turn', args: {}});
+  if (r.state) loadState(r.state);
+}
+
+async function refresh() {
+  const r = await api('/api/state');
+  if (r.state) loadState(r.state);
+}
+
+function flipBoard() {
+  flipped = !flipped;
+  renderBoard(state);
+  setTimeout(() => { if (window._lastDrawFn) window._lastDrawFn(); }, 100);
+}
+</script>
+</body>
+</html>

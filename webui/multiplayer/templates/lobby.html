@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NFW — Multijugador</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#e0e0e0;font-family:monospace;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+h1{color:#e94560;margin-bottom:8px;font-size:22px}
+.sub{color:#4fc3f7;margin-bottom:24px;font-size:12px}
+.panel{background:#16213e;border:1px solid #333;border-radius:6px;padding:20px;width:420px;margin-bottom:16px}
+.panel h2{color:#4fc3f7;font-size:14px;margin-bottom:12px}
+input,select,button{display:block;width:100%;padding:10px 14px;margin:6px 0;border-radius:4px;border:1px solid #333;font-family:monospace;font-size:13px}
+input,select{background:#0f3460;color:#e0e0e0}
+button{background:#e94560;color:#fff;border:none;cursor:pointer;font-weight:bold;font-size:14px;transition:background .2s}
+button:hover{background:#c0392b}
+button.secondary{background:#0f3460;color:#4fc3f7;border:1px solid #4fc3f7}
+button.secondary:hover{background:#1a3a5c}
+.code{text-align:center;font-size:32px;font-weight:bold;color:#ffd700;letter-spacing:6px;margin:16px 0}
+.status{text-align:center;color:#888;font-size:11px;margin-top:8px}
+.error{color:#e94560;font-size:11px;margin-top:4px}
+.hidden{display:none}
+.deck-option{display:block;width:100%;padding:8px 12px;margin:4px 0;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:4px;cursor:pointer;text-align:left;font-family:monospace;font-size:12px}
+.deck-option:hover{background:#1a3a5c;border-color:#4fc3f7}
+.deck-option.selected{border-color:#e94560;background:#2a1a2e}
+.wait-msg{color:#888;font-style:italic;font-size:13px}
+</style>
+</head>
+<body>
+
+<h1>Network Fantasy War</h1>
+<div class="sub">Modo Multijugador Online</div>
+
+<!-- Phase 1: Mode selection -->
+<div id="phase-mode" class="panel">
+  <h2>Elige como jugar</h2>
+  <button onclick="showCreate()">Crear sala</button>
+  <button class="secondary" onclick="showJoin()">Unirse a sala</button>
+</div>
+
+<!-- Create room -->
+<div id="phase-create" class="panel hidden">
+  <h2>Crear Sala</h2>
+  <div id="deck-options-host"></div>
+  <button onclick="createRoom()" id="btn-create" disabled>Crear sala</button>
+  <button class="secondary" onclick="back()">Volver</button>
+</div>
+
+<!-- Waiting room (host) -->
+<div id="phase-waiting" class="panel hidden">
+  <h2>Sala Creada</h2>
+  <p class="wait-msg" style="text-align:center">Comparte este codigo con tu oponente:</p>
+  <div class="code" id="room-code-display"></div>
+  <p class="status" id="wait-msg">Esperando oponente...</p>
+</div>
+
+<!-- Join room -->
+<div id="phase-join" class="panel hidden">
+  <h2>Unirse a Sala</h2>
+  <input type="text" id="join-code" placeholder="Codigo de 4 letras/digitos" maxlength="4" autocomplete="off" style="text-align:center;font-size:20px;letter-spacing:4px">
+  <div id="deck-options-joiner"></div>
+  <button onclick="joinRoom()" id="btn-join" disabled>Unirse</button>
+  <button class="secondary" onclick="back()">Volver</button>
+  <div class="error" id="join-error"></div>
+</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io();
+let selectedDeckHost = null;
+let selectedDeckJoiner = null;
+let decksData = null;
+
+// Load decks
+fetch('/api/decks')
+  .then(r => r.json())
+  .then(d => {
+    decksData = d;
+    renderDecks('deck-options-host', k => {
+      selectedDeckHost = k;
+      document.querySelectorAll('#deck-options-host .deck-option').forEach(el => el.classList.remove('selected'));
+      event.target.classList.add('selected');
+      document.getElementById('btn-create').disabled = false;
+    });
+    renderDecks('deck-options-joiner', k => {
+      selectedDeckJoiner = k;
+      document.querySelectorAll('#deck-options-joiner .deck-option').forEach(el => el.classList.remove('selected'));
+      event.target.classList.add('selected');
+      document.getElementById('btn-join').disabled = false;
+    });
+  });
+
+function renderDecks(containerId, onPick) {
+  if (!decksData) return;
+  const keys = Object.keys(decksData);
+  const div = document.getElementById(containerId);
+  div.innerHTML = '<p style="color:#888;font-size:11px;margin-bottom:4px">Elige tu mazo:</p>';
+  keys.forEach(k => {
+    const btn = document.createElement('div');
+    btn.className = 'deck-option';
+    btn.textContent = decksData[k].name + ' (' + decksData[k].count + ' cartas)';
+    btn.onclick = () => onPick(k);
+    div.appendChild(btn);
+  });
+}
+
+function showCreate() {
+  document.getElementById('phase-mode').classList.add('hidden');
+  document.getElementById('phase-create').classList.remove('hidden');
+}
+
+function showJoin() {
+  document.getElementById('phase-mode').classList.add('hidden');
+  document.getElementById('phase-join').classList.remove('hidden');
+}
+
+function back() {
+  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('phase-mode').classList.remove('hidden');
+}
+
+function createRoom() {
+  if (!selectedDeckHost) return;
+  socket.emit('create_room', {deck: selectedDeckHost});
+}
+
+function joinRoom() {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if (!code || !selectedDeckJoiner) return;
+  socket.emit('join_room', {code: code, deck: selectedDeckJoiner});
+}
+
+// Socket events
+socket.on('room_created', data => {
+  document.getElementById('phase-create').classList.add('hidden');
+  document.getElementById('phase-waiting').classList.remove('hidden');
+  document.getElementById('room-code-display').textContent = data.code;
+});
+
+socket.on('opponent_joined', data => {
+  // Both players: redirect to game
+  // Pass room code + player_id via sessionStorage
+  sessionStorage.setItem('nfw_room_code', document.getElementById('room-code-display').textContent);
+  sessionStorage.setItem('nfw_player_id', '0');
+  window.location.href = '/mp-game';
+});
+
+socket.on('room_joined', data => {
+  sessionStorage.setItem('nfw_room_code', data.code);
+  sessionStorage.setItem('nfw_player_id', '1');
+  window.location.href = '/mp-game';
+});
+
+socket.on('error', data => {
+  document.getElementById('join-error').textContent = data.message;
+});
+
+socket.on('state_update', data => {
+  // Handled on the game page
+});
+</script>
+</body>
+</html>

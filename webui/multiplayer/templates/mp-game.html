@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NFW — Partida Online</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a1a2e;color:#e0e0e0;font-family:monospace;font-size:11px;overflow-x:hidden}
+body.p0-turn{background:#1a1a2e}
+body.p1-turn{background:#1a2e1a}
+#controls{position:sticky;top:0;z-index:30;background:#16213e;padding:6px 10px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;border-bottom:1px solid #333}
+.btn{padding:5px 12px;background:#0f3460;color:#e0e0e0;border:1px solid #333;border-radius:3px;cursor:pointer;font-family:monospace;font-size:11px;transition:all .15s}
+.btn:hover{background:#1a3a5c;border-color:#4fc3f7}
+.btn.primary{background:#e94560;border-color:#e94560;color:#fff;font-weight:bold}
+.btn.primary:hover{background:#c0392b}
+.btn:disabled{opacity:0.4;cursor:not-allowed}
+#player-indicator{padding:4px 12px;border-radius:3px;font-size:12px;font-weight:bold;margin-left:auto}
+#player-indicator.p0{color:#4fc3f7}
+#player-indicator.p1{color:#4caf50}
+#board-container{position:relative;margin:6px 10px}
+#board-container svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20}
+#board-container svg line{stroke:#ffd700;stroke-width:1.5;opacity:0.6}
+#board-container svg line.cross{stroke:#e94560;stroke-width:1;stroke-dasharray:3,3;opacity:0.4}
+.territory{margin:4px 0}
+.territory-label{font-size:10px;color:#888;margin-bottom:2px;padding:0 4px}
+.row{display:flex;gap:2px;margin:1px 0}
+.cell{width:110px;height:60px;background:#0f3460;border-radius:2px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;text-align:center;position:relative;transition:all .1s;color:#e0e0e0;overflow:hidden;flex-shrink:0}
+.cell:hover{background:#1a3a5c;border:1px solid #4fc3f7}
+.cell.selected{border:2px solid #ffd700;box-shadow:0 0 6px #ffd700}
+.cell.playable{border:1px dashed #4fc3f7;background:#0a1a2e}
+.cell.occupied{background:#16213e;border:1px solid #333;font-size:14px}
+.cell.occupied:hover{border-color:#e94560}
+.cell .hp{position:absolute;bottom:1px;right:3px;font-size:8px;color:#4fc3f7}
+.cell .v{position:absolute;top:1px;right:3px;font-size:8px;color:#888}
+.cell .dmg{position:absolute;bottom:1px;left:3px;font-size:8px;color:#e94560}
+.frontier{background:#1a0a0a;color:#e94560;font-size:10px;padding:2px;text-align:center;margin:3px 0;border-top:1px solid #e94560;border-bottom:1px solid #e94560}
+#hand-cards{display:flex;gap:4px;flex-wrap:wrap;padding:6px 10px;background:#16213e;margin:0 10px;border-radius:4px;min-height:40px}
+.hand-card{background:#0f3460;border:1px solid #333;border-radius:3px;padding:4px 8px;cursor:pointer;font-size:10px;max-width:130px;transition:all .1s}
+.hand-card:hover{background:#1a3a5c;border-color:#4fc3f7}
+.hand-card.selected{border-color:#e94560;box-shadow:0 0 4px #e94560}
+.hand-card .hn{font-weight:bold;font-size:11px;margin-bottom:2px}
+.hand-card .hs{color:#4fc3f7;font-size:9px}
+.hand-card .ha{color:#888;font-size:8px;margin-top:2px}
+#card-detail{position:fixed;bottom:8px;right:8px;background:#16213e;border:1px solid #e94560;border-radius:4px;padding:12px;max-width:280px;z-index:50;display:none;font-size:11px}
+#card-detail h3{color:#e94560;margin-bottom:4px}
+#card-detail .stat{color:#4fc3f7}
+#card-detail .ability{color:#aaa;margin:2px 0;padding-left:8px;border-left:2px solid #333}
+#card-detail .close{position:absolute;top:4px;right:8px;cursor:pointer;color:#888}
+#card-detail .close:hover{color:#e94560}
+#squads-panel{margin:6px 10px;padding:8px 12px;background:#16213e;border-radius:4px;display:none}
+#squads-panel h3{color:#e94560;font-size:11px;margin-bottom:6px}
+.squad-entry{background:#0f3460;border:1px solid #333;border-radius:3px;padding:6px;margin:3px 0;cursor:pointer;font-size:10px}
+.squad-entry:hover{background:#1a3a5c;border-color:#e94560}
+.squad-entry .type{color:#ffd700;font-weight:bold}
+#log{margin:6px 10px;font-size:9px;max-height:80px;overflow-y:auto;color:#666}
+#log .entry{padding:1px 0}
+#victory-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:100;display:none;flex-direction:column;align-items:center;justify-content:center}
+#victory-overlay h1{color:#ffd700;font-size:36px;margin-bottom:12px}
+#victory-overlay .vstat{color:#e0e0e0;font-size:14px;margin:3px 0}
+#victory-overlay button{margin-top:20px;padding:10px 30px;font-size:16px;background:#e94560;color:#fff;border:none;border-radius:4px;cursor:pointer}
+#defense-popup{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:60;display:none;align-items:center;justify-content:center}
+#defense-popup>div{background:#16213e;border:2px solid #e94560;border-radius:6px;padding:20px;max-width:400px;width:90%}
+#defense-popup h2{color:#e94560;font-size:14px;margin-bottom:12px}
+.def-opt{padding:8px 12px;background:#0f3460;border:1px solid #333;border-radius:3px;cursor:pointer;margin:4px 0;font-size:11px;text-align:left}
+.def-opt:hover{background:#1a3a5c;border-color:#4fc3f7}
+.wait-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:70;display:none;align-items:center;justify-content:center;font-size:18px;color:#ffd700}
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <span class="phase-actions">
+    <button class="btn primary" onclick="doAction('play')">Jugar carta</button>
+    <button class="btn" onclick="doAction('link')">Vincular</button>
+    <button class="btn" onclick="doAction('ascend')">Ascender</button>
+    <button class="btn" onclick="doAction('next_phase')">Atacar →</button>
+  </span>
+  <span class="phase-attack">
+    <button class="btn" onclick="doAction('next_phase')">Finalizar ataque</button>
+  </span>
+  <button class="btn" onclick="doAction('end_turn')">Fin Turno</button>
+  <button class="btn" onclick="location.reload()">Refresh</button>
+  <span id="player-indicator"></span>
+</div>
+
+<div id="board-container">
+  <div id="board-inner"></div>
+  <svg id="svg-links"></svg>
+</div>
+
+<div class="frontier">=== FRONTERA ===</div>
+<div id="hand-cards"></div>
+<div id="squads-panel"><h3>Escuadrones</h3><div id="squads-list"></div></div>
+<div id="log"></div>
+
+<div id="card-detail">
+  <span class="close" onclick="document.getElementById('card-detail').style.display='none'">X</span>
+  <h3 id="detail-name"></h3>
+  <div id="detail-stats"></div>
+  <div id="detail-abilities"></div>
+</div>
+
+<div id="defense-popup"><div><h2>Defensa</h2><div id="defense-options"></div></div></div>
+<div id="victory-overlay"><h1 id="victory-title"></h1><div id="victory-stats"></div><button onclick="location.href='/'">Nueva partida</button></div>
+<div class="wait-overlay" id="wait-overlay">Esperando al oponente...</div>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+const socket = io();
+const MY_ID = parseInt(sessionStorage.getItem('nfw_player_id') || '0');
+let state = null;
+let selectedBoard = null;
+let selectedHand = null;
+let linkTarget = null;
+let flipped = false;
+
+// Phase-aware control visibility
+function updateControls(s) {
+  const myTurn = s.active_player === MY_ID;
+  const isAttack = s.phase === 'attack';
+  document.querySelectorAll('.phase-actions').forEach(el => el.style.display = (!isAttack && myTurn) ? '' : 'none');
+  document.querySelectorAll('.phase-attack').forEach(el => el.style.display = (isAttack && myTurn) ? '' : 'none');
+  document.querySelectorAll('button').forEach(b => { if (b.textContent === 'Fin Turno') b.style.display = myTurn ? '' : 'none'; });
+  document.getElementById('wait-overlay').style.display = myTurn ? 'none' : 'flex';
+}
+
+// ═══ Render ═══
+function renderBoard(s) {
+  const c = document.getElementById('board-inner');
+  const topPlayer = flipped ? 0 : 1;
+  const botPlayer = flipped ? 1 : 0;
+  c.innerHTML = territoryHtml(topPlayer, s.seals[topPlayer], s) +
+                '<div class="frontier">=== FRONTERA ===</div>' +
+                territoryHtml(botPlayer, s.seals[botPlayer], s);
+}
+
+function territoryHtml(player, seals, s) {
+  const playerAtTop = flipped ? player === 0 : player === 1;
+  let h = '<div class="territory"><div class="territory-label">J' + (player+1) + ' — Sellos: ' + seals + '</div>';
+  for (let dl = 1; dl <= 3; dl++) {
+    const gameLayer = playerAtTop ? dl : 4 - dl;
+    h += '<div class="row">';
+    for (let m = 0; m < 15; m++) {
+      const cell = s.board['p' + player][gameLayer - 1][m];
+      if (cell) {
+        const cid = player + ',' + (gameLayer - 1) + ',' + m;
+        const sel = selectedBoard === cid ? ' selected' : '';
+        const used = cell.used_links || 0;
+        const max = cell.link_capacity || 0;
+        h += '<div class="cell occupied' + sel + '" data-cid="' + cid + '" title="' + cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + cell.damage_bonus + '" onclick="selectBoard(\'' + cid + '\')">' +
+             cell.name.substring(0, 8) +
+             '<span class="hp">' + cell.hp + '</span>' +
+             '<span class="v">' + used + '/' + max + '</span>' +
+             '</div>';
+      } else {
+        h += '<div class="cell' + (myTurn && !isAttack ? ' playable' : '') + '" onclick="selectBoardCell(' + player + ',' + gameLayer + ',' + m + ')"></div>';
+      }
+    }
+    h += '</div>';
+  }
+  return h + '</div>';
+}
+
+function renderHand(s) {
+  const div = document.getElementById('hand-cards');
+  if (!s.hand || !s.hand.length) { div.innerHTML = '<div style="color:#888;font-size:9px">Mano vacia</div>'; return; }
+  div.innerHTML = s.hand.map(c => {
+    const sel = selectedHand === c.index ? ' selected' : '';
+    const abils = c.abilities ? c.abilities.map(a => a.length > 50 ? a.substring(0,47)+'...' : a).join(' | ') : '';
+    return '<div class="hand-card' + sel + '" onclick="selectHand(' + c.index + ')" title="' + c.name + '">' +
+           '<div class="hn">' + c.name + '</div>' +
+           '<div class="hs">' + c.color + ' | HP:' + c.hp + ' D:' + c.damage_bonus + ' V:' + c.link_capacity + ' | L:' + c.allowed_layers.join(',') + '</div>' +
+           (abils ? '<div class="ha">' + abils + '</div>' : '') +
+           '</div>';
+  }).join('');
+  div.innerHTML += '<div style="color:#888;font-size:9px;margin-left:8px;align-self:center">Oponente: ' + (s.opponent_hand_size || 0) + ' cartas</div>';
+}
+
+function renderLinks(s) {
+  const svg = document.getElementById('svg-links');
+  if (!s.links_pairs || !s.links_pairs.length) { svg.innerHTML = ''; return; }
+  const container = document.getElementById('board-container');
+  const rect = container.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.style.width = w + 'px';
+  svg.style.height = h + 'px';
+  let lines = '';
+  s.links_pairs.forEach(lp => {
+    const elA = document.querySelector('[data-cid="' + lp.from + '"]');
+    const elB = document.querySelector('[data-cid="' + lp.to + '"]');
+    if (!elA || !elB) return;
+    const ra = elA.getBoundingClientRect();
+    const rb = elB.getBoundingClientRect();
+    const x1 = ra.left + ra.width/2 - rect.left;
+    const y1 = ra.top + ra.height/2 - rect.top;
+    const x2 = rb.left + rb.width/2 - rect.left;
+    const y2 = rb.top + rb.height/2 - rect.top;
+    const cross = lp.from.split(',')[0] !== lp.to.split(',')[0];
+    lines += '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '"' + (cross ? ' class="cross"' : '') + '/>';
+  });
+  svg.innerHTML = lines;
+}
+
+function renderSquads(s) {
+  const div = document.getElementById('squads-panel');
+  const list = document.getElementById('squads-list');
+  const mySquads = s.squads['p' + MY_ID] || [];
+  const oppSquads = s.squads['p' + (1 - MY_ID)] || [];
+  div.style.display = (mySquads.length || oppSquads.length || s.phase === 'attack') ? 'block' : 'none';
+  let h = '';
+  if (mySquads.length) {
+    h += '<div style="color:#4fc3f7;font-size:10px;margin-bottom:3px">Tus escuadrones:</div>';
+    mySquads.forEach((sq, i) => {
+      h += '<div class="squad-entry" onclick="doAction(\'attack\',{squad_index:' + i + ',target:\'grimoire\'})">' +
+           '<span class="type">[' + i + '] ' + sq.type + '</span> | daño:' + sq.damage + ' | pot:' + sq.potenciamiento + '</div>';
+    });
+  }
+  if (oppSquads.length) {
+    h += '<div style="color:#888;font-size:10px;margin:4px 0 2px">Escuadrones enemigos:</div>';
+    oppSquads.forEach(sq => {
+      h += '<div class="squad-entry" style="border-color:#555">' + sq.type + ' | daño:' + sq.damage + ' | pot:' + sq.potenciamiento + '</div>';
+    });
+  }
+  list.innerHTML = h || '<div style="color:#888">Sin escuadrones</div>';
+
+  // Defense popup
+  if (s.pending_attack && s.pending_attack.attacker !== MY_ID) {
+    const defSquads = s.squads['p' + MY_ID] || [];
+    let dh = '<p style="color:#ccc;margin-bottom:8px">El oponente esta atacando. Elige defensor:</p>';
+    defSquads.forEach((sq, i) => {
+      dh += '<div class="def-opt" onclick="doAction(\'defend\',{defender_squad_index:' + i + '});document.getElementById(\'defense-popup\').style.display=\'none\'">[' + i + '] ' + sq.type + ' | daño:' + sq.damage + '</div>';
+    });
+    dh += '<div class="def-opt" style="color:#e94560;font-weight:bold" onclick="doAction(\'defend\',{defender_squad_index:-1});document.getElementById(\'defense-popup\').style.display=\'none\'">Sin defensor (recibir daño)</div>';
+    document.getElementById('defense-options').innerHTML = dh;
+    document.getElementById('defense-popup').style.display = 'flex';
+  }
+}
+
+function renderLog(s) {
+  const div = document.getElementById('log');
+  if (!s.log || !s.log.length) { div.innerHTML = ''; return; }
+  div.innerHTML = s.log.slice(-6).map(e => '<div class="entry">' + e + '</div>').join('');
+}
+
+function loadState(s) {
+  state = s;
+  const myTurn = s.active_player === MY_ID;
+  const isAttack = s.phase === 'attack';
+  updateControls(s);
+  document.body.className = 'p' + s.active_player + '-turn';
+  
+  const indicator = document.getElementById('player-indicator');
+  indicator.textContent = myTurn ? 'TU TURNO' : 'Turno de: Jugador ' + (s.active_player + 1);
+  indicator.className = 'p' + s.active_player;
+
+  renderBoard(s);
+  setTimeout(() => renderLinks(s), 50);
+  renderHand(s);
+  renderSquads(s);
+
+  if (s.game_over) {
+    document.getElementById('victory-title').textContent = 'Jugador ' + (s.winner + 1) + ' gana!';
+    document.getElementById('victory-stats').innerHTML = 'Sellos finales — J1: ' + s.seals[0] + ' | J2: ' + s.seals[1];
+    document.getElementById('victory-overlay').style.display = 'flex';
+  }
+}
+
+// ═══ Selection ═══
+let myTurn = false;
+let isAttack = false;
+
+function selectBoard(cid) {
+  if (linkTarget && cid !== linkTarget) {
+    doAction('link', {card_a: linkTarget, card_b: cid});
+    linkTarget = null;
+    selectedBoard = null;
+    return;
+  }
+  if (selectedBoard === cid) {
+    selectedBoard = null;
+    linkTarget = null;
+    document.getElementById('card-detail').style.display = 'none';
+    renderBoard(state);
+    return;
+  }
+  selectedBoard = cid;
+  linkTarget = null;
+  const parts = cid.split(',');
+  const player = parseInt(parts[0]);
+  const li = parseInt(parts[1]);
+  const cell = state.board['p' + player][li][parseInt(parts[2])];
+  if (cell) {
+    showCardDetail(cell);
+  }
+  renderBoard(state);
+}
+
+function selectBoardCell(player, gameLayer, m) {
+  selectedBoard = null;
+  linkTarget = null;
+  document.getElementById('card-detail').style.display = 'none';
+  if (myTurn && !isAttack) {
+    // Select as play target
+    document.querySelectorAll('.cell').forEach(el => el.classList.remove('playable'));
+    event.target.classList.add('playable');
+    // Store target for play action
+    window._playTarget = {player: player, gameLayer: gameLayer, meridian: m};
+  }
+}
+
+function selectHand(idx) {
+  if (myTurn && !isAttack) {
+    selectedHand = (selectedHand === idx) ? null : idx;
+    renderHand(state);
+  }
+}
+
+function showCardDetail(cell) {
+  const panel = document.getElementById('card-detail');
+  document.getElementById('detail-name').textContent = cell.name + ' [' + cell.color + ']';
+  document.getElementById('detail-stats').innerHTML =
+    '<span class="stat">HP:' + cell.hp + '/' + cell.max_hp + '</span> ' +
+    '<span class="stat">D:' + cell.damage_bonus + '</span> ' +
+    '<span class="stat">V:' + cell.used_links + '/' + cell.link_capacity + '</span>';
+  let ah = '';
+  if (cell.abilities) {
+    cell.abilities.forEach(a => { ah += '<div class="ability">' + a + '</div>'; });
+  }
+  document.getElementById('detail-abilities').innerHTML = ah || '<span class="stat">Sin habilidades</span>';
+  panel.style.display = 'block';
+}
+
+// ═══ Actions ═══
+function doAction(act, extraArgs = {}) {
+  if (!myTurn) {
+    alert('No es tu turno.');
+    return;
+  }
+  let args = { ...extraArgs };
+
+  if (act === 'play') {
+    if (selectedHand === null) { alert('Selecciona una carta de tu mano primero'); return; }
+    if (!window._playTarget) { alert('Click en celda vacia del tablero'); return; }
+    args = {hand_index: selectedHand, layer: window._playTarget.gameLayer, meridian: window._playTarget.meridian};
+    window._playTarget = null;
+    selectedHand = null;
+  }
+  if (act === 'ascend' && selectedBoard === null) {
+    alert('Selecciona una carta en el tablero'); return;
+  }
+  if (act === 'ascend') {
+    args = {card_id: selectedBoard};
+  }
+  if (act === 'link' && !args.card_a && selectedBoard) {
+    linkTarget = selectedBoard;
+    renderBoard(state);
+    return;
+  }
+
+  selectedBoard = null;
+  socket.emit('game_action', {action: act, args: args});
+}
+
+// ═══ Socket Events ═══
+socket.on('state_update', s => {
+  myTurn = s.active_player === MY_ID;
+  isAttack = s.phase === 'attack';
+  loadState(s);
+});
+
+socket.on('game_over', data => {
+  state.game_over = true;
+  state.winner = data.winner;
+  document.getElementById('victory-title').textContent = 'Jugador ' + (data.winner + 1) + ' gana!';
+  document.getElementById('victory-stats').innerHTML = 'Sellos finales — J1: ' + data.seals[0] + ' | J2: ' + data.seals[1];
+  document.getElementById('victory-overlay').style.display = 'flex';
+});
+
+socket.on('opponent_left', () => {
+  alert('Oponente desconectado. La partida termino.');
+  window.location.href = '/';
+});
+
+socket.on('error', data => {
+  alert(data.message);
+});
+
+window.addEventListener('resize', () => { if (state) renderLinks(state); });
+</script>
+</body>
+</html>
