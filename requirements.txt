@@ -3,3 +3,4 @@ flask-socketio>=5.3
 python-engineio>=4.8
 python-socketio>=5.11
 simple-websocket>=1.0
+eventlet>=0.36

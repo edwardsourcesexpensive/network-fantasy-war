@@ -322,9 +322,12 @@ if __name__ == '__main__':
     import os
     port = int(os.environ.get('PORT', 5001))
     debug = os.environ.get('DEBUG', 'false').lower() == 'true'
+    prod = os.environ.get('RAILWAY_ENVIRONMENT', '') == 'production' or os.environ.get('RENDER', '')
     
     print(f"\n  NFW Multiplayer Server")
-    print(f"  Port: {port}")
-    print(f"  Debug: {debug}\n")
+    print(f"  Port: {port} | Debug: {debug} | Production: {prod}\n")
     
-    socketio.run(app, host='0.0.0.0', port=port, debug=debug, allow_unsafe_werkzeug=True)
+    if prod:
+        socketio.run(app, host='0.0.0.0', port=port, debug=False)
+    else:
+        socketio.run(app, host='0.0.0.0', port=port, debug=debug, allow_unsafe_werkzeug=True)
