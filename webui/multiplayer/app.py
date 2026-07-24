@@ -191,9 +191,46 @@ def on_join(data):
     # Send filtered state to each player
     for sid, pinfo in room["players"].items():
         s = filtered_state(game, pinfo["player_id"])
+        s["room_code"] = code
         emit('state_update', s, to=sid)
 
     print(f"[Room {code}] {request.sid} joined. Game started.")
+
+
+@socketio.on('rejoin_game')
+def on_rejoin(data):
+    """Rejoin a room after page navigation (new socket connection)."""
+    code = data.get('code', '').upper()
+    player_id = data.get('player_id')
+    
+    if code not in rooms:
+        emit('error', {"message": "Sala no encontrada."})
+        return
+    
+    room = rooms[code]
+    if not room["game"]:
+        emit('error', {"message": "Juego no iniciado."})
+        return
+    
+    # Update the player's socket to the new connection
+    # Find the player by player_id and update their SID
+    old_sid = None
+    for sid, pinfo in room["players"].items():
+        if pinfo["player_id"] == player_id:
+            old_sid = sid
+            break
+    
+    if old_sid:
+        del room["players"][old_sid]
+    
+    room["players"][request.sid] = {"player_id": player_id, "deck": None}
+    join_room(code)
+    
+    # Send current state to the reconnected player
+    s = filtered_state(room["game"], player_id)
+    s["room_code"] = code
+    emit('state_update', s, to=request.sid)
+    print(f"[Room {code}] Player {player_id} rejoined (new SID: {request.sid})")
 
 
 @socketio.on('game_action')

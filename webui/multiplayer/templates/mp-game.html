@@ -109,6 +109,14 @@ body.p1-turn{background:#1a2e1a}
 <script>
 const socket = io();
 const MY_ID = parseInt(sessionStorage.getItem('nfw_player_id') || '0');
+const ROOM_CODE = sessionStorage.getItem('nfw_room_code') || '';
+
+// Rejoin the game room on connect (new socket after page navigation)
+socket.on('connect', () => {
+  if (ROOM_CODE) {
+    socket.emit('rejoin_game', {code: ROOM_CODE, player_id: MY_ID});
+  }
+});
 let state = null;
 let selectedBoard = null;
 let selectedHand = null;
