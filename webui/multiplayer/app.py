@@ -429,8 +429,12 @@ def on_action(data):
     elif action == 'attack':
         si = args.get('squad_index', 0)
         squads = game.get_player_squads(player_id)
-        if 0 <= si < len(squads):
+        if not squads:
+            err = "No tienes escuadrones. Forma triangulos, cuadrados o pentagonos."
+        elif 0 <= si < len(squads):
             err = game.attack(squads[si], args.get('target', 'grimoire'))
+        else:
+            err = "Escuadron no encontrado."
 
     elif action == 'defend':
         di = args.get('defender_squad_index', -1)
