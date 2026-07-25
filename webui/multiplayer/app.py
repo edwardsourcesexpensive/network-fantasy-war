@@ -450,6 +450,8 @@ def on_action(data):
             squad = squads[si]
             if room.get("solo"):
                 # Solo mode: resolve immediately
+                if game.phase != Phase.ATTACK:
+                    game.start_attack_phase()
                 target = args.get('target', 'grimoire')
                 target_id = args.get('target_id')
                 print(f"[Room {code}] Attack (solo): player={player_id}, squad={si}/{len(squads)}, target={target}")
@@ -638,13 +640,17 @@ def on_action(data):
                     continue
             
             # Determine valid entry layers for this card
-            has_vg = any("Vanguardia" in a.description for a in card.definition.abilities)
-            has_lf = any("Línea de fuego" in a.description for a in card.definition.abilities)
-            valid_layers = [1]  # always L1
-            if has_vg or has_lf: valid_layers.append(2)
-            if has_lf: valid_layers.append(3)
-            # Filter by allowed_layers too
-            valid_layers = [l for l in valid_layers if l in card.definition.allowed_layers]
+            # Logistrones and spies are exempt from entry rule
+            if card.definition.is_logistron:
+                valid_layers = card.definition.allowed_layers
+            else:
+                has_vg = any("Vanguardia" in a.description for a in card.definition.abilities)
+                has_lf = any("Línea de fuego" in a.description for a in card.definition.abilities)
+                valid_layers = [1]  # always L1
+                if has_vg or has_lf: valid_layers.append(2)
+                if has_lf: valid_layers.append(3)
+                # Filter by allowed_layers too
+                valid_layers = [l for l in valid_layers if l in card.definition.allowed_layers]
             
             # Try to play near existing cards to form potential squads
             bot_pos = get_bot_positions()
