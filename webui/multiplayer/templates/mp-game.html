@@ -109,13 +109,21 @@ body.p1-turn{background:#1a2e1a}
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
 const socket = io();
-const MY_ID = parseInt(sessionStorage.getItem('nfw_player_id') || '0');
-const ROOM_CODE = sessionStorage.getItem('nfw_room_code') || '';
+// Get player info from URL params or sessionStorage
+const urlParams = new URLSearchParams(window.location.search);
+const MY_ID = parseInt(sessionStorage.getItem('nfw_player_id') || urlParams.get('pid') || '0');
+const ROOM_CODE = sessionStorage.getItem('nfw_room_code') || urlParams.get('code') || '';
+
+// Also store URL params to sessionStorage for reloads
+if (urlParams.get('code')) sessionStorage.setItem('nfw_room_code', urlParams.get('code'));
+if (urlParams.get('pid')) sessionStorage.setItem('nfw_player_id', urlParams.get('pid'));
 
 // Rejoin the game room on connect (new socket after page navigation)
 socket.on('connect', () => {
   if (ROOM_CODE) {
-    socket.emit('rejoin_game', {code: ROOM_CODE, player_id: MY_ID});
+    setTimeout(() => {
+      socket.emit('rejoin_game', {code: ROOM_CODE, player_id: MY_ID});
+    }, 200);
   }
 });
 let state = null;

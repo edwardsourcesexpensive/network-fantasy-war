@@ -191,7 +191,7 @@ socket.on('room_joined', data => {
 socket.on('solo_started', data => {
   sessionStorage.setItem('nfw_room_code', data.room_code);
   sessionStorage.setItem('nfw_player_id', data.player_id);
-  window.location.href = '/mp-game';
+  window.location.href = '/mp-game?code=' + data.room_code + '&pid=' + data.player_id;
 });
 
 socket.on('error', data => {
