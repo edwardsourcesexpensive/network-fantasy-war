@@ -90,7 +90,6 @@ body.p1-turn{background:#1a2e1a}
   <svg id="svg-links"></svg>
 </div>
 
-<div class="frontier">=== FRONTERA ===</div>
 <div id="hand-cards"></div>
 <div id="squads-panel"><h3>Escuadrones</h3><div id="squads-list"></div></div>
 <div id="log"></div>
@@ -276,7 +275,7 @@ function loadState(s) {
   indicator.className = 'p' + s.active_player;
 
   renderBoard(s);
-  setTimeout(() => renderLinks(s), 50);
+  setTimeout(() => renderLinks(s), 100);
   renderHand(s);
   renderSquads(s);
 
