@@ -516,6 +516,30 @@ def on_action(data):
         }, to=code)
         return
     
+    # Solo mode: continue bot attacks after defense
+    if room.get("solo") and room.get("bot_attacks") and action == 'defend':
+        # More bot attacks queued — pop next one
+        next_attack = room['bot_attacks'].pop(0)
+        room['pending_attack'] = next_attack
+        print(f"[Room {code}] Bot next attack: {next_attack['squad_type']}")
+        # Broadcast with new pending_attack (triggers another defense popup)
+        for sid, pinfo in room["players"].items():
+            s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
+            emit('state_update', s, to=sid)
+        return
+    
+    # Solo mode: bot attacks done, end bot turn
+    if room.get("solo") and action == 'defend' and game.active_player == 1:
+        game.active_player = 0
+        game.phase = Phase.ACTIONS
+        game.start_turn()
+        game.entry_phase()
+        print(f"[Room {code}] Bot turn ended, human's turn")
+        for sid, pinfo in room["players"].items():
+            s = filtered_state(game, pinfo["player_id"])
+            emit('state_update', s, to=sid)
+        return
+    
     # Solo mode: auto-play bot turn
     if room.get("solo") and game.active_player == 1:
         print(f"[Room {code}] Bot turn triggered, active_player={game.active_player}")
@@ -602,40 +626,46 @@ def on_action(data):
             emit_bot_state(all_logs)
             socketio.sleep(0.5)
         
-        # Step 4: Attack
+        # Step 4: Queue attacks with defense popup
         squads = game.get_player_squads(1)
         if squads:
             all_logs.append(f"IA tiene {len(squads)} escuadron(es)")
             game.start_attack_phase()
             emit_bot_state(all_logs)
             socketio.sleep(1)
-            # Human auto-defense: pick best squad to defend
-            human_squads = game.get_player_squads(0)
+            
+            # Build attack queue
+            bot_attacks = []
             for sq_idx, squad in enumerate(squads[:2]):
-                # Auto-defend with human's best squad (highest base_damage)
-                defender = None
-                if human_squads:
-                    defender = max(human_squads, key=lambda s: s.base_damage)
-                err = game.attack(squad, 'grimoire', defender)
-                if err is None:
-                    def_str = f" (defendido por {defender.squad_type})" if defender else ""
-                    all_logs.append(f"IA ataca con {squad.squad_type} (daño={squad.base_damage}){def_str}")
-                    emit_bot_state(all_logs)
-                    socketio.sleep(1)
-                    if game.game_over:
-                        for sid, pinfo in room["players"].items():
-                            s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
-                            s["log"] = all_logs[-10:]
-                            emit('state_update', s, to=sid)
-                        emit('game_over', {"winner": game.winner, "seals": [game.seals[0], game.seals[1]]}, to=code)
-                        return
+                bot_attacks.append({
+                    'attacker': 1,
+                    'squad_idx': sq_idx,
+                    'target': 'grimoire',
+                    'target_id': None,
+                    'squad_type': squad.squad_type,
+                    'squad_damage': squad.base_damage,
+                    'squad_color': squad.dominant_color.value if squad.dominant_color else 'incoloro',
+                    'members': [game.all_cards[cid].definition.name for cid in squad.members],
+                })
+            room['bot_attacks'] = bot_attacks
+            
+            # Pop first attack as pending
+            first_attack = room['bot_attacks'].pop(0)
+            room['pending_attack'] = first_attack
+            all_logs.append(f"IA prepara ataque con {first_attack['squad_type']} — ¡defiéndete!")
+            
+            # Broadcast with pending_attack (triggers defense popup)
+            for sid, pinfo in room["players"].items():
+                s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
+                s["log"] = all_logs[-10:]
+                emit('state_update', s, to=sid)
+            return  # Wait for human to defend
         
-        # Step 5: End turn
+        # Step 5: End turn (only reached if bot has no squads)
         game.active_player = 0
         game.phase = Phase.ACTIONS
         game.start_turn()
         game.entry_phase()
-        # Clear log for human's turn
         all_logs = []
         emit_bot_state(all_logs)
         
