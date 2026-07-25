@@ -395,16 +395,28 @@ def on_action(data):
     elif action == 'link':
         ca = args.get('card_a')
         cb = args.get('card_b')
-        # Parse card positions: "0,2,5" -> (player, layer, meridian)
+        # Parse card positions: "0,2,5" -> get CardInstances
         pa = tuple(int(x) for x in ca.split(','))
         pb = tuple(int(x) for x in cb.split(','))
-        err = game.link(player_id, (pa[1], pa[2]), (pb[1], pb[2]))
+        cid_a = game.board.cells[pa[0]][pa[1]][pa[2]] if len(pa) == 3 else None
+        cid_b = game.board.cells[pb[0]][pb[1]][pb[2]] if len(pb) == 3 else None
+        card_a = game.all_cards.get(cid_a) if cid_a else None
+        card_b = game.all_cards.get(cid_b) if cid_b else None
+        if card_a and card_b:
+            err = game.link_cards(player_id, card_a, card_b)
+        else:
+            err = "Cartas no encontradas en el tablero."
 
     elif action == 'ascend':
         cid = args.get('card_id', '')
         parts = cid.split(',')
         li, m = int(parts[1]), int(parts[2])
-        err = game.ascend(player_id, li, m)
+        cell_cid = game.board.cells[player_id][li][m]
+        card = game.all_cards.get(cell_cid) if cell_cid else None
+        if card:
+            err = game.ascend(player_id, card)
+        else:
+            err = "Carta no encontrada."
 
     elif action == 'attack':
         si = args.get('squad_index', 0)
