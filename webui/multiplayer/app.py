@@ -121,6 +121,8 @@ def filtered_state(game, player_id, pending_attack=None):
         "actions": game.actions_remaining,
         "hand": hand,
         "opponent_hand_size": opp_hand_size,
+        "deck_sizes": [len(game.decks[0]), len(game.decks[1])],
+        "hand_sizes": [len(game.hands[0]), len(game.hands[1])],
         "player_id": player_id,
         "board": board,
         "links": links,

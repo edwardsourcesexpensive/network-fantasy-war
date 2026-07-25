@@ -158,7 +158,7 @@ function renderBoard(s) {
 
 function territoryHtml(player, seals, s) {
   const playerAtTop = flipped ? player === 0 : player === 1;
-  let h = '<div class="territory"><div class="territory-label">J' + (player+1) + ' — Sellos: ' + seals + '</div>';
+  let h = '<div class="territory"><div class="territory-label">J' + (player+1) + ' — Sellos: ' + seals + ' | Mazo: ' + (s.deck_sizes ? s.deck_sizes[player] : '?') + ' cartas</div>';
   for (let dl = 1; dl <= 3; dl++) {
     const gameLayer = playerAtTop ? dl : 4 - dl;
     h += '<div class="row">';
