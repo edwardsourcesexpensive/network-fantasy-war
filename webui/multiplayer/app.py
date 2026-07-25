@@ -231,7 +231,8 @@ def play_bot_turn(game, player_id):
                 placed.append((li, m))
     
     for ci_idx, ci in enumerate(placed):
-        a_card = game.board.cells[player_id][ci[0]][ci[1]]
+        cid_a = game.board.cells[player_id][ci[0]][ci[1]]
+        a_card = game.all_cards.get(cid_a)
         if not a_card:
             continue
         if game.network.link_count(a_card) >= 2:
@@ -239,7 +240,8 @@ def play_bot_turn(game, player_id):
         for cj in placed:
             if ci == cj:
                 continue
-            b_card = game.board.cells[player_id][cj[0]][cj[1]]
+            cid_b = game.board.cells[player_id][cj[0]][cj[1]]
+            b_card = game.all_cards.get(cid_b)
             if not b_card:
                 continue
             if game.network.link_count(b_card) >= 2:
