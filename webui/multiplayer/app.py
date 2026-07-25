@@ -211,8 +211,10 @@ def play_bot_turn(game, player_id):
             break
         if not game.hands[player_id]:
             break
+        # Skip spies — pop them to try the next card
         card = game.hands[player_id][0]
         if card.definition.is_spy:
+            game.hands[player_id].pop(0)  # discard spy
             continue
         played = False
         for li in range(3):
@@ -479,8 +481,16 @@ def on_action(data):
     # Solo mode: auto-play bot turn
     if room.get("solo") and game.active_player == 1:
         import time
-        time.sleep(0.3)  # brief pause so the human sees their result
-        logs = play_bot_turn(game, 1)
+        time.sleep(0.3)
+        try:
+            logs = play_bot_turn(game, 1)
+        except Exception as e:
+            logs = [f"Error en IA: {e}"]
+            # Still transition back to human
+            game.active_player = 0
+            game.phase = Phase.ACTIONS
+            game.start_turn()
+            game.entry_phase()
         # Send updated state to human
         for sid, pinfo in room["players"].items():
             s = filtered_state(game, pinfo["player_id"])
