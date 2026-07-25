@@ -450,10 +450,8 @@ def on_action(data):
         if game.phase == Phase.ACTIONS:
             game.start_attack_phase()
         elif game.phase == Phase.ATTACK:
-            game.exit_phase()
-            if not game.game_over:
-                game.start_turn()
-                game.entry_phase()
+            # Return to actions phase (same player keeps remaining actions)
+            game.phase = Phase.ACTIONS
 
     elif action == 'end_turn':
         print(f"[Room {code}] end_turn by player {player_id}")
