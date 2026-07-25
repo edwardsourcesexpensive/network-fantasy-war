@@ -449,9 +449,11 @@ def on_action(data):
         elif 0 <= si < len(squads):
             squad = squads[si]
             if room.get("solo"):
-                # Solo mode: resolve immediately (bot auto-defends with first squad or skips)
-                print(f"[Room {code}] Attack (solo): player={player_id}, squad={si}/{len(squads)}")
-                err = game.attack(squad, args.get('target', 'grimoire'))
+                # Solo mode: resolve immediately
+                target = args.get('target', 'grimoire')
+                target_id = args.get('target_id')
+                print(f"[Room {code}] Attack (solo): player={player_id}, squad={si}/{len(squads)}, target={target}")
+                err = game.attack(squad, target, None, target_id)
                 print(f"[Room {code}] Attack result: err={err}, seals={game.seals}")
             else:
                 # PvP mode: store pending attack for opponent's defense
