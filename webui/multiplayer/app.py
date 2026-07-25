@@ -493,27 +493,107 @@ def on_action(data):
     if room.get("solo") and game.active_player == 1:
         print(f"[Room {code}] Bot turn triggered, active_player={game.active_player}")
         import time
-        time.sleep(0.3)
-        try:
-            logs = play_bot_turn(game, 1)
-        except Exception as e:
-            logs = [f"Error en IA: {e}"]
-            # Still transition back to human
-            game.active_player = 0
-            game.phase = Phase.ACTIONS
-            game.start_turn()
-            game.entry_phase()
-        # Send updated state to human
-        for sid, pinfo in room["players"].items():
-            s = filtered_state(game, pinfo["player_id"])
-            s["log"] = (s.get("log", []) + logs)[-10:]
-            emit('state_update', s, to=sid)
+        
+        def emit_bot_state(logs):
+            for sid, pinfo in room["players"].items():
+                s = filtered_state(game, pinfo["player_id"])
+                s["log"] = logs[-10:] if logs else []
+                emit('state_update', s, to=sid)
+        
+        all_logs = []
+        time.sleep(0.5)
+        
+        # Step 1: Enter actions phase
+        game.phase = Phase.ACTIONS
+        game.actions_remaining = 10
+        all_logs.append("IA comienza su turno")
+        emit_bot_state(all_logs)
+        time.sleep(1)
+        
+        # Step 2: Play cards one by one
+        for _ in range(4):
+            if not game.hands[1]:
+                break
+            card = game.hands[1][0]
+            if card.definition.is_spy:
+                game.hands[1].pop(0)
+                all_logs.append(f"IA descarta espia: {card.definition.name}")
+                emit_bot_state(all_logs)
+                time.sleep(1)
+                continue
+            played = False
+            for li in range(3):
+                for m in range(15):
+                    if game.board.cells[1][li][m] is None:
+                        res = game.play_card(1, 0, li + 1, m)
+                        if res is None:
+                            all_logs.append(f"IA juega {card.definition.name} en L{li+1}:{m}")
+                            played = True
+                            break
+                if played:
+                    break
+            if not played:
+                break
+            emit_bot_state(all_logs)
+            time.sleep(1)
+        
+        # Step 3: Link adjacent cards
+        placed = []
+        for li in range(3):
+            for m in range(15):
+                if game.board.cells[1][li][m] is not None:
+                    placed.append((li, m))
+        for ci_idx, ci in enumerate(placed):
+            for cj in placed[ci_idx+1:]:
+                if ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2:
+                    cid_a = game.board.cells[1][ci[0]][ci[1]]
+                    cid_b = game.board.cells[1][cj[0]][cj[1]]
+                    a_card = game.all_cards.get(cid_a)
+                    b_card = game.all_cards.get(cid_b)
+                    if not a_card or not b_card:
+                        continue
+                    if game.network.link_count(a_card) >= a_card.definition.link_capacity:
+                        continue
+                    if game.network.link_count(b_card) >= b_card.definition.link_capacity:
+                        continue
+                    res = game.link_cards(1, a_card, b_card)
+                    if res is None:
+                        all_logs.append(f"IA vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
+                        emit_bot_state(all_logs)
+                        time.sleep(1)
+        
+        # Step 4: Attack
+        squads = game.get_player_squads(1)
+        if squads:
+            all_logs.append(f"IA tiene {len(squads)} escuadron(es)")
+            game.start_attack_phase()
+            emit_bot_state(all_logs)
+            time.sleep(1)
+            for sq_idx, squad in enumerate(squads[:2]):
+                err = game.attack(squad, 'grimoire')
+                if err is None:
+                    all_logs.append(f"IA ataca con {squad.squad_type} (daño={squad.base_damage})")
+                    emit_bot_state(all_logs)
+                    time.sleep(1)
+                    if game.game_over:
+                        for sid, pinfo in room["players"].items():
+                            s = filtered_state(game, pinfo["player_id"])
+                            s["log"] = all_logs[-10:]
+                            emit('state_update', s, to=sid)
+                        emit('game_over', {"winner": game.winner, "seals": [game.seals[0], game.seals[1]]}, to=code)
+                        return
+        
+        # Step 5: End turn
+        game.active_player = 0
+        game.phase = Phase.ACTIONS
+        game.start_turn()
+        game.entry_phase()
+        # Clear log for human's turn
+        all_logs = []
+        emit_bot_state(all_logs)
         
         if game.game_over:
-            emit('game_over', {
-                "winner": game.winner,
-                "seals": [game.seals[0], game.seals[1]],
-            }, to=code)
+            emit('game_over', {"winner": game.winner, "seals": [game.seals[0], game.seals[1]]}, to=code)
 
 
 @socketio.on('disconnect')
