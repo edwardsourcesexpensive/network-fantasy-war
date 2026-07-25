@@ -267,9 +267,10 @@ def play_bot_turn(game, player_id):
                 if game.game_over:
                     break
     
-    # End turn — skip exit_phase to avoid purging human player's cards
+    # End turn — skip exit_phase to avoid purging human cards, manually switch player
     if not game.game_over:
-        game.phase = Phase.ACTIONS  # reset for next player
+        game.active_player = 1 - game.active_player  # switch to human
+        game.phase = Phase.ACTIONS
         game.start_turn()
         game.entry_phase()
     logs.append("IA termina turno")

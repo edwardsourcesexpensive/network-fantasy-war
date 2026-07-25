@@ -275,8 +275,10 @@ function loadState(s) {
   indicator.className = 'p' + s.active_player;
 
   renderBoard(s);
-  // Wait for DOM layout before rendering SVG links
-  requestAnimationFrame(() => renderLinks(s));
+  // Double-requestAnimationFrame ensures layout is complete
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => renderLinks(s));
+  });
   renderHand(s);
   renderSquads(s);
 
