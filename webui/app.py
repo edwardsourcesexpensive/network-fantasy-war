@@ -173,6 +173,10 @@ def api_action():
             game.entry_phase()
         result["ok"] = True
     
+    elif action == 'surrender':
+        game._end_game(1 - player)
+        result["ok"] = True
+    
     elif action == 'ai_turn':
         result["log"] = []
         # Ensure actions phase is active

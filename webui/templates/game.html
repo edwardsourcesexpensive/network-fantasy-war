@@ -120,6 +120,7 @@ body.phase-attack .phase-attack{display:flex}
    <button class="btn" onclick="action('next_phase')">🏁 Finalizar ataque</button>
   </span>
   <button class="btn" onclick="action('end_turn')">⏩ Fin Turno</button>
+  <button class="btn" onclick="surrender()" style="background:#8b0000;color:#fff;border-color:#8b0000">🏳️ Rendirse</button>
   <button class="btn" onclick="refresh()">🔄 Refresh</button>
   <button class="btn" onclick="flipBoard()">🔄 Flip</button>
  </div>
@@ -576,6 +577,12 @@ async function runAITurn() {
 
 async function refresh() {
   const r = await api('/api/state');
+  if (r.state) loadState(r.state);
+}
+
+async function surrender() {
+  if (!confirm('¿Rendirse? Tu oponente ganará la partida.')) return;
+  const r = await api('/api/action', {action: 'surrender', args: {}});
   if (r.state) loadState(r.state);
 }
 

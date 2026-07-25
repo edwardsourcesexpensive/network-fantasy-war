@@ -408,14 +408,14 @@ def on_action(data):
         else:
             pa = tuple(int(x) for x in ca.split(','))
             pb = tuple(int(x) for x in cb.split(','))
-        cid_a = game.board.cells[pa[0]][pa[1]][pa[2]] if len(pa) == 3 else None
-        cid_b = game.board.cells[pb[0]][pb[1]][pb[2]] if len(pb) == 3 else None
-        card_a = game.all_cards.get(cid_a) if cid_a else None
-        card_b = game.all_cards.get(cid_b) if cid_b else None
-        if card_a and card_b:
-            err = game.link_cards(player_id, card_a, card_b)
-        else:
-            err = "Cartas no encontradas en el tablero."
+            cid_a = game.board.cells[pa[0]][pa[1]][pa[2]] if len(pa) == 3 else None
+            cid_b = game.board.cells[pb[0]][pb[1]][pb[2]] if len(pb) == 3 else None
+            card_a = game.all_cards.get(cid_a) if cid_a else None
+            card_b = game.all_cards.get(cid_b) if cid_b else None
+            if card_a and card_b:
+                err = game.link_cards(player_id, card_a, card_b)
+            else:
+                err = "Cartas no encontradas en el tablero."
 
     elif action == 'ascend':
         cid = args.get('card_id', '')
@@ -470,6 +470,10 @@ def on_action(data):
             game.start_turn()
             game.entry_phase()
 
+    elif action == 'surrender':
+        game._end_game(1 - player_id)
+        print(f"[Room {code}] Player {player_id} surrendered. Winner: {game.winner}")
+
     else:
         emit('error', {"message": f"Accion desconocida: {action}"})
         return
@@ -507,13 +511,13 @@ def on_action(data):
         
         # Step 1: Enter actions phase
         game.phase = Phase.ACTIONS
-        game.actions_remaining = 4
-        all_logs.append("IA comienza su turno (4 acciones)")
+        game.actions_remaining = 10  # plenty of actions to form squads
+        all_logs.append("IA comienza su turno (10 acciones)")
         emit_bot_state(all_logs)
         socketio.sleep(1)
         
-        # Step 2: Play cards one by one (max 3, saving 1 action for linking)
-        cards_to_play = 3
+        # Step 2: Play cards one by one (max 4, saving actions for linking)
+        cards_to_play = 4
         for _ in range(cards_to_play):
             if not game.hands[1]:
                 break
@@ -540,18 +544,21 @@ def on_action(data):
             emit_bot_state(all_logs)
             socketio.sleep(1)
         
-        # Step 3: Link one pair of adjacent cards (1 action)
+        # Step 3: Link all possible adjacent pairs (same layer + cross-layer)
         placed = []
         for li in range(3):
             for m in range(15):
                 if game.board.cells[1][li][m] is not None:
                     placed.append((li, m))
-        linked = False
+        
+        link_count = 0
         for ci_idx, ci in enumerate(placed):
-            if linked:
-                break
             for cj in placed[ci_idx+1:]:
-                if ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2:
+                # Same layer: adjacent meridians (distance <= 2)
+                # Cross-layer: same meridian or adjacent, layer diff = 1
+                same_layer = ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2
+                cross_layer = abs(ci[0] - cj[0]) == 1 and abs(ci[1] - cj[1]) <= 1
+                if same_layer or cross_layer:
                     cid_a = game.board.cells[1][ci[0]][ci[1]]
                     cid_b = game.board.cells[1][cj[0]][cj[1]]
                     a_card = game.all_cards.get(cid_a)
@@ -565,9 +572,14 @@ def on_action(data):
                     res = game.link_cards(1, a_card, b_card)
                     if res is None:
                         all_logs.append(f"IA vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
-                        linked = True
+                        link_count += 1
                         emit_bot_state(all_logs)
-                        socketio.sleep(1)
+                        socketio.sleep(0.5)
+        
+        if link_count == 0:
+            all_logs.append("IA no pudo vincular cartas")
+            emit_bot_state(all_logs)
+            socketio.sleep(0.5)
         
         # Step 4: Attack
         squads = game.get_player_squads(1)

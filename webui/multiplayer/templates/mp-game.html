@@ -81,6 +81,7 @@ body.p1-turn{background:#1a2e1a}
     <button class="btn" onclick="doAction('next_phase')">Finalizar ataque</button>
   </span>
   <button class="btn" onclick="doAction('end_turn')">Fin Turno</button>
+  <button class="btn" onclick="surrender()" style="background:#8b0000;color:#fff;border-color:#8b0000">🏳️ Rendirse</button>
   <button class="btn" onclick="location.reload()">Refresh</button>
   <span id="player-indicator"></span>
 </div>
@@ -380,8 +381,13 @@ function doAction(act, extraArgs = {}) {
     return;
   }
 
-  selectedBoard = null;
-  socket.emit('game_action', {action: act, args: args});
+  selectedBoard = null; selectedHand = null;
+  socket.emit('game_action', { action: act, args });
+}
+
+function surrender() {
+  if (!confirm('¿Rendirse? Tu oponente ganará la partida.')) return;
+  socket.emit('game_action', { action: 'surrender', args: {} });
 }
 
 // ═══ Socket Events ═══
