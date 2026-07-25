@@ -451,8 +451,10 @@ def on_action(data):
                 game.entry_phase()
 
     elif action == 'end_turn':
+        print(f"[Room {code}] end_turn by player {player_id}")
         game.phase = Phase.ATTACK
         game.exit_phase()
+        print(f"[Room {code}] after exit_phase: active_player={game.active_player}")
         if not game.game_over:
             game.start_turn()
             game.entry_phase()
@@ -480,6 +482,7 @@ def on_action(data):
     
     # Solo mode: auto-play bot turn
     if room.get("solo") and game.active_player == 1:
+        print(f"[Room {code}] Bot turn triggered, active_player={game.active_player}")
         import time
         time.sleep(0.3)
         try:
