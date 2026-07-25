@@ -35,7 +35,8 @@ button.secondary:hover{background:#1a3a5c}
 <!-- Phase 1: Mode selection -->
 <div id="phase-mode" class="panel">
   <h2>Elige como jugar</h2>
-  <button onclick="showCreate()">Crear sala</button>
+  <button onclick="showSolo()" style="background:#1a3a1a;border-color:#4caf50;color:#4caf50">Jugar vs IA</button>
+  <button onclick="showCreate()">Crear sala (2 jugadores)</button>
   <button class="secondary" onclick="showJoin()">Unirse a sala</button>
 </div>
 
@@ -53,6 +54,12 @@ button.secondary:hover{background:#1a3a5c}
   <p class="wait-msg" style="text-align:center">Comparte este codigo con tu oponente:</p>
   <div class="code" id="room-code-display"></div>
   <p class="status" id="wait-msg">Esperando oponente...</p>
+</div>
+
+<!-- Solo vs AI -->
+<div id="phase-solo" class="panel hidden">
+  <h2>Jugar vs IA</h2>
+  <div id="deck-options-solo"></div>
 </div>
 
 <!-- Join room -->
@@ -131,6 +138,35 @@ function joinRoom() {
   socket.emit('join_room', {code: code, deck: selectedDeckJoiner});
 }
 
+// Solo vs AI
+let selectedDeckSolo = null;
+
+function showSolo() {
+  document.getElementById('phase-mode').classList.add('hidden');
+  document.getElementById('phase-solo').classList.remove('hidden');
+  if (!decksData) return;
+  const keys = Object.keys(decksData);
+  const div = document.getElementById('deck-options-solo');
+  div.innerHTML = '<p style="color:#888;font-size:11px;margin-bottom:4px">Elige tu mazo:</p>';
+  keys.forEach(k => {
+    const btn = document.createElement('div');
+    btn.className = 'deck-option';
+    btn.textContent = decksData[k].name + ' (' + decksData[k].count + ' cartas)';
+    btn.onclick = () => {
+      selectedDeckSolo = k;
+      document.querySelectorAll('#deck-options-solo .deck-option').forEach(el => el.classList.remove('selected'));
+      btn.classList.add('selected');
+      createSoloRoom();
+    };
+    div.appendChild(btn);
+  });
+}
+
+function createSoloRoom() {
+  if (!selectedDeckSolo) return;
+  socket.emit('create_solo_room', {deck: selectedDeckSolo});
+}
+
 // Socket events
 socket.on('room_created', data => {
   document.getElementById('phase-create').classList.add('hidden');
@@ -149,6 +185,12 @@ socket.on('opponent_joined', data => {
 socket.on('room_joined', data => {
   sessionStorage.setItem('nfw_room_code', data.code);
   sessionStorage.setItem('nfw_player_id', '1');
+  window.location.href = '/mp-game';
+});
+
+socket.on('solo_started', data => {
+  sessionStorage.setItem('nfw_room_code', data.room_code);
+  sessionStorage.setItem('nfw_player_id', data.player_id);
   window.location.href = '/mp-game';
 });
 

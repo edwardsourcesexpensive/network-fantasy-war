@@ -157,6 +157,114 @@ def on_create(data):
     print(f"[Room {code}] Created by {request.sid} (host, P0)")
 
 
+@socketio.on('create_solo_room')
+def on_create_solo(data):
+    """Create a room with human + AI bot."""
+    code = gen_code()
+    while code in rooms:
+        code = gen_code()
+    deck_key = data.get('deck', 'filo')
+    
+    # Pick AI deck (different from human's)
+    ai_keys = [k for k in DECKS if k != deck_key]
+    import random
+    ai_deck_key = random.choice(ai_keys)
+    
+    rooms[code] = {
+        "players": {request.sid: {"player_id": 0, "deck": deck_key}},
+        "game": None,
+        "host_sid": request.sid,
+        "solo": True,
+        "bot_deck": ai_deck_key,
+    }
+    join_room(code)
+    
+    # Start game immediately
+    room = rooms[code]
+    deck1 = DECKS[deck_key][:]
+    deck2 = DECKS[ai_deck_key][:]
+    game = GameState(deck1, deck2)
+    game.start_turn()
+    game.entry_phase()
+    room["game"] = game
+    
+    s = filtered_state(game, 0)
+    s["room_code"] = code
+    s["solo"] = True
+    emit('solo_started', s)
+    print(f"[Room {code}] Solo game vs AI ({ai_deck_key}) started")
+
+
+def play_bot_turn(game, player_id):
+    """Execute AI turn for the bot player. Returns list of log messages."""
+    logs = []
+    
+    # Actions phase: play up to 4 cards
+    for _ in range(4):
+        if game.phase != Phase.ACTIONS:
+            break
+        if not game.hands[player_id]:
+            break
+        card = game.hands[player_id][0]
+        if card.definition.is_spy:
+            continue
+        played = False
+        for li in range(3):
+            for m in range(15):
+                if game.board.cells[player_id][li][m] is None:
+                    res = game.play_card(player_id, 0, li + 1, m)
+                    if res is None:
+                        logs.append(f"IA juega {card.definition.name} en L{li+1}:{m}")
+                        played = True
+                        break
+            if played:
+                break
+        if not played:
+            break
+    
+    # Link adjacent cards
+    placed = game.board.all_placed(player_id)
+    for ci_idx, ci in enumerate(placed):
+        if game.board.node_link_count(player_id, ci[0], ci[1]) >= 2:
+            continue
+        for cj in placed:
+            if ci == cj:
+                continue
+            if game.board.node_link_count(player_id, cj[0], cj[1]) >= 2:
+                continue
+            if ci[0] == cj[0] and abs(ci[1] - cj[1]) == 1:
+                a_card = game.board.cells[player_id][ci[0]][ci[1]]
+                b_card = game.board.cells[player_id][cj[0]][cj[1]]
+                if a_card and b_card:
+                    res = game.link_cards(player_id, a_card, b_card)
+                    if res is None:
+                        logs.append(f"IA vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
+                        break
+        break
+    
+    # Attack phase
+    if game.phase == Phase.ACTIONS:
+        game.start_attack_phase()
+        logs.append("IA entra en fase de ataque")
+    
+    if game.phase == Phase.ATTACK:
+        squads = game.get_player_squads(player_id)
+        for sq_idx, squad in enumerate(squads[:2]):  # max 2 attacks
+            err = game.attack(squad, 'grimoire')
+            if err is None:
+                logs.append(f"IA ataca con escuadron {sq_idx} ({squad.squad_type})")
+                if game.game_over:
+                    break
+    
+    # End turn
+    if not game.game_over:
+        game.exit_phase()
+        game.start_turn()
+        game.entry_phase()
+    logs.append("IA termina turno")
+    return logs
+
+
 @socketio.on('join_room')
 def on_join(data):
     code = data.get('code', '').upper()
@@ -341,6 +449,24 @@ def on_action(data):
             "winner": game.winner,
             "seals": [game.seals[0], game.seals[1]],
         }, to=code)
+        return
+    
+    # Solo mode: auto-play bot turn
+    if room.get("solo") and game.active_player == 1:
+        import time
+        time.sleep(0.3)  # brief pause so the human sees their result
+        logs = play_bot_turn(game, 1)
+        # Send updated state to human
+        for sid, pinfo in room["players"].items():
+            s = filtered_state(game, pinfo["player_id"])
+            s["log"] = (s.get("log", []) + logs)[-10:]
+            emit('state_update', s, to=sid)
+        
+        if game.game_over:
+            emit('game_over', {
+                "winner": game.winner,
+                "seals": [game.seals[0], game.seals[1]],
+            }, to=code)
 
 
 @socketio.on('disconnect')
