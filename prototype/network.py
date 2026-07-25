@@ -132,6 +132,30 @@ class Network:
             for s in component_squads:
                 processed.update(s.members)
 
+        # Detect lines (pairs of linked cards not in any cycle)
+        for cid in list(normal_ids):
+            if cid in processed:
+                continue
+            if cid not in self.links:
+                processed.add(cid)
+                continue
+            
+            # Find a linked neighbor that's also unprocessed
+            for neighbor in self.links[cid]:
+                if neighbor in normal_ids and neighbor not in processed:
+                    squad = Squad(
+                        members={cid, neighbor},
+                        squad_type="line",
+                        cards=cards,
+                        internal_nodes=0,
+                    )
+                    squads.append(squad)
+                    processed.add(cid)
+                    processed.add(neighbor)
+                    break
+            else:
+                processed.add(cid)
+
         # Handle any remaining cards as singletons
         for cid in normal_ids:
             if cid not in processed:
