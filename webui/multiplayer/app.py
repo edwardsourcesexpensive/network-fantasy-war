@@ -231,21 +231,24 @@ def play_bot_turn(game, player_id):
                 placed.append((li, m))
     
     for ci_idx, ci in enumerate(placed):
-        if game.board.node_link_count(player_id, ci[0], ci[1]) >= 2:
+        a_card = game.board.cells[player_id][ci[0]][ci[1]]
+        if not a_card:
+            continue
+        if game.network.link_count(a_card) >= 2:
             continue
         for cj in placed:
             if ci == cj:
                 continue
-            if game.board.node_link_count(player_id, cj[0], cj[1]) >= 2:
+            b_card = game.board.cells[player_id][cj[0]][cj[1]]
+            if not b_card:
+                continue
+            if game.network.link_count(b_card) >= 2:
                 continue
             if ci[0] == cj[0] and abs(ci[1] - cj[1]) == 1:
-                a_card = game.board.cells[player_id][ci[0]][ci[1]]
-                b_card = game.board.cells[player_id][cj[0]][cj[1]]
-                if a_card and b_card:
-                    res = game.link_cards(player_id, a_card, b_card)
-                    if res is None:
-                        logs.append(f"IA vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
-                        break
+                res = game.link_cards(player_id, a_card, b_card)
+                if res is None:
+                    logs.append(f"IA vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
+                    break
         break
     
     # Attack phase
