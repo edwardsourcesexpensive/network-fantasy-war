@@ -275,10 +275,7 @@ function loadState(s) {
   indicator.className = 'p' + s.active_player;
 
   renderBoard(s);
-  // Double-requestAnimationFrame ensures layout is complete
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => renderLinks(s));
-  });
+  renderLinks(s);
   renderHand(s);
   renderSquads(s);
 
