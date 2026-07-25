@@ -165,7 +165,9 @@ function territoryHtml(player, seals, s) {
         const sel = selectedBoard === cid ? ' selected' : '';
         const used = cell.v_used || 0;
         const max = cell.v || 0;
-        h += '<div class="cell occupied' + sel + '" data-cid="' + cid + '" title="' + cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + (cell.d || 0) + '" onclick="selectBoard(\'' + cid + '\')">' +
+        const abils = cell.abilities ? cell.abilities.map(a => a.length > 40 ? a.substring(0,37)+'...' : a).join(' | ') : '';
+        const tt = cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + (cell.d || 0) + ' | V:' + used + '/' + max + (abils ? ' | ' + abils : '');
+        h += '<div class="cell occupied' + sel + '" data-cid="' + cid + '" title="' + tt + '" onclick="selectBoard(\'' + cid + '\');showCardDetail(window._lastCell||cell)" onmouseenter="window._lastCell=cell">' +
              cell.name.substring(0, 8) +
              '<span class="hp">' + cell.hp + '</span>' +
              '<span class="v">' + used + '/' + max + '</span>' +
@@ -185,7 +187,8 @@ function renderHand(s) {
   div.innerHTML = s.hand.map(c => {
     const sel = selectedHand === c.index ? ' selected' : '';
     const abils = c.abilities ? c.abilities.map(a => a.length > 50 ? a.substring(0,47)+'...' : a).join(' | ') : '';
-    return '<div class="hand-card' + sel + '" onclick="selectHand(' + c.index + ')" title="' + c.name + '">' +
+    const tooltip = c.name + ' | ' + c.color + ' | HP:' + c.hp + ' D:' + (c.damage_bonus||0) + ' V:' + (c.link_capacity||0) + ' | L:' + (c.allowed_layers||[]).join(',') + (abils ? ' | ' + abils : '');
+    return '<div class="hand-card' + sel + '" onclick="selectHand(' + c.index + ')" title="' + tooltip + '">' +
            '<div class="hn">' + c.name + '</div>' +
            '<div class="hs">' + c.color + ' | HP:' + c.hp + ' D:' + c.damage_bonus + ' V:' + c.link_capacity + ' | L:' + c.allowed_layers.join(',') + '</div>' +
            (abils ? '<div class="ha">' + abils + '</div>' : '') +
@@ -337,6 +340,26 @@ function selectHand(idx) {
     selectedHand = (selectedHand === idx) ? null : idx;
     renderHand(state);
   }
+  // Also show card detail panel for any click
+  if (state && state.hand && state.hand[idx]) {
+    showHandDetail(state.hand[idx]);
+  }
+}
+
+function showHandDetail(c) {
+  const panel = document.getElementById('card-detail');
+  document.getElementById('detail-name').textContent = c.name + ' [' + c.color + ']';
+  document.getElementById('detail-stats').innerHTML =
+    '<span class="stat">HP:' + c.hp + '</span> ' +
+    '<span class="stat">D:' + (c.damage_bonus || 0) + '</span> ' +
+    '<span class="stat">V:' + (c.link_capacity || 0) + '</span> ' +
+    '<span class="stat">L:' + (c.allowed_layers || []).join(',') + '</span>';
+  let ah = '';
+  if (c.abilities) {
+    c.abilities.forEach(a => { ah += '<div class="ability">' + a + '</div>'; });
+  }
+  document.getElementById('detail-abilities').innerHTML = ah || '<span class="stat">Sin habilidades</span>';
+  panel.style.display = 'block';
 }
 
 function showCardDetail(cell) {

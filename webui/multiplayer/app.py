@@ -609,10 +609,17 @@ def on_action(data):
             game.start_attack_phase()
             emit_bot_state(all_logs)
             socketio.sleep(1)
+            # Human auto-defense: pick best squad to defend
+            human_squads = game.get_player_squads(0)
             for sq_idx, squad in enumerate(squads[:2]):
-                err = game.attack(squad, 'grimoire')
+                # Auto-defend with human's best squad (highest base_damage)
+                defender = None
+                if human_squads:
+                    defender = max(human_squads, key=lambda s: s.base_damage)
+                err = game.attack(squad, 'grimoire', defender)
                 if err is None:
-                    all_logs.append(f"IA ataca con {squad.squad_type} (daño={squad.base_damage})")
+                    def_str = f" (defendido por {defender.squad_type})" if defender else ""
+                    all_logs.append(f"IA ataca con {squad.squad_type} (daño={squad.base_damage}){def_str}")
                     emit_bot_state(all_logs)
                     socketio.sleep(1)
                     if game.game_over:
