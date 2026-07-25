@@ -163,9 +163,9 @@ function territoryHtml(player, seals, s) {
       if (cell) {
         const cid = player + ',' + (gameLayer - 1) + ',' + m;
         const sel = selectedBoard === cid ? ' selected' : '';
-        const used = cell.used_links || 0;
-        const max = cell.link_capacity || 0;
-        h += '<div class="cell occupied' + sel + '" data-cid="' + cid + '" title="' + cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + cell.damage_bonus + '" onclick="selectBoard(\'' + cid + '\')">' +
+        const used = cell.v_used || 0;
+        const max = cell.v || 0;
+        h += '<div class="cell occupied' + sel + '" data-cid="' + cid + '" title="' + cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + (cell.d || 0) + '" onclick="selectBoard(\'' + cid + '\')">' +
              cell.name.substring(0, 8) +
              '<span class="hp">' + cell.hp + '</span>' +
              '<span class="v">' + used + '/' + max + '</span>' +
@@ -344,8 +344,8 @@ function showCardDetail(cell) {
   document.getElementById('detail-name').textContent = cell.name + ' [' + cell.color + ']';
   document.getElementById('detail-stats').innerHTML =
     '<span class="stat">HP:' + cell.hp + '/' + cell.max_hp + '</span> ' +
-    '<span class="stat">D:' + cell.damage_bonus + '</span> ' +
-    '<span class="stat">V:' + cell.used_links + '/' + cell.link_capacity + '</span>';
+    '<span class="stat">D:' + (cell.d || 0) + '</span> ' +
+    '<span class="stat">V:' + (cell.v_used || 0) + '/' + (cell.v || 0) + '</span>';
   let ah = '';
   if (cell.abilities) {
     cell.abilities.forEach(a => { ah += '<div class="ability">' + a + '</div>'; });
