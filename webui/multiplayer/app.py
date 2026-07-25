@@ -199,6 +199,10 @@ def play_bot_turn(game, player_id):
     """Execute AI turn for the bot player. Returns list of log messages."""
     logs = []
     
+    # Ensure we're in actions phase
+    game.phase = Phase.ACTIONS
+    game.actions_remaining = 4
+    
     # Actions phase: play up to 4 cards
     for _ in range(4):
         if game.phase != Phase.ACTIONS:

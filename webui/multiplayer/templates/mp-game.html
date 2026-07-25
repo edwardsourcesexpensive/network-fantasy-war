@@ -276,6 +276,8 @@ function loadState(s) {
 
   renderBoard(s);
   renderLinks(s);
+  // Fallback: re-render links after layout settles
+  setTimeout(() => renderLinks(s), 300);
   renderHand(s);
   renderSquads(s);
 

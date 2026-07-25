@@ -175,6 +175,9 @@ def api_action():
     
     elif action == 'ai_turn':
         result["log"] = []
+        # Ensure actions phase is active
+        game.phase = Phase.ACTIONS
+        game.actions_remaining = 4
         # Actions phase: play up to 4 cards (always use index 0 since hand shifts)
         for _ in range(4):
             if game.phase != Phase.ACTIONS:
