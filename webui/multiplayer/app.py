@@ -228,36 +228,31 @@ def play_bot_turn(game, player_id):
         if not played:
             break
     
-    # Link adjacent cards
-    # Collect positions of placed cards
+    # Link adjacent cards — link all possible adjacent pairs
     placed = []
     for li in range(3):
         for m in range(15):
             if game.board.cells[player_id][li][m] is not None:
                 placed.append((li, m))
     
+    linked_any = False
     for ci_idx, ci in enumerate(placed):
-        cid_a = game.board.cells[player_id][ci[0]][ci[1]]
-        a_card = game.all_cards.get(cid_a)
-        if not a_card:
-            continue
-        if game.network.link_count(a_card) >= 2:
-            continue
-        for cj in placed:
-            if ci == cj:
-                continue
-            cid_b = game.board.cells[player_id][cj[0]][cj[1]]
-            b_card = game.all_cards.get(cid_b)
-            if not b_card:
-                continue
-            if game.network.link_count(b_card) >= 2:
-                continue
+        for cj in placed[ci_idx+1:]:
             if ci[0] == cj[0] and abs(ci[1] - cj[1]) == 1:
+                cid_a = game.board.cells[player_id][ci[0]][ci[1]]
+                cid_b = game.board.cells[player_id][cj[0]][cj[1]]
+                a_card = game.all_cards.get(cid_a)
+                b_card = game.all_cards.get(cid_b)
+                if not a_card or not b_card:
+                    continue
+                if game.network.link_count(a_card) >= a_card.definition.link_capacity:
+                    continue
+                if game.network.link_count(b_card) >= b_card.definition.link_capacity:
+                    continue
                 res = game.link_cards(player_id, a_card, b_card)
                 if res is None:
                     logs.append(f"IA vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
-                    break
-        break
+                    linked_any = True
     
     # Attack phase
     if game.phase == Phase.ACTIONS:

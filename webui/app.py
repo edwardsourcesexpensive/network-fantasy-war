@@ -201,22 +201,29 @@ def api_action():
             if not played:
                 break
         
-        # Link adjacent cards if possible (simple heuristic)
-        for ci, c1 in game.board.all_placed(player):
-            if game.board.node_link_count(player, ci[0], ci[1]) >= 2:
-                continue
-            for c2 in game.board.all_placed(player):
-                if c1 == c2:
-                    continue
-                if game.board.node_link_count(player, c2[0], c2[1]) >= 2:
-                    continue
-                # Simple check: same layer, adjacent meridian
-                if c1[0] == c2[0] and abs(c1[1] - c2[1]) == 1:
-                    res = game.link(player, (c1[0], c1[1]), (c2[0], c2[1]))
+        # Link adjacent cards — link all possible adjacent pairs
+        placed = []
+        for li in range(3):
+            for m in range(15):
+                if game.board.cells[player][li][m] is not None:
+                    placed.append((li, m))
+        
+        for ci_idx, ci in enumerate(placed):
+            for cj in placed[ci_idx+1:]:
+                if ci[0] == cj[0] and abs(ci[1] - cj[1]) == 1:
+                    cid_a = game.board.cells[player][ci[0]][ci[1]]
+                    cid_b = game.board.cells[player][cj[0]][cj[1]]
+                    a_card = game.all_cards.get(cid_a)
+                    b_card = game.all_cards.get(cid_b)
+                    if not a_card or not b_card:
+                        continue
+                    if game.network.link_count(a_card) >= a_card.definition.link_capacity:
+                        continue
+                    if game.network.link_count(b_card) >= b_card.definition.link_capacity:
+                        continue
+                    res = game.link_cards(player, a_card, b_card)
                     if res is None:
-                        result["log"].append(f"AI vincula L{c1[0]+1}:{c1[1]} - L{c2[0]+1}:{c2[1]}")
-                        break
-            break
+                        result["log"].append(f"AI vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
         
         # Attack phase
         if game.phase == Phase.ACTIONS:
