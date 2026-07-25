@@ -403,9 +403,11 @@ def on_action(data):
     elif action == 'link':
         ca = args.get('card_a')
         cb = args.get('card_b')
-        # Parse card positions: "0,2,5" -> get CardInstances
-        pa = tuple(int(x) for x in ca.split(','))
-        pb = tuple(int(x) for x in cb.split(','))
+        if not ca or not cb:
+            err = "Selecciona dos cartas para vincular."
+        else:
+            pa = tuple(int(x) for x in ca.split(','))
+            pb = tuple(int(x) for x in cb.split(','))
         cid_a = game.board.cells[pa[0]][pa[1]][pa[2]] if len(pa) == 3 else None
         cid_b = game.board.cells[pb[0]][pb[1]][pb[2]] if len(pb) == 3 else None
         card_a = game.all_cards.get(cid_a) if cid_a else None
@@ -492,7 +494,7 @@ def on_action(data):
     # Solo mode: auto-play bot turn
     if room.get("solo") and game.active_player == 1:
         print(f"[Room {code}] Bot turn triggered, active_player={game.active_player}")
-        import time
+        import time  # keep time module available
         
         def emit_bot_state(logs):
             for sid, pinfo in room["players"].items():
@@ -501,14 +503,14 @@ def on_action(data):
                 emit('state_update', s, to=sid)
         
         all_logs = []
-        time.sleep(0.5)
+        socketio.sleep(0.5)
         
         # Step 1: Enter actions phase
         game.phase = Phase.ACTIONS
         game.actions_remaining = 10
         all_logs.append("IA comienza su turno")
         emit_bot_state(all_logs)
-        time.sleep(1)
+        socketio.sleep(1)
         
         # Step 2: Play cards one by one
         for _ in range(4):
@@ -519,7 +521,7 @@ def on_action(data):
                 game.hands[1].pop(0)
                 all_logs.append(f"IA descarta espia: {card.definition.name}")
                 emit_bot_state(all_logs)
-                time.sleep(1)
+                socketio.sleep(1)
                 continue
             played = False
             for li in range(3):
@@ -535,7 +537,7 @@ def on_action(data):
             if not played:
                 break
             emit_bot_state(all_logs)
-            time.sleep(1)
+            socketio.sleep(1)
         
         # Step 3: Link adjacent cards
         placed = []
@@ -560,7 +562,7 @@ def on_action(data):
                     if res is None:
                         all_logs.append(f"IA vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
                         emit_bot_state(all_logs)
-                        time.sleep(1)
+                        socketio.sleep(1)
         
         # Step 4: Attack
         squads = game.get_player_squads(1)
@@ -568,13 +570,13 @@ def on_action(data):
             all_logs.append(f"IA tiene {len(squads)} escuadron(es)")
             game.start_attack_phase()
             emit_bot_state(all_logs)
-            time.sleep(1)
+            socketio.sleep(1)
             for sq_idx, squad in enumerate(squads[:2]):
                 err = game.attack(squad, 'grimoire')
                 if err is None:
                     all_logs.append(f"IA ataca con {squad.squad_type} (daño={squad.base_damage})")
                     emit_bot_state(all_logs)
-                    time.sleep(1)
+                    socketio.sleep(1)
                     if game.game_over:
                         for sid, pinfo in room["players"].items():
                             s = filtered_state(game, pinfo["player_id"])
