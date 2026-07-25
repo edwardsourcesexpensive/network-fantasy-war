@@ -435,18 +435,24 @@ def on_action(data):
             err = "No tienes escuadrones. Forma triangulos, cuadrados o pentagonos."
         elif 0 <= si < len(squads):
             squad = squads[si]
-            print(f"[Room {code}] Attack pending: player={player_id}, squad={si}/{len(squads)}")
-            # Store pending attack for defense
-            room['pending_attack'] = {
-                'attacker': player_id,
-                'squad_idx': si,
-                'target': args.get('target', 'grimoire'),
-                'target_id': args.get('target_id'),
-                'squad_type': squad.squad_type,
-                'squad_damage': squad.base_damage,
-                'squad_color': squad.dominant_color.value if squad.dominant_color else 'incoloro',
-                'members': [game.all_cards[cid].definition.name for cid in squad.members],
-            }
+            if room.get("solo"):
+                # Solo mode: resolve immediately (bot auto-defends with first squad or skips)
+                print(f"[Room {code}] Attack (solo): player={player_id}, squad={si}/{len(squads)}")
+                err = game.attack(squad, args.get('target', 'grimoire'))
+                print(f"[Room {code}] Attack result: err={err}, seals={game.seals}")
+            else:
+                # PvP mode: store pending attack for opponent's defense
+                print(f"[Room {code}] Attack pending: player={player_id}, squad={si}/{len(squads)}")
+                room['pending_attack'] = {
+                    'attacker': player_id,
+                    'squad_idx': si,
+                    'target': args.get('target', 'grimoire'),
+                    'target_id': args.get('target_id'),
+                    'squad_type': squad.squad_type,
+                    'squad_damage': squad.base_damage,
+                    'squad_color': squad.dominant_color.value if squad.dominant_color else 'incoloro',
+                    'members': [game.all_cards[cid].definition.name for cid in squad.members],
+                }
         else:
             err = "Escuadron no encontrado."
 
