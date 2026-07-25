@@ -75,7 +75,12 @@ def filtered_state(game, player_id):
     for p in [0, 1]:
         player_squads = game.get_player_squads(p)
         for s in player_squads:
-            members = [{"layer": m[0], "meridian": m[1]} for m in s.members]
+            members = []
+            for cid in s.members:
+                card = game.all_cards.get(cid)
+                if card and card.position:
+                    _, li, m = card.position
+                    members.append({"layer": li, "meridian": m})
             squads[f"p{p}"].append({
                 "type": s.squad_type,
                 "damage": s.base_damage,
