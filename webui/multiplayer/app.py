@@ -483,13 +483,16 @@ def on_action(data):
             game.phase = Phase.ACTIONS
 
     elif action == 'end_turn':
-        print(f"[Room {code}] end_turn by player {player_id}")
-        game.phase = Phase.ATTACK
-        game.exit_phase()
-        print(f"[Room {code}] after exit_phase: active_player={game.active_player}")
-        if not game.game_over:
-            game.start_turn()
-            game.entry_phase()
+        if game.active_player != player_id:
+            err = "No es tu turno."
+        else:
+            print(f"[Room {code}] end_turn by player {player_id}")
+            game.phase = Phase.ATTACK
+            game.exit_phase()
+            print(f"[Room {code}] after exit_phase: active_player={game.active_player}")
+            if not game.game_over:
+                game.start_turn()
+                game.entry_phase()
 
     elif action == 'surrender':
         game._end_game(1 - player_id)
@@ -530,14 +533,17 @@ def on_action(data):
     
     # Solo mode: bot attacks done, end bot turn
     if room.get("solo") and action == 'defend' and game.active_player == 1:
-        game.active_player = 0
-        game.phase = Phase.ACTIONS
-        game.start_turn()
-        game.entry_phase()
         print(f"[Room {code}] Bot turn ended, human's turn")
+        game.phase = Phase.ATTACK
+        game.exit_phase()  # triggers faction effects, purge, discard
+        if not game.game_over:
+            game.start_turn()
+            game.entry_phase()
         for sid, pinfo in room["players"].items():
             s = filtered_state(game, pinfo["player_id"])
             emit('state_update', s, to=sid)
+        if game.game_over:
+            emit('game_over', {"winner": game.winner, "seals": [game.seals[0], game.seals[1]]}, to=code)
         return
     
     # Solo mode: auto-play bot turn
