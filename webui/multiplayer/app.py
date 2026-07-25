@@ -561,46 +561,174 @@ def on_action(data):
         emit_bot_state(all_logs)
         socketio.sleep(1)
         
-        # Step 2: Play cards one by one (max 4, saving actions for linking)
-        cards_to_play = 4
-        for _ in range(cards_to_play):
-            if not game.hands[1]:
-                break
-            card = game.hands[1][0]
-            if card.definition.is_spy:
-                game.hands[1].pop(0)
-                all_logs.append(f"IA descarta espia: {card.definition.name}")
-                emit_bot_state(all_logs)
-                socketio.sleep(1)
-                continue
-            played = False
+        # ═══ Step 2: Play cards (priority: V desc, D desc, prefer squad-friendly positions) ═══
+        # Sort hand by link capacity desc, then damage desc
+        hand_with_idx = [(i, game.hands[1][i]) for i in range(len(game.hands[1]))]
+        hand_sorted = sorted(hand_with_idx, key=lambda x: (x[1].definition.link_capacity, x[1].definition.damage_bonus), reverse=True)
+        
+        # Get existing bot positions to play near them
+        def get_bot_positions():
+            pos = []
             for li in range(3):
                 for m in range(15):
-                    if game.board.cells[1][li][m] is None:
-                        res = game.play_card(1, 0, li + 1, m)
-                        if res is None:
-                            all_logs.append(f"IA juega {card.definition.name} en L{li+1}:{m}")
-                            played = True
-                            break
-                if played:
-                    break
-            if not played:
-                break
-            emit_bot_state(all_logs)
-            socketio.sleep(1)
+                    if game.board.cells[1][li][m] is not None:
+                        pos.append((li, m))
+            return pos
         
-        # Step 3: Link all possible adjacent pairs (same layer + cross-layer)
+        cards_played = 0
+        for orig_idx, card in hand_sorted:
+            if cards_played >= 4 or game.actions_remaining < 1:
+                break
+            if not game.hands[1]:
+                break
+            
+            # Find card in current hand (indices shifted after plays)
+            current_idx = None
+            for i, hc in enumerate(game.hands[1]):
+                if hc.card_id == card.card_id:
+                    current_idx = i
+                    break
+            if current_idx is None:
+                continue
+            
+            # Spy handling: infiltrate to enemy territory
+            if card.definition.is_spy:
+                # Try to play on enemy L1 or L2
+                # Spies have special placement rules — just play as normal for now
+                # (spy infiltration is complex, skip for now but don't discard)
+                played_spy = False
+                for li in range(3):
+                    for m in range(15):
+                        if game.board.cells[1][li][m] is None:
+                            res = game.play_card(1, current_idx, li + 1, m)
+                            if res is None:
+                                all_logs.append(f"IA infiltra espía {card.definition.name} en L{li+1}:{m}")
+                                cards_played += 1
+                                played_spy = True
+                                break
+                    if played_spy:
+                        break
+                if played_spy:
+                    emit_bot_state(all_logs)
+                    socketio.sleep(0.8)
+                    continue
+                else:
+                    # Can't place spy, skip
+                    continue
+            
+            # Try to play near existing cards to form potential squads
+            bot_pos = get_bot_positions()
+            best_pos = None
+            
+            if bot_pos:
+                # Prefer positions that form triangle-friendly layouts
+                # Try positions near existing cards first
+                for li in range(3):
+                    for m in range(15):
+                        if game.board.cells[1][li][m] is not None:
+                            continue
+                        # Check if this position is near existing cards
+                        near_count = sum(1 for bl, bm in bot_pos 
+                                       if abs(li - bl) <= 1 and abs(m - bm) <= 2)
+                        if near_count >= 1 and (best_pos is None or near_count > best_pos[2]):
+                            best_pos = (li + 1, m, near_count)
+            
+            if best_pos:
+                layer, m, _ = best_pos
+            else:
+                # No existing cards or no good spot — pick any valid position
+                layer, m = None, None
+                for li in range(3):
+                    found_m = game.board.find_empty_meridian(1, li + 1)
+                    if found_m is not None:
+                        layer, m = li + 1, found_m
+                        break
+                if layer is None:
+                    continue
+            
+            res = game.play_card(1, current_idx, layer, m)
+            if res is None:
+                all_logs.append(f"IA juega {card.definition.name} (V={card.definition.link_capacity}) en L{layer}:{m}")
+                cards_played += 1
+                emit_bot_state(all_logs)
+                socketio.sleep(0.8)
+        
+        if cards_played == 0:
+            all_logs.append("IA no pudo jugar cartas")
+            emit_bot_state(all_logs)
+            socketio.sleep(0.5)
+        
+        # ═══ Step 2.5: Use ascensions ═══
+        for li in range(3):
+            for m in range(15):
+                cid = game.board.cells[1][li][m]
+                if not cid:
+                    continue
+                card = game.all_cards.get(cid)
+                if not card:
+                    continue
+                # Check for ascension ability
+                for ability in card.definition.abilities:
+                    if any(kw in ability.description.lower() for kw in ['[1]: asciende', '[1]: Asciende']):
+                        if game.actions_remaining >= 1:
+                            err = game.ascend(1, card)
+                            if err is None:
+                                all_logs.append(f"IA asciende {card.definition.name}")
+                                emit_bot_state(all_logs)
+                                socketio.sleep(0.5)
+                                break
+        
+        # ═══ Step 3: Smart linking — build squads intentionally ═══
+        link_count = 0
         placed = []
         for li in range(3):
             for m in range(15):
                 if game.board.cells[1][li][m] is not None:
                     placed.append((li, m))
         
-        link_count = 0
+        if len(placed) >= 3:
+            # Phase A: Try to form triangles (3 cards in cycle)
+            for i, ci in enumerate(placed):
+                for j, cj in enumerate(placed[i+1:], i+1):
+                    for ck in placed[j+1:]:
+                        # Check if these 3 can form triangle: all pairwise distances must be 'corta'
+                        dist_ij = game.board.spatial_distance(
+                            (1, ci[0]+1, ci[1]), 
+                            (1, cj[0]+1, cj[1])
+                        )
+                        dist_jk = game.board.spatial_distance(
+                            (1, cj[0]+1, cj[1]), 
+                            (1, ck[0]+1, ck[1])
+                        )
+                        dist_ki = game.board.spatial_distance(
+                            (1, ck[0]+1, ck[1]), 
+                            (1, ci[0]+1, ci[1])
+                        )
+                        if dist_ij == 'corta' and dist_jk == 'corta' and dist_ki == 'corta':
+                            cid_i = game.board.cells[1][ci[0]][ci[1]]
+                            cid_j = game.board.cells[1][cj[0]][cj[1]]
+                            cid_k = game.board.cells[1][ck[0]][ck[1]]
+                            ca = game.all_cards[cid_i]
+                            cb = game.all_cards[cid_j]
+                            cc = game.all_cards[cid_k]
+                            
+                            # Only link if all have capacity
+                            if (game.network.link_count(ca) < ca.definition.link_capacity and
+                                game.network.link_count(cb) < cb.definition.link_capacity and
+                                game.network.link_count(cc) < cc.definition.link_capacity):
+                                
+                                for a, b in [(ca, cb), (cb, cc), (cc, ca)]:
+                                    if game.actions_remaining >= 1:
+                                        res = game.link_cards(1, a, b)
+                                        if res is None:
+                                            link_count += 1
+                                all_logs.append(f"IA forma TRIÁNGULO: {ca.definition.name}/{cb.definition.name}/{cc.definition.name}")
+                                emit_bot_state(all_logs)
+                                socketio.sleep(0.5)
+        
+        # Phase B: Link all remaining adjacent pairs
         for ci_idx, ci in enumerate(placed):
             for cj in placed[ci_idx+1:]:
-                # Same layer: adjacent meridians (distance <= 2)
-                # Cross-layer: same meridian or adjacent, layer diff = 1
                 same_layer = ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2
                 cross_layer = abs(ci[0] - cj[0]) == 1 and abs(ci[1] - cj[1]) <= 1
                 if same_layer or cross_layer:
@@ -614,19 +742,21 @@ def on_action(data):
                         continue
                     if game.network.link_count(b_card) >= b_card.definition.link_capacity:
                         continue
+                    if game.actions_remaining < 1:
+                        break
                     res = game.link_cards(1, a_card, b_card)
                     if res is None:
                         all_logs.append(f"IA vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
                         link_count += 1
                         emit_bot_state(all_logs)
-                        socketio.sleep(0.5)
+                        socketio.sleep(0.3)
         
         if link_count == 0:
             all_logs.append("IA no pudo vincular cartas")
             emit_bot_state(all_logs)
             socketio.sleep(0.5)
         
-        # Step 4: Queue attacks with defense popup
+        # ═══ Step 4: Attack with target selection ═══
         squads = game.get_player_squads(1)
         if squads:
             all_logs.append(f"IA tiene {len(squads)} escuadron(es)")
@@ -634,25 +764,48 @@ def on_action(data):
             emit_bot_state(all_logs)
             socketio.sleep(1)
             
-            # Build attack queue
+            # Sort squads by damage desc
+            squads_sorted = sorted(squads, key=lambda s: s.base_damage, reverse=True)
+            
+            # Build attack queue with smart targeting
             bot_attacks = []
-            for sq_idx, squad in enumerate(squads[:2]):
+            for squad in squads_sorted[:2]:
+                # Check if human has isolated cards to destroy
+                target = 'grimoire'
+                target_id = None
+                human_isolated = []
+                for li in range(3):
+                    for m in range(15):
+                        cid = game.board.cells[0][li][m]
+                        if cid:
+                            card = game.all_cards.get(cid)
+                            if card and game.network.link_count(card) == 0:
+                                human_isolated.append((cid, card.definition.name))
+                
+                if human_isolated:
+                    # Attack weakest isolated card
+                    target = 'card'
+                    target_id = human_isolated[0][0]
+                    all_logs.append(f"IA apunta a carta aislada: {human_isolated[0][1]}")
+                
                 bot_attacks.append({
                     'attacker': 1,
-                    'squad_idx': sq_idx,
-                    'target': 'grimoire',
-                    'target_id': None,
+                    'squad_idx': 0,  # will be populated by defend handler
+                    'target': target,
+                    'target_id': target_id,
                     'squad_type': squad.squad_type,
                     'squad_damage': squad.base_damage,
                     'squad_color': squad.dominant_color.value if squad.dominant_color else 'incoloro',
                     'members': [game.all_cards[cid].definition.name for cid in squad.members],
                 })
+            
             room['bot_attacks'] = bot_attacks
             
             # Pop first attack as pending
             first_attack = room['bot_attacks'].pop(0)
             room['pending_attack'] = first_attack
-            all_logs.append(f"IA prepara ataque con {first_attack['squad_type']} — ¡defiéndete!")
+            target_str = f"a {first_attack['target']}" + (f" ({target_id})" if target_id else "")
+            all_logs.append(f"IA prepara ataque con {first_attack['squad_type']} {target_str} — ¡defiéndete!")
             
             # Broadcast with pending_attack (triggers defense popup)
             for sid, pinfo in room["players"].items():
