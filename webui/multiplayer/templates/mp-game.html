@@ -496,6 +496,14 @@ socket.on('opponent_left', () => {
 
 socket.on('error', data => {
   alert(data.message);
+  // Also show in game log so it's not missed
+  const logDiv = document.getElementById('log');
+  logDiv.innerHTML = '<div style="color:#e94560;padding:4px;margin:2px;background:#2a0a0a;border-radius:3px">⚠ ' + data.message + '</div>' + logDiv.innerHTML;
+  // Refresh state to sync UI (failed actions may leave stale visual state)
+  if (state) {
+    renderBoard(state);
+    renderLinks(state);
+  }
 });
 
 window.addEventListener('resize', () => { if (state) renderLinks(state); });
