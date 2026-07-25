@@ -203,7 +203,7 @@ def play_bot_turn(game, player_id):
     
     # Ensure we're in actions phase
     game.phase = Phase.ACTIONS
-    game.actions_remaining = 4
+    game.actions_remaining = 10  # give AI plenty of actions
     
     # Actions phase: play up to 4 cards
     for _ in range(4):
@@ -238,7 +238,7 @@ def play_bot_turn(game, player_id):
     linked_any = False
     for ci_idx, ci in enumerate(placed):
         for cj in placed[ci_idx+1:]:
-            if ci[0] == cj[0] and abs(ci[1] - cj[1]) == 1:
+            if ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2:
                 cid_a = game.board.cells[player_id][ci[0]][ci[1]]
                 cid_b = game.board.cells[player_id][cj[0]][cj[1]]
                 a_card = game.all_cards.get(cid_a)

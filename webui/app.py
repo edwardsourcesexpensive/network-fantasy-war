@@ -177,7 +177,7 @@ def api_action():
         result["log"] = []
         # Ensure actions phase is active
         game.phase = Phase.ACTIONS
-        game.actions_remaining = 4
+        game.actions_remaining = 10  # give AI plenty of actions
         # Actions phase: play up to 4 cards (always use index 0 since hand shifts)
         for _ in range(4):
             if game.phase != Phase.ACTIONS:
@@ -210,7 +210,7 @@ def api_action():
         
         for ci_idx, ci in enumerate(placed):
             for cj in placed[ci_idx+1:]:
-                if ci[0] == cj[0] and abs(ci[1] - cj[1]) == 1:
+                if ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2:
                     cid_a = game.board.cells[player][ci[0]][ci[1]]
                     cid_b = game.board.cells[player][cj[0]][cj[1]]
                     a_card = game.all_cards.get(cid_a)
