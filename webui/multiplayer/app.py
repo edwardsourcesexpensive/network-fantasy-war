@@ -89,18 +89,20 @@ def filtered_state(game, player_id):
     for cid, c in game.all_cards.items():
         if c.position:
             owner_p, owner_li, owner_m = c.position
-            pos_key = f"{owner_p},{owner_li},{owner_m}"
+            # position uses 1-indexed layers, convert to 0-indexed for data-cid
+            owner_li_idx = owner_li - 1
+            pos_key = f"{owner_p},{owner_li_idx},{owner_m}"
             linked = list(game.network.links.get(cid, set()))
             if linked:
-                links[pos_key] = [f"{game.all_cards[lid].position[0]},{game.all_cards[lid].position[1]},{game.all_cards[lid].position[2]}" for lid in linked if game.all_cards.get(lid) and game.all_cards[lid].position]
+                links[pos_key] = [f"{game.all_cards[lid].position[0]},{game.all_cards[lid].position[1]-1},{game.all_cards[lid].position[2]}" for lid in linked if game.all_cards.get(lid) and game.all_cards[lid].position]
                 for lid in linked:
                     if cid < lid:
                         tc = game.all_cards.get(lid)
                         if tc and tc.position:
                             tp, tl, tm = tc.position
                             links_pairs.append({
-                                "from": f"{owner_p},{owner_li},{owner_m}",
-                                "to": f"{tp},{tl},{tm}",
+                                "from": f"{owner_p},{owner_li_idx},{owner_m}",
+                                "to": f"{tp},{tl-1},{tm}",
                             })
     
     return {
