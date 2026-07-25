@@ -193,7 +193,7 @@ def api_action():
         # Ensure actions phase is active
         game.phase = Phase.ACTIONS
         game.actions_remaining = 10  # give AI plenty of actions
-        # Actions phase: play up to 4 cards (always use index 0 since hand shifts)
+        # Actions phase: play up to 4 cards with valid layer selection
         for _ in range(4):
             if game.phase != Phase.ACTIONS:
                 break
@@ -202,13 +202,22 @@ def api_action():
             card = game.hands[player][0]
             if card.definition.is_spy:
                 continue
+            
+            # Determine valid entry layers
+            has_vg = any("Vanguardia" in a.description for a in card.definition.abilities)
+            has_lf = any("Línea de fuego" in a.description for a in card.definition.abilities)
+            valid_layers = [1]
+            if has_vg or has_lf: valid_layers.append(2)
+            if has_lf: valid_layers.append(3)
+            valid_layers = [l for l in valid_layers if l in card.definition.allowed_layers]
+            
             played = False
-            for li in range(3):
+            for layer in valid_layers:
                 for m in range(15):
-                    if game.board.cells[player][li][m] is None:
-                        res = game.play_card(player, 0, li + 1, m)
+                    if game.board.cells[player][layer-1][m] is None:
+                        res = game.play_card(player, 0, layer, m)
                         if res is None:
-                            result["log"].append(f"AI juega {card.definition.name} en L{li+1}:{m}")
+                            result["log"].append(f"AI juega {card.definition.name} en L{layer}:{m}")
                             played = True
                             break
                 if played:

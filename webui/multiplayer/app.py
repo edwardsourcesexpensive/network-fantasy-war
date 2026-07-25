@@ -637,32 +637,45 @@ def on_action(data):
                     # Can't place spy, skip
                     continue
             
+            # Determine valid entry layers for this card
+            has_vg = any("Vanguardia" in a.description for a in card.definition.abilities)
+            has_lf = any("Línea de fuego" in a.description for a in card.definition.abilities)
+            valid_layers = [1]  # always L1
+            if has_vg or has_lf: valid_layers.append(2)
+            if has_lf: valid_layers.append(3)
+            # Filter by allowed_layers too
+            valid_layers = [l for l in valid_layers if l in card.definition.allowed_layers]
+            
             # Try to play near existing cards to form potential squads
             bot_pos = get_bot_positions()
             best_pos = None
             
             if bot_pos:
                 # Prefer positions that form triangle-friendly layouts
-                # Try positions near existing cards first
-                for li in range(3):
+                for li_0 in range(3):
+                    layer = li_0 + 1
+                    if layer not in valid_layers:
+                        continue
                     for m in range(15):
-                        if game.board.cells[1][li][m] is not None:
+                        if game.board.cells[1][li_0][m] is not None:
                             continue
-                        # Check if this position is near existing cards
                         near_count = sum(1 for bl, bm in bot_pos 
-                                       if abs(li - bl) <= 1 and abs(m - bm) <= 2)
+                                       if abs(li_0 - bl) <= 1 and abs(m - bm) <= 2)
                         if near_count >= 1 and (best_pos is None or near_count > best_pos[2]):
-                            best_pos = (li + 1, m, near_count)
+                            best_pos = (layer, m, near_count)
             
             if best_pos:
                 layer, m, _ = best_pos
             else:
-                # No existing cards or no good spot — pick any valid position
+                # No existing cards or no good spot — pick first valid layer
                 layer, m = None, None
-                for li in range(3):
-                    found_m = game.board.find_empty_meridian(1, li + 1)
+                for li_0 in range(3):
+                    lyr = li_0 + 1
+                    if lyr not in valid_layers:
+                        continue
+                    found_m = game.board.find_empty_meridian(1, lyr)
                     if found_m is not None:
-                        layer, m = li + 1, found_m
+                        layer, m = lyr, found_m
                         break
                 if layer is None:
                     continue

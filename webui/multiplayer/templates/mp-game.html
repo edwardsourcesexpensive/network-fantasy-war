@@ -177,7 +177,8 @@ function territoryHtml(player, seals, s) {
              '<span class="v">' + used + '/' + max + '</span>' +
              '</div>';
       } else {
-        h += '<div class="cell' + (myTurn && !isAttack ? ' playable' : '') + '" onclick="selectBoardCell(' + player + ',' + gameLayer + ',' + m + ')"></div>';
+        const isPlayable = myTurn && !isAttack && dl === 1;  // only L1 by default
+        h += '<div class="cell' + (isPlayable ? ' playable' : '') + '" onclick="selectBoardCell(' + player + ',' + gameLayer + ',' + m + ')"></div>';
       }
     }
     h += '</div>';
