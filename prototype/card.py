@@ -1451,3 +1451,29 @@ _c("Alquimista de la Forma", Color.ALQUIMISTA, 2, 2, 0, 4, [1], ["triangle","squ
 
 # Legacy alias
 MINI_SET = ALL_CARDS
+
+# ─── Vanguardia & Línea de fuego distribution ───
+# Regla nueva: cartas entran por defecto en L1
+# Vanguardia: permite entrada directa en L2 (~30% de cartas con L2)
+# Línea de fuego: permite entrada directa en L3 (~30% de cartas con L3)
+import random as _random
+_random.seed(42)
+
+_l2_cards = [c for c in ALL_CARDS if 2 in c.allowed_layers and not c.is_spy and not c.is_logistron]
+_l3_cards = [c for c in ALL_CARDS if 3 in c.allowed_layers and not c.is_spy and not c.is_logistron]
+
+_vg = _random.sample([c.name for c in _l2_cards], max(1, int(len(_l2_cards) * 0.30)))
+_lf = _random.sample([c.name for c in _l3_cards], max(1, int(len(_l3_cards) * 0.30)))
+
+_vg_set = set(_vg)
+_lf_set = set(_lf)
+
+for c in ALL_CARDS:
+    if c.name in _vg_set:
+        if not any("Vanguardia" in a.description for a in c.abilities):
+            c.abilities.append(Ability("Vanguardia: puede entrar directamente en L2.", AbilityType.GENERAL, "on_enter"))
+    if c.name in _lf_set:
+        if not any("Línea de fuego" in a.description for a in c.abilities):
+            c.abilities.append(Ability("Línea de fuego: puede entrar directamente en L3.", AbilityType.GENERAL, "on_enter"))
+
+del _random, _l2_cards, _l3_cards, _vg, _lf, _vg_set, _lf_set

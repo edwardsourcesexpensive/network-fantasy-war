@@ -110,6 +110,18 @@ class GameState:
             return None
 
         if not card.definition.is_logistron:
+            # New rule: cards must enter at L1 by default
+            # Vanguardia: allows direct entry at L2
+            # Línea de fuego: allows direct entry at L3
+            # Spies are exempt (they go to frontier)
+            has_vanguardia = any("Vanguardia" in a.description for a in card.definition.abilities)
+            has_linea_de_fuego = any("Línea de fuego" in a.description for a in card.definition.abilities)
+            
+            if layer == 2 and not has_vanguardia and not has_linea_de_fuego:
+                return f"{card.definition.name} no puede entrar directamente en L2 (requiere Vanguardia)."
+            if layer == 3 and not has_linea_de_fuego:
+                return f"{card.definition.name} no puede entrar directamente en L3 (requiere Línea de fuego)."
+            
             if layer not in card.definition.allowed_layers:
                 return f"{card.definition.name} no puede jugarse en L{layer}."
 
