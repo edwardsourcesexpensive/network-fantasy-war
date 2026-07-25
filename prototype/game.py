@@ -207,6 +207,50 @@ class GameState:
         self._log(f"J{player+1} asciende {card.definition.name} a L{new_layer}.")
         return None
 
+    def move_card(self, player: int, card: CardInstance, direction: int) -> Optional[str]:
+        """
+        Move a card horizontally (free action, 0 cost).
+        direction: -1 (left) or +1 (right) in meridians.
+        Links that exceed valid distance after move are dissolved.
+        """
+        if player != self.active_player:
+            return "No es tu turno."
+        if self.phase != Phase.ACTIONS:
+            return "No estás en la fase de acciones."
+        if not card.position:
+            return "Carta sin posición."
+        if direction not in (-1, 1):
+            return "Dirección inválida."
+
+        p, layer, meridian = card.position
+        new_m = meridian + direction
+        li = layer - 1
+
+        if new_m < 0 or new_m >= 15:
+            return "Fuera del tablero."
+        if self.board.cells[p][li][new_m] is not None:
+            return "Celda ocupada."
+
+        # Move the card
+        self.board.cells[p][li][meridian] = None
+        self.board.cells[p][li][new_m] = card.card_id
+        card.position = (p, layer, new_m)
+
+        # Break links that exceed valid distance
+        broken = []
+        for neighbor_id in list(self.network.links.get(card.card_id, set())):
+            neighbor = self.all_cards.get(neighbor_id)
+            if neighbor and neighbor.position:
+                dist = self.board.spatial_distance(card.position, neighbor.position)
+                if dist is None:
+                    self.network.remove_link(card, neighbor)
+                    broken.append(neighbor.definition.name)
+
+        self._log(f"J{player+1} mueve {card.definition.name} a L{layer}:{new_m}.")
+        if broken:
+            self._log(f"  Vínculos rotos: {', '.join(broken)}")
+        return None
+
     def can_link(self, player: int, card_a: CardInstance, card_b: CardInstance) -> Optional[str]:
         if player != self.active_player:
             return "No es tu turno."

@@ -103,6 +103,17 @@ def api_action():
             if err: result["error"] = err
             else: result["ok"] = True
     
+    elif action == 'move':
+        card_id = args.get('card_id')
+        direction = args.get('direction', 0)
+        card = game.all_cards.get(card_id)
+        if card:
+            err = game.move_card(player, card, direction)
+            if err: result["error"] = err
+            else: result["ok"] = True
+        else:
+            result["error"] = "Carta no encontrada."
+    
     elif action == 'attack':
         squad_idx = args.get('squad_index', 0)
         target = args.get('target', 'grimoire')

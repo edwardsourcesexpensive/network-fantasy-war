@@ -85,6 +85,7 @@ def filtered_state(game, player_id, pending_attack=None):
                 "type": s.squad_type,
                 "damage": s.base_damage,
                 "potenciamiento": s.empowerment,
+                "color": s.dominant_color.value if s.dominant_color else "Incoloro",
                 "members": members,
             })
     
@@ -428,6 +429,18 @@ def on_action(data):
         else:
             err = "Carta no encontrada."
 
+    elif action == 'move':
+        cid = args.get('card_id', '')
+        parts = cid.split(',')
+        li, m = int(parts[1]), int(parts[2])
+        cell_cid = game.board.cells[player_id][li][m]
+        card = game.all_cards.get(cell_cid) if cell_cid else None
+        direction = args.get('direction', 0)
+        if card:
+            err = game.move_card(player_id, card, direction)
+        else:
+            err = "Carta no encontrada."
+
     elif action == 'attack':
         si = args.get('squad_index', 0)
         squads = game.get_player_squads(player_id)
@@ -665,6 +678,7 @@ def on_action(data):
             socketio.sleep(0.5)
         
         # ═══ Step 2.5: Use ascensions ═══
+        # ═══ Step 2.5: Use ascensions ═══
         for li in range(3):
             for m in range(15):
                 cid = game.board.cells[1][li][m]
@@ -673,7 +687,6 @@ def on_action(data):
                 card = game.all_cards.get(cid)
                 if not card:
                     continue
-                # Check for ascension ability
                 for ability in card.definition.abilities:
                     if any(kw in ability.description.lower() for kw in ['[1]: asciende', '[1]: Asciende']):
                         if game.actions_remaining >= 1:
@@ -683,6 +696,43 @@ def on_action(data):
                                 emit_bot_state(all_logs)
                                 socketio.sleep(0.5)
                                 break
+        
+        # ═══ Step 2.6: Horizontal movement — reposition for better squad formation ═══
+        # Move V>=2 cards closer together to form triangles
+        bot_positions = [(li, m, game.board.cells[1][li][m]) for li in range(3) for m in range(15) if game.board.cells[1][li][m]]
+        for li, m, cid in bot_positions:
+            card = game.all_cards.get(cid)
+            if not card or card.definition.link_capacity < 2:
+                continue
+            # Check if moving this card would bring it closer to other V>=2 cards
+            best_dir = 0
+            best_near = 0
+            for direction in [-1, 1]:
+                new_m = m + direction
+                if new_m < 0 or new_m >= 15:
+                    continue
+                if game.board.cells[1][li][new_m] is not None:
+                    continue
+                # Count V>=2 cards within distance 2 on same or adjacent layer
+                near = 0
+                for bli, bm, bcid in bot_positions:
+                    if bcid == cid:
+                        continue
+                    bcard = game.all_cards.get(bcid)
+                    if not bcard or bcard.definition.link_capacity < 2:
+                        continue
+                    if abs(li - bli) <= 1 and abs(new_m - bm) <= 2:
+                        near += 1
+                if near > best_near:
+                    best_near = near
+                    best_dir = direction
+            if best_dir != 0:
+                err = game.move_card(1, card, best_dir)
+                if err is None:
+                    all_logs.append(f"IA reposiciona {card.definition.name}")
+                    emit_bot_state(all_logs)
+                    socketio.sleep(0.3)
+                    break  # One move per turn to keep it fast
         
         # ═══ Step 3: Smart linking — build squads intentionally ═══
         link_count = 0
