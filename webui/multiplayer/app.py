@@ -484,6 +484,10 @@ def on_action(data):
 def on_disconnect():
     for code, room in list(rooms.items()):
         if request.sid in room["players"]:
+            if room.get("solo"):
+                # Solo rooms: keep alive, player will rejoin
+                print(f"[Room {code}] Solo player disconnected (will rejoin)")
+                continue
             emit('opponent_left', {"message": "Oponente desconectado."}, to=code, skip_sid=request.sid)
             del room["players"][request.sid]
             if not room["players"]:
