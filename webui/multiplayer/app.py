@@ -223,7 +223,13 @@ def play_bot_turn(game, player_id):
             break
     
     # Link adjacent cards
-    placed = game.board.all_placed(player_id)
+    # Collect positions of placed cards
+    placed = []
+    for li in range(3):
+        for m in range(15):
+            if game.board.cells[player_id][li][m] is not None:
+                placed.append((li, m))
+    
     for ci_idx, ci in enumerate(placed):
         if game.board.node_link_count(player_id, ci[0], ci[1]) >= 2:
             continue
