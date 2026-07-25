@@ -432,7 +432,9 @@ def on_action(data):
         if not squads:
             err = "No tienes escuadrones. Forma triangulos, cuadrados o pentagonos."
         elif 0 <= si < len(squads):
+            print(f"[Room {code}] Attack: player={player_id}, squad={si}/{len(squads)}, seals_before={game.seals[:]}")
             err = game.attack(squads[si], args.get('target', 'grimoire'))
+            print(f"[Room {code}] Attack result: err={err}, seals_after={game.seals[:]}")
         else:
             err = "Escuadron no encontrado."
 
