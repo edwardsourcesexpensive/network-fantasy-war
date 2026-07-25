@@ -24,7 +24,7 @@ def gen_code():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
 
 
-def filtered_state(game, player_id):
+def filtered_state(game, player_id, pending_attack=None):
     """Build complete game state with per-player hand filtering."""
     # Board cells
     board = {"p0": [], "p1": []}
@@ -125,7 +125,7 @@ def filtered_state(game, player_id):
         "links": links,
         "links_pairs": links_pairs,
         "squads": squads,
-        "pending_attack": None,
+        "pending_attack": pending_attack,
         "log": game.log[-10:] if game.log else [],
     }
 
@@ -434,25 +434,40 @@ def on_action(data):
         if not squads:
             err = "No tienes escuadrones. Forma triangulos, cuadrados o pentagonos."
         elif 0 <= si < len(squads):
-            print(f"[Room {code}] Attack: player={player_id}, squad={si}/{len(squads)}, seals_before={game.seals[:]}")
-            err = game.attack(squads[si], args.get('target', 'grimoire'))
-            print(f"[Room {code}] Attack result: err={err}, seals_after={game.seals[:]}")
+            squad = squads[si]
+            print(f"[Room {code}] Attack pending: player={player_id}, squad={si}/{len(squads)}")
+            # Store pending attack for defense
+            room['pending_attack'] = {
+                'attacker': player_id,
+                'squad_idx': si,
+                'target': args.get('target', 'grimoire'),
+                'target_id': args.get('target_id'),
+                'squad_type': squad.squad_type,
+                'squad_damage': squad.base_damage,
+                'squad_color': squad.dominant_color.value if squad.dominant_color else 'incoloro',
+                'members': [game.all_cards[cid].definition.name for cid in squad.members],
+            }
         else:
             err = "Escuadron no encontrado."
 
     elif action == 'defend':
         di = args.get('defender_squad_index', -1)
-        # Handle defense — resolve pending attack
-        from webui.app import pending_attacks
-        pa = pending_attacks.pop(None, None)  # simplified: find by game
-        if pa:
-            game.active_player = pa['attacker']
-            def_squads = game.get_player_squads(1 - pa['attacker'])
-            defending = def_squads[di] if 0 <= di < len(def_squads) else None
-            game.attack(
-                game.get_player_squads(pa['attacker'])[pa['squad_idx']],
-                pa['target'], defending, pa.get('target_id')
-            )
+        pa = room.pop('pending_attack', None)
+        if not pa:
+            err = "No hay ataque pendiente."
+        else:
+            game.active_player = pa['attacker']  # restore attacker
+            attacker_squads = game.get_player_squads(pa['attacker'])
+            # Get defending squad (may be None = no defense)
+            defending_squad = None
+            if di is not None and di >= 0:
+                def_squads = game.get_player_squads(1 - pa['attacker'])
+                if di < len(def_squads):
+                    defending_squad = def_squads[di]
+            if pa['squad_idx'] < len(attacker_squads):
+                err = game.attack(attacker_squads[pa['squad_idx']], pa['target'], defending_squad, pa.get('target_id'))
+            else:
+                err = "Escuadrón atacante ya no existe."
 
     elif action == 'next_phase':
         if game.phase == Phase.ACTIONS:
@@ -484,7 +499,7 @@ def on_action(data):
 
     # Broadcast updated state to both players
     for sid, pinfo in room["players"].items():
-        s = filtered_state(game, pinfo["player_id"])
+        s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
         emit('state_update', s, to=sid)
 
     # Check game over
@@ -502,7 +517,7 @@ def on_action(data):
         
         def emit_bot_state(logs):
             for sid, pinfo in room["players"].items():
-                s = filtered_state(game, pinfo["player_id"])
+                s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
                 s["log"] = logs[-10:] if logs else []
                 emit('state_update', s, to=sid)
         
@@ -596,7 +611,7 @@ def on_action(data):
                     socketio.sleep(1)
                     if game.game_over:
                         for sid, pinfo in room["players"].items():
-                            s = filtered_state(game, pinfo["player_id"])
+                            s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
                             s["log"] = all_logs[-10:]
                             emit('state_update', s, to=sid)
                         emit('game_over', {"winner": game.winner, "seals": [game.seals[0], game.seals[1]]}, to=code)
