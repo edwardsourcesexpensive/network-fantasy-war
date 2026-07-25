@@ -507,13 +507,14 @@ def on_action(data):
         
         # Step 1: Enter actions phase
         game.phase = Phase.ACTIONS
-        game.actions_remaining = 10
-        all_logs.append("IA comienza su turno")
+        game.actions_remaining = 4
+        all_logs.append("IA comienza su turno (4 acciones)")
         emit_bot_state(all_logs)
         socketio.sleep(1)
         
-        # Step 2: Play cards one by one
-        for _ in range(4):
+        # Step 2: Play cards one by one (max 3, saving 1 action for linking)
+        cards_to_play = 3
+        for _ in range(cards_to_play):
             if not game.hands[1]:
                 break
             card = game.hands[1][0]
@@ -539,13 +540,16 @@ def on_action(data):
             emit_bot_state(all_logs)
             socketio.sleep(1)
         
-        # Step 3: Link adjacent cards
+        # Step 3: Link one pair of adjacent cards (1 action)
         placed = []
         for li in range(3):
             for m in range(15):
                 if game.board.cells[1][li][m] is not None:
                     placed.append((li, m))
+        linked = False
         for ci_idx, ci in enumerate(placed):
+            if linked:
+                break
             for cj in placed[ci_idx+1:]:
                 if ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2:
                     cid_a = game.board.cells[1][ci[0]][ci[1]]
@@ -561,6 +565,7 @@ def on_action(data):
                     res = game.link_cards(1, a_card, b_card)
                     if res is None:
                         all_logs.append(f"IA vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
+                        linked = True
                         emit_bot_state(all_logs)
                         socketio.sleep(1)
         
