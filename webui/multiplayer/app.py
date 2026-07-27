@@ -144,10 +144,34 @@ def mp_game():
 
 @app.route('/api/decks')
 def api_decks():
-    return jsonify({
-        k: {"name": DECK_NAMES[k], "count": len(v)}
-        for k, v in DECKS.items()
-    })
+    from collections import Counter
+    result = {}
+    for k, v in DECKS.items():
+        colors = Counter(c.color.value for c in v)
+        avg_v = round(sum(c.link_capacity for c in v) / len(v), 1)
+        avg_d = round(sum(c.damage_bonus for c in v) / len(v), 1)
+        spies = sum(1 for c in v if c.is_spy)
+        logis = sum(1 for c in v if c.is_logistron)
+        result[k] = {
+            "name": DECK_NAMES[k],
+            "count": len(v),
+            "avg_v": avg_v,
+            "avg_d": avg_d,
+            "spies": spies,
+            "logistrones": logis,
+            "colors": dict(colors),
+        }
+    return jsonify(result)
+
+
+@app.route('/rules')
+def serve_rules():
+    """Serve the rules reference PDF."""
+    import os as _os
+    from flask import send_file as _send_file
+    rules_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))), 
+                                'rules-reference-comprehensive.pdf')
+    return _send_file(rules_path, mimetype='application/pdf')
 
 
 # ─── Socket Events ─────────────────────────────────────────
@@ -589,7 +613,13 @@ def on_action(data):
         # ═══ Step 2: Play cards (priority: V desc, D desc, prefer squad-friendly positions) ═══
         # Sort hand by link capacity desc, then damage desc
         hand_with_idx = [(i, game.hands[1][i]) for i in range(len(game.hands[1]))]
-        hand_sorted = sorted(hand_with_idx, key=lambda x: (x[1].definition.link_capacity, x[1].definition.damage_bonus), reverse=True)
+        # Reserve Vanguardia cards for bridge placement — sort them lower
+        def _sort_key(item):
+            idx, c = item
+            has_vg = any("Vanguardia" in a.description for a in c.definition.abilities)
+            vg_penalty = -10 if has_vg else 0  # deprioritize VG cards
+            return (vg_penalty, c.definition.link_capacity, c.definition.damage_bonus)
+        hand_sorted = sorted(hand_with_idx, key=_sort_key, reverse=True)
         
         # Get existing bot positions to play near them
         def get_bot_positions():
@@ -655,11 +685,11 @@ def on_action(data):
                 valid_layers = [l for l in valid_layers if l in card.definition.allowed_layers]
             
             # Try to play near existing cards to form potential squads
+            # IMPORTANT: same-layer must have dh>=2 spacing (engine blocks dh=1 adjacency)
             bot_pos = get_bot_positions()
             best_pos = None
             
             if bot_pos:
-                # Prefer positions that form triangle-friendly layouts
                 for li_0 in range(3):
                     layer = li_0 + 1
                     if layer not in valid_layers:
@@ -667,8 +697,15 @@ def on_action(data):
                     for m in range(15):
                         if game.board.cells[1][li_0][m] is not None:
                             continue
-                        near_count = sum(1 for bl, bm in bot_pos 
-                                       if abs(li_0 - bl) <= 1 and abs(m - bm) <= 2)
+                        # Count existing cards within valid link range (dh=2 for same layer, dh<=1 for cross)
+                        near_count = 0
+                        for bl, bm in bot_pos:
+                            if li_0 == bl and abs(m - bm) == 2:
+                                near_count += 2  # same-layer dh=2 is preferred (triangle-ready)
+                            elif li_0 == bl and abs(m - bm) <= 2:
+                                near_count += 0  # dh=1 would fail; dh=0 impossible
+                            elif abs(li_0 - bl) == 1 and abs(m - bm) <= 1:
+                                near_count += 1  # cross-layer proximity
                         if near_count >= 1 and (best_pos is None or near_count > best_pos[2]):
                             best_pos = (layer, m, near_count)
             
@@ -700,8 +737,55 @@ def on_action(data):
             emit_bot_state(all_logs)
             socketio.sleep(0.5)
         
-        # ═══ Step 2.5: Use ascensions ═══
-        # ═══ Step 2.5: Use ascensions ═══
+        # ═══ Step 2.4: Vanguardia bridge — play VG card at L2 to enable L1-L2-L1 triangles ═══
+        # Only geometry for cross-layer triangle: L1:m, L2:m+1, L1:m+2 (all pairwise corta).
+        # Since same-layer placement requires dh>=2, the L2 bridge must be placed directly.
+        # Strategy: if any Vanguardia card remains in hand, play it at L2 midpoint of a dh=2 L1 pair.
+        if cards_played >= 2 and game.actions_remaining >= 1:
+            # Find dh=2 L1 pairs with empty L2 bridge position
+            l1_occupied = sorted([m for m in range(15) if game.board.cells[1][0][m] is not None])
+            bridge_target = None
+            
+            for i, m_a in enumerate(l1_occupied):
+                for m_b in l1_occupied[i+1:]:
+                    if m_b - m_a != 2:
+                        continue
+                    bridge_m = m_a + 1
+                    if game.board.cells[1][1][bridge_m] is not None:
+                        continue
+                    # Found valid bridge position — look for Vanguardia card in hand
+                    for hi, hc in enumerate(game.hands[1]):
+                        if hc.definition.is_spy:
+                            continue
+                        has_vg = any("Vanguardia" in a.description for a in hc.definition.abilities)
+                        if not has_vg:
+                            continue
+                        if hc.definition.link_capacity < 2:  # triangle needs V>=2
+                            continue
+                        if 2 not in hc.definition.allowed_layers:
+                            continue
+                        # Play it at L2:bridge_m
+                        err = game.play_card(1, hi, 2, bridge_m)
+                        if err is None:
+                            all_logs.append(f"IA coloca {hc.definition.name} (Vanguardia) en L2:{bridge_m} — ¡puente de triángulo!")
+                            cards_played += 1
+                            bridge_target = bridge_m
+                            emit_bot_state(all_logs)
+                            socketio.sleep(0.8)
+                            break
+                    if bridge_target is not None:
+                        break
+                if bridge_target is not None:
+                    break
+            
+            if bridge_target is not None:
+                all_logs.append(f"IA forma puente L1–L2–L1 en m={bridge_target} — ¡triángulo posible!")
+                emit_bot_state(all_logs)
+                socketio.sleep(0.3)
+        
+        
+        # ═══ Step 2.5: Use ascension abilities (cards with [1]: asciende) ═══
+        # ═══ Step 2.5: Use ascension abilities (cards with [1]: asciende) ═══
         for li in range(3):
             for m in range(15):
                 cid = game.board.cells[1][li][m]
@@ -791,8 +875,11 @@ def on_action(data):
                             cb = game.all_cards[cid_j]
                             cc = game.all_cards[cid_k]
                             
-                            # Only link if all have capacity
-                            if (game.network.link_count(ca) < ca.definition.link_capacity and
+                            # Only link if all have V>=2 capacity (triangle requires 2 links per card)
+                            if (ca.definition.link_capacity >= 2 and 
+                                cb.definition.link_capacity >= 2 and
+                                cc.definition.link_capacity >= 2 and
+                                game.network.link_count(ca) < ca.definition.link_capacity and
                                 game.network.link_count(cb) < cb.definition.link_capacity and
                                 game.network.link_count(cc) < cc.definition.link_capacity):
                                 

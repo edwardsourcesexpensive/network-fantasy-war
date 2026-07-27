@@ -123,10 +123,23 @@ body.phase-attack .phase-attack{display:flex}
   <button class="btn" onclick="surrender()" style="background:#8b0000;color:#fff;border-color:#8b0000">🏳️ Rendirse</button>
   <button class="btn" onclick="refresh()">🔄 Refresh</button>
   <button class="btn" onclick="flipBoard()">🔄 Flip</button>
- </div>
+  <button class="btn" onclick="window.open('/rules','_blank')" style="background:#0f3460;color:#4fc3f7;font-size:10px">📜 Reglas</button>
+  <button class="btn" onclick="showDecks()" style="background:#0f3460;color:#ffd700;font-size:10px">📚 Decks</button>
+</div>
  <div id="squads-panel" class="phase-attack"></div>
  <div id="log"></div>
-</div>
+ </div>
+
+ <!-- Decks modal -->
+ <div id="decks-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:100;overflow-y:auto;padding:20px">
+   <div style="max-width:700px;margin:20px auto;background:#16213e;border:1px solid #e94560;border-radius:8px;padding:20px">
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+       <h2 style="color:#e94560;margin:0">📚 Todos los Decks</h2>
+       <button onclick="document.getElementById('decks-modal').style.display='none'" style="background:none;border:1px solid #e94560;color:#e94560;padding:4px 12px;cursor:pointer;border-radius:4px;font-size:16px">✕</button>
+     </div>
+     <div id="decks-content" style="color:#aaa;font-size:11px">Cargando...</div>
+   </div>
+ </div>
 
 <div id="victory-overlay">
  <div>
@@ -222,7 +235,8 @@ async function startMatch() {
     const r = await api('/api/new_game', {deck1: playerDeck1, deck2: playerDeck2});
     loadState(r.state);
   } catch(e) {
-    alert('Error al iniciar: ' + e.message + '. ¿Está corriendo el servidor? python -m webui.app');
+    const m = 'Error al iniciar: ' + e.message + '. ¿Está corriendo el servidor? python -m webui.app';
+    alert(m); logError(m);
   }
 }
 
@@ -534,16 +548,22 @@ function renderLog(s) {
   div.scrollTop = div.scrollHeight;
 }
 
+function logError(msg) {
+  const logDiv = document.getElementById('log');
+  logDiv.innerHTML = '<div style="color:#e94560;padding:4px;margin:2px;background:#2a0a0a;border-radius:3px">⚠ ' + msg + '</div>' + logDiv.innerHTML;
+  logDiv.scrollTop = 0;
+}
+
 async function action(act, args={}) {
   if (gameMode === 'ai' && state && state.active_player === 1) { return; }
   if (act === 'play') {
-    if (selectedHand === null) { alert('Selecciona una carta de tu mano primero'); return; }
-    if (!playTarget) { alert('Click en celda vacía del tablero'); return; }
+    if (selectedHand === null) { const m='Selecciona una carta de tu mano primero'; alert(m); logError(m); return; }
+    if (!playTarget) { const m='Click en celda vacía del tablero'; alert(m); logError(m); return; }
     args = {hand_index: selectedHand, layer: playTarget.gameLayer, meridian: playTarget.meridian};
     playTarget = null;
   }
   if (act === 'ascend') {
-    if (selectedBoard === null) { alert('Selecciona una carta en el tablero'); return; }
+    if (selectedBoard === null) { const m='Selecciona una carta en el tablero'; alert(m); logError(m); return; }
     args = {card_id: selectedBoard};
   }
   if (act === 'link') {
@@ -556,7 +576,7 @@ async function action(act, args={}) {
   }
   selectedBoard = null; selectedHand = null;
   const r = await api('/api/action', {action: act, args});
-  if (r.error) alert(r.error);
+  if (r.error) { alert(r.error); logError(r.error); }
   if (r.state) loadState(r.state);
   // AI auto-defend when pending attack targets AI
   if (gameMode === 'ai' && r.state && r.state.pending_attack && r.state.pending_attack.attacker === 0) {
@@ -590,6 +610,33 @@ function flipBoard() {
   flipped = !flipped;
   renderBoard(state);
   setTimeout(() => { if (window._lastDrawFn) window._lastDrawFn(); }, 100);
+}
+
+async function showDecks() {
+  const modal = document.getElementById('decks-modal');
+  const content = document.getElementById('decks-content');
+  modal.style.display = 'block';
+  content.innerHTML = 'Cargando...';
+  try {
+    const r = await fetch('/api/decks');
+    const decks = await r.json();
+    let html = '';
+    for (const [key, d] of Object.entries(decks)) {
+      const colorTags = Object.entries(d.colors).map(([c, n]) => 
+        '<span style="color:#4fc3f7">' + c + '</span>:' + n).join(' ');
+      html += '<div style="background:#0f3460;border:1px solid #333;border-radius:4px;padding:10px;margin:6px 0">' +
+        '<strong style="color:#e94560;font-size:13px">' + d.name + '</strong>' +
+        '<span style="color:#888;font-size:10px;margin-left:8px">(' + key + ' · ' + d.count + ' cartas)</span>' +
+        '<div style="margin-top:4px;color:#aaa;font-size:10px">' +
+          'V prom: ' + d.avg_v + ' | D prom: ' + d.avg_d + ' | Espías: ' + d.spies + ' | Logistrones: ' + d.logistrones +
+        '</div>' +
+        '<div style="color:#888;font-size:9px;margin-top:2px">' + colorTags + '</div>' +
+      '</div>';
+    }
+    content.innerHTML = html;
+  } catch(e) {
+    content.innerHTML = '<span style="color:#e94560">Error al cargar decks.</span>';
+  }
 }
 </script>
 </body>

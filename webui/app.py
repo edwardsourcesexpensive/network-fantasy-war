@@ -30,11 +30,31 @@ def index():
 
 @app.route('/api/decks')
 def api_decks():
-    """List available decks."""
-    return jsonify({
-        k: {"name": DECK_NAMES[k], "count": len(v)} 
-        for k, v in DECKS.items()
-    })
+    """List available decks with stats."""
+    from collections import Counter
+    result = {}
+    for k, v in DECKS.items():
+        colors = Counter(c.color.value for c in v)
+        avg_v = round(sum(c.link_capacity for c in v) / len(v), 1)
+        avg_d = round(sum(c.damage_bonus for c in v) / len(v), 1)
+        spies = sum(1 for c in v if c.is_spy)
+        logis = sum(1 for c in v if c.is_logistron)
+        result[k] = {
+            "name": DECK_NAMES[k], "count": len(v),
+            "avg_v": avg_v, "avg_d": avg_d,
+            "spies": spies, "logistrones": logis,
+            "colors": dict(colors),
+        }
+    return jsonify(result)
+
+
+@app.route('/rules')
+def serve_rules():
+    """Serve the rules reference PDF."""
+    from flask import send_file as _send_file
+    rules_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
+                               'rules-reference-comprehensive.pdf')
+    return _send_file(rules_path, mimetype='application/pdf')
 
 @app.route('/api/new_game', methods=['POST'])
 def api_new_game():
