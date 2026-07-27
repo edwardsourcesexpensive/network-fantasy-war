@@ -440,12 +440,13 @@ def on_action(data):
     player_info = room["players"][request.sid]
     player_id = player_info["player_id"]
 
-    if game.active_player != player_id:
-        emit('error', {"message": "No es tu turno."})
-        return
-
     action = data.get('action')
     args = data.get('args', {})
+
+    # Allow defend and surrender regardless of whose turn it is
+    if action not in ('defend', 'surrender') and game.active_player != player_id:
+        emit('error', {'message': 'No es tu turno.'})
+        return
 
     result = {}
     err = None

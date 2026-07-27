@@ -453,7 +453,8 @@ function doAttackGrimoire() {
 
 // ═══ Actions ═══
 function doAction(act, extraArgs = {}) {
-  if (!myTurn) {
+  // Allow defend and surrender regardless of turn
+  if (act !== 'defend' && act !== 'surrender' && !myTurn) {
     alert('No es tu turno.');
     return;
   }
