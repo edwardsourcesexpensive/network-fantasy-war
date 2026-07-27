@@ -773,7 +773,7 @@ _c("Rompe-escudos", Color.GUERRERO, 3, 2, 1, 2, [1,2,3], ["triangle","square","p
 ])
 
 _c("Héroe de Mil Batallas", Color.GUERRERO, 1, 6, 2, 3, [1,2,3], ["triangle","square","pentagon"], [
-    Ability("Gana +1 D permanente por cada partida ganada con este mazo (máx +5)", AbilityType.GENERAL, "permanent")
+    Ability("Gana +1 D permanente por cada carta enemiga destruida (máx +5)", AbilityType.GENERAL, "on_kill")
 ])
 
 _c("Asistente Parlamentario", Color.POLITICO, 5, 1, 0, 2, [1], ["triangle","square","pentagon"], [
