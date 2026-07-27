@@ -51,6 +51,7 @@ def ability_implementation_status(ability: Ability) -> str:
             ("destruye", "vínculo" in desc),                             # destroy specific link
             ("rompe", "vínculo" in desc and "escuadrón" not in desc),    # destroy specific link (alias)
             ("muévete", "meridiano" in desc),                            # move + conditional link
+            ("escuadrón", "daño" in desc or "daño base" in desc),       # squad damage buff
             ("costos de vínculo", True),                                 # link cost free
             ("cambia", "color" in desc),                                 # change color
             ("escuadrón se considera del color", True),                  # squad color
@@ -213,6 +214,10 @@ class GameState:
 
         # Global flag: link costs are 0 this turn
         self._link_cost_free: bool = False
+
+        # Temporary squad damage buffs (cleared in exit_phase)
+        # {frozenset(members): +N damage}
+        self._temp_squad_buffs: dict[frozenset, int] = {}
 
         # Event log for UI
         self.log: list[str] = []
@@ -978,6 +983,26 @@ class GameState:
                     self._end_game(player)
                 return None
 
+            # ─── Squad damage buff ───
+            if "escuadrón" in desc_lower and ("daño" in desc_lower or "daño base" in desc_lower):
+                squads = self.get_player_squads(player)
+                if not squads:
+                    return "No tienes escuadrones."
+                squad_idx = targets.get("squad_index", 0)
+                if squad_idx >= len(squads):
+                    return "Escuadrón no encontrado."
+                squad = squads[squad_idx]
+                import re
+                bonus = 1
+                m = re.search(r'\+(\d+)', desc_lower)
+                if m:
+                    bonus = int(m.group(1))
+                key = frozenset(squad.members)
+                self._temp_squad_buffs[key] = self._temp_squad_buffs.get(key, 0) + bonus
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: +{bonus} daño base al escuadrón {squad.squad_type}")
+                return None
+
             # ─── Move 1 meridian + conditional Nature link ───
             if "muévete" in desc_lower and "meridiano" in desc_lower:
                 p, layer, meridian = card.position
@@ -1295,6 +1320,9 @@ class GameState:
         # Reset link cost free flag
         self._link_cost_free = False
 
+        # Clear squad buffs
+        self._temp_squad_buffs = {}
+
         # Switch player
         self.active_player = 1 - self.active_player
         self.turn_number += 1
@@ -1335,6 +1363,9 @@ class GameState:
 
         # Calculate attack damage
         base = attacking_squad.base_damage
+        # Apply squad buffs
+        squad_key = frozenset(attacking_squad.members)
+        base += self._temp_squad_buffs.get(squad_key, 0)
         all_squads = self.network.find_squads(self.all_cards)
         pot = calculate_potenciamiento(attacking_squad, all_squads, self.network, self.all_cards)
 

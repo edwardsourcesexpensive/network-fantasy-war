@@ -481,7 +481,7 @@ _c("Saboteadora de Formaciones", Color.SABOTEADOR, 2, 2, 1, 2, [1,2,3], ["triang
 ])
 
 _c("Alquimista de la Forma", Color.ALQUIMISTA, 2, 2, 0, 2, [1,2], ["triangle","square","pentagon"], [
-    Ability("[1]: Cambia la forma de un escuadrón hasta final del turno", AbilityType.ACTIVE, "active", action_cost=1)
+    Ability("[1]: Elige un escuadrón aliado. Gana +1 daño base hasta final del turno.", AbilityType.ACTIVE, "active", action_cost=1)
 ])
 
 _c("Catalizadora de Reacción", Color.ALQUIMISTA, 2, 2, 0, 2, [1,2], ["triangle","square","pentagon"], [
