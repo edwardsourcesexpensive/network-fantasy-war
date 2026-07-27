@@ -954,6 +954,7 @@ def on_action(data):
         
         # ═══ Step 4: Attack with target selection ═══
         squads = game.get_player_squads(1)
+        print(f"[Room {code}] Bot: cards_played={cards_played}, links={link_count}, squads={len(squads)}, actions_left={game.actions_remaining}")
         if squads:
             all_logs.append(f"IA tiene {len(squads)} escuadron(es)")
             game.start_attack_phase()
@@ -1002,6 +1003,7 @@ def on_action(data):
             room['pending_attack'] = first_attack
             target_str = f"a {first_attack['target']}" + (f" ({target_id})" if target_id else "")
             all_logs.append(f"IA prepara ataque con {first_attack['squad_type']} {target_str} — ¡defiéndete!")
+            print(f"[Room {code}] Bot attacks: {first_attack['squad_type']} dmg={first_attack['squad_damage']}, queue={len(room.get('bot_attacks',[]))} more")
             
             # Broadcast with pending_attack (triggers defense popup)
             for sid, pinfo in room["players"].items():
@@ -1011,6 +1013,7 @@ def on_action(data):
             return  # Wait for human to defend
         
         # Step 5: End turn (only reached if bot has no squads)
+        print(f"[Room {code}] Bot: NO squads, ending turn silently")
         game.active_player = 0
         game.phase = Phase.ACTIONS
         game.start_turn()
