@@ -75,11 +75,23 @@ def ability_implementation_status(ability: Ability) -> str:
     if trigger == "start_of_turn":
         if "roba" in desc:
             return "implemented"
+        if "mira" in desc:
+            return "implemented"
+        if "asciende" in desc:
+            return "implemented"
+        if "acción" in desc or "accion" in desc:
+            return "implemented"
+        if "vínculo" in desc and "gratis" in desc:
+            return "implemented"
         return "not_implemented"
 
     if trigger == "end_of_turn":
+        if "recupera" in desc and "hp" in desc:
+            return "implemented"
         if "vínculo" in desc:
-            return "partial"  # logged but no real link break
+            return "partial"
+        if "sello" in desc:
+            return "implemented"
         return "not_implemented"
 
     if trigger == "on_enter":
@@ -111,6 +123,12 @@ def ability_implementation_status(ability: Ability) -> str:
         return "implemented"  # Most on_attack are checked inline in attack()
 
     if trigger == "on_kill":
+        if "gana" in desc and "hp" in desc:
+            return "implemented"
+        if "pierde" in desc and "sello" in desc:
+            return "implemented"
+        if "roba" in desc:
+            return "implemented"
         return "not_implemented"
 
     # COLOR/FORMATION abilities
@@ -280,13 +298,13 @@ class GameState:
         self._log(f"J{player+1} juega {card.definition.name} en L{layer}:{meridian}.")
         return None
 
-    def can_ascend(self, player: int, card: CardInstance) -> Optional[str]:
-        if player != self.active_player:
-            return "No es tu turno."
-        if self.phase != Phase.ACTIONS:
-            return "No estás en la fase de acciones."
+    def can_ascend(self, player: int, card: CardInstance, free: bool = False) -> Optional[str]:
+        if not free:
+            if player != self.active_player:
+                return "No es tu turno."
+            if self.phase != Phase.ACTIONS:
+                return "No estás en la fase de acciones."
         if not card.position or card.position[0] == -1:
-            # Spy infiltration
             if card.definition.is_spy and self.actions_remaining >= 1:
                 return None
             return "Esa carta no está en posición de ascender."
@@ -296,16 +314,17 @@ class GameState:
         new_layer = layer + 1
         if new_layer not in card.definition.allowed_layers:
             return f"{card.definition.name} solo puede estar en L{card.definition.allowed_layers}."
-        cost = 1 if layer == 1 else 2
-        if self.actions_remaining < cost:
-            return f"Necesitas {cost} acciones (tienes {self.actions_remaining})."
-        new_li = layer  # L1->L2: layer goes from 1 to 2, index from 0 to 1
+        if not free:
+            cost = 1 if layer == 1 else 2
+            if self.actions_remaining < cost:
+                return f"Necesitas {cost} acciones (tienes {self.actions_remaining})."
+        new_li = layer
         if self.board.cells[player][new_li][meridian] is not None:
             return "Celda de destino ocupada."
         return None
 
-    def ascend(self, player: int, card: CardInstance) -> Optional[str]:
-        err = self.can_ascend(player, card)
+    def ascend(self, player: int, card: CardInstance, free: bool = False) -> Optional[str]:
+        err = self.can_ascend(player, card, free=free)
         if err:
             return err
 
@@ -334,7 +353,8 @@ class GameState:
         self.board.cells[player][old_li][meridian] = None
         self.board.cells[player][new_li][meridian] = card.card_id
         card.position = (player, new_layer, meridian)
-        self.actions_remaining -= cost
+        if not free:
+            self.actions_remaining -= cost
 
         # Caudillismo trigger
         if new_layer == 3:
@@ -913,10 +933,10 @@ class GameState:
                 self._log(f"  {card.definition.name}: lucha con {target_card.definition.name} — ambos reciben 2 daño")
                 if card.current_hp <= 0:
                     self._log(f"  {card.definition.name} DESTRUIDO en combate.")
-                    self._destroy_card(card)
+                    self._destroy_card(card, killer=target_card)
                 if target_card.current_hp <= 0:
                     self._log(f"  {target_card.definition.name} DESTRUIDO en combate.")
-                    self._destroy_card(target_card)
+                    self._destroy_card(target_card, killer=card)
                 return None
 
             # ─── Destroy ally + damage grimoire ───
@@ -1309,13 +1329,14 @@ class GameState:
                 self._log(f"  ¡{net_damage} daño a {target_card.definition.name}! (HP: {target_card.current_hp})")
                 if target_card.current_hp <= 0:
                     self._log(f"  {target_card.definition.name} DESTRUIDO.")
-                    self._destroy_card(target_card)
-                    # Engendro del Vacío: gains HP on kill
+                    # Find a killer from attacking squad
+                    killer_card = None
                     for cid in attacking_squad.members:
-                        card = self.all_cards.get(cid)
-                        if card and "Engendro" in card.definition.name:
-                            card.current_hp += 1
-                            self._log(f"  Engendro del Vacío gana +1 HP ({card.current_hp})")
+                        kc = self.all_cards.get(cid)
+                        if kc:
+                            killer_card = kc
+                            break
+                    self._destroy_card(target_card, killer=killer_card)
 
         self._attacked_squads.add(squad_hash)
         return None
@@ -1363,7 +1384,7 @@ class GameState:
 
     def _resolve_ability(self, ability: Ability, card: CardInstance,
                          squad: Squad, all_squads: list[Squad]):
-        """Try to resolve a card ability."""
+        """Try to resolve a card ability (passive triggers only)."""
         # Check conditions
         if ability.ability_type == AbilityType.COLOR:
             if squad.get_dominant_color(self._temp_colors) != ability.color_required:
@@ -1372,17 +1393,140 @@ class GameState:
             if squad.squad_type.replace("_ampliado", "") != ability.formation_required:
                 return
 
+        desc = ability.description.lower()
+        player = card.owner
+
         # Execute based on trigger
         if ability.trigger == "start_of_turn":
-            if "roba" in ability.description.lower():
-                extra = self._draw_card(card.owner)
-                if extra:
-                    self._log(f"  {card.definition.name}: +1 robo")
+            # ─── Draw ───
+            if "roba" in desc:
+                count = 1
+                import re
+                m = re.search(r'roba\s+(\d+)', desc)
+                if m:
+                    count = int(m.group(1))
+                for _ in range(count):
+                    extra = self._draw_card(player)
+                    if extra:
+                        self._log(f"  {card.definition.name}: +1 robo")
+                # Also handle "+1 robo extra" pattern
+                if "extra" in desc and count == 1:
+                    pass  # already drawn above
+
+            # ─── Scry / peek ───
+            elif "mira" in desc:
+                import re
+                count = 2
+                m = re.search(r'mira\s+(\d+)', desc)
+                if m:
+                    count = int(m.group(1))
+                top_cards = self.decks[player][-count:] if len(self.decks[player]) >= count else self.decks[player][:]
+                names = [c.definition.name for c in reversed(top_cards)]
+                self._log(f"  {card.definition.name}: mira top {len(names)}: {', '.join(names)}")
+
+            # ─── Auto-ascend ───
+            elif "asciende" in desc:
+                # Find a card to ascend in the same squad (or self)
+                target = card
+                for cid in squad.members:
+                    c = self.all_cards.get(cid)
+                    if c and c.position and c.position[1] < 3 and c.position[0] != -1:
+                        target = c
+                        break
+                err = self.ascend(player, target, free=True)
+                if not err:
+                    self._log(f"  {card.definition.name}: asciende {target.definition.name} sin costo")
+
+            # ─── +1 acción ───
+            elif "acción" in desc or "accion" in desc:
+                bonus = 1
+                import re
+                m = re.search(r'\+(\d+)\s*acci', desc)
+                if m:
+                    bonus = int(m.group(1))
+                self.actions_remaining += bonus
+                self._log(f"  {card.definition.name}: +{bonus} acción(es) ({self.actions_remaining})")
+
+            # ─── Free link ───
+            elif "vínculo" in desc and "gratis" in desc:
+                # Auto-link two cards in squad
+                members = [self.all_cards.get(cid) for cid in squad.members
+                          if self.all_cards.get(cid) and self.all_cards[cid].owner == player]
+                linked = False
+                for i, ca in enumerate(members):
+                    for cb in members[i+1:]:
+                        if ca and cb and not self.network.has_link(ca, cb) and self.network.can_link(ca) and self.network.can_link(cb):
+                            self.network.add_link(ca, cb)
+                            self._log(f"  {card.definition.name}: vínculo gratis {ca.definition.name} <-> {cb.definition.name}")
+                            linked = True
+                            break
+                    if linked:
+                        break
+
         elif ability.trigger == "end_of_turn":
-            if "vínculo" in ability.description.lower():
+            # ─── Heal self / ally ───
+            if "recupera" in desc and "hp" in desc:
+                import re
+                heal = 1
+                m = re.search(r'recupera\s+(\d+)\s*hp', desc)
+                if m:
+                    heal = int(m.group(1))
+                # "a todas las cartas de tu red" or "a todas las cartas de tu escuadrón"
+                if "todas" in desc:
+                    for cid in squad.members:
+                        c = self.all_cards.get(cid)
+                        if c and c.owner == player:
+                            c.current_hp = min(c.current_hp + heal, c.definition.hp)
+                    self._log(f"  {card.definition.name}: +{heal} HP a todo el escuadrón")
+                else:
+                    card.current_hp = min(card.current_hp + heal, card.definition.hp)
+                    self._log(f"  {card.definition.name}: recupera {heal} HP ({card.current_hp}/{card.definition.hp})")
+
+            # ─── Vínculo enemigo destruible ───
+            elif "vínculo" in desc:
                 self._log(f"  {card.definition.name}: +1 vínculo enemigo destruible")
 
-    def _destroy_card(self, card: CardInstance):
+            # ─── Sellos adicionales (individual cards) ───
+            elif "sello" in desc:
+                import re
+                bonus = 5
+                m = re.search(r'\+(\d+)\s*sello', desc)
+                if m:
+                    bonus = int(m.group(1))
+                self.seals[player] += bonus
+                self._log(f"  {card.definition.name}: +{bonus} sellos ({self.seals[player]})")
+
+        elif ability.trigger == "on_kill":
+            # ─── Gain HP on kill ───
+            if "gana" in desc and "hp" in desc:
+                import re
+                hp_bonus = 1
+                m = re.search(r'\+(\d+)\s*hp', desc)
+                if m:
+                    hp_bonus = int(m.group(1))
+                card.current_hp += hp_bonus
+                self._log(f"  {card.definition.name}: +{hp_bonus} HP por destrucción ({card.current_hp})")
+
+            # ─── Enemy loses seals on kill ───
+            elif "pierde" in desc and "sello" in desc:
+                import re
+                seal_loss = 2
+                m = re.search(r'pierde\s+(\d+)\s+sello', desc)
+                if m:
+                    seal_loss = int(m.group(1))
+                enemy = 1 - player
+                self.seals[enemy] = max(0, self.seals[enemy] - seal_loss)
+                self._log(f"  {card.definition.name}: enemigo pierde {seal_loss} sellos ({self.seals[enemy]})")
+                if self.seals[enemy] <= 0:
+                    self._end_game(player)
+
+            # ─── Draw on kill ───
+            elif "roba" in desc:
+                extra = self._draw_card(player)
+                if extra:
+                    self._log(f"  {card.definition.name}: +1 robo por destrucción")
+
+    def _destroy_card(self, card: CardInstance, killer: Optional[CardInstance] = None):
         self.network.remove_all_links(card)
         self.board.remove_card(card)
         # Remove from spy tracking
@@ -1390,6 +1534,20 @@ class GameState:
             if card.card_id in self.spies_infiltrated[p]:
                 self.spies_infiltrated[p].remove(card.card_id)
         self.discard_piles[card.owner].append(card)
+
+        # Trigger on_kill abilities for the killer
+        if killer:
+            squads = self.network.find_squads(self.all_cards)
+            for squad in squads:
+                if killer.card_id in squad.members:
+                    for cid in squad.members:
+                        c = self.all_cards.get(cid)
+                        if not c or c.owner != killer.owner:
+                            continue
+                        for ability in c.definition.abilities:
+                            if ability.trigger == "on_kill":
+                                self._resolve_ability(ability, c, squad, squads)
+                    break
 
     def _end_game(self, winner: int):
         self.game_over = True
