@@ -43,6 +43,20 @@ def ability_implementation_status(ability: Ability) -> str:
             ("pierde", any(w in desc for w in ["sello", "sellos"])),    # enemy loses seals
             ("mira", any(w in desc for w in ["carta", "cartas", "reserva", "tope"])),  # scry
             ("descarta", True),                                          # discard
+            # Phase B additions
+            ("intercambia", True),                                       # swap (position, layer, HP, color, hand)
+            ("vínculo", "ignorando" in desc or "temporal" in desc or "disuelve" in desc),  # special links
+            ("vínculo", "armadura" in desc),                             # link armor reduction
+            ("rompe", "vínculo" in desc and "escuadrón" in desc),        # break squad links
+            ("destruye", "vínculo" in desc),                             # destroy specific link
+            ("costos de vínculo", True),                                 # link cost free
+            ("cambia", "color" in desc),                                 # change color
+            ("escuadrón se considera del color", True),                  # squad color
+            ("salta", "celda libre" in desc),                            # jump to free cell
+            ("teletransporta", True),                                    # teleport ally
+            ("ataca", "nodo" in desc),                                   # direct node attack
+            ("lucha", "daño" in desc),                                   # fight
+            ("destruye", "grimorio" in desc),                            # destroy ally + damage
         ]
         for kw, cond in implemented_kw:
             if kw in desc and cond:
@@ -152,6 +166,17 @@ class GameState:
         # Temporary buffs applied this turn (cleared in exit_phase)
         # {card_id: [{"attr": "d", "delta": 2}, ...]}
         self._temp_buffs: dict[int, list[dict]] = {}
+
+        # Temporary color overrides (cleared in exit_phase)
+        # {card_id: Color}
+        self._temp_colors: dict[int, Color] = {}
+
+        # Temporary links that dissolve at end of turn
+        # set of (card_id, card_id) tuples
+        self._temp_links: set[tuple] = set()
+
+        # Global flag: link costs are 0 this turn
+        self._link_cost_free: bool = False
 
         # Event log for UI
         self.log: list[str] = []
@@ -612,6 +637,309 @@ class GameState:
                 self._log(f"  {card.definition.name}: usa habilidad → descarta: {', '.join(discarded) if discarded else '(mano vacía)'}")
                 return None
 
+            # ─── Swap positions ───
+            if "intercambia" in desc_lower and any(w in desc_lower for w in ["posición", "posiciones"]):
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona una segunda carta para intercambiar."
+                if card.card_id == target_card.card_id:
+                    return "No puedes intercambiar una carta consigo misma."
+                # Check same territory restriction on some abilities
+                if "tu territorio" in desc_lower and target_card.owner != player:
+                    return "Solo puedes intercambiar con cartas en tu territorio."
+                if "aliada" in desc_lower and target_card.owner != player:
+                    return "Solo puedes intercambiar con cartas aliadas."
+                self.board.swap_cards(card, target_card)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: intercambia posición con {target_card.definition.name}")
+                return None
+
+            # ─── Swap layers ───
+            if "intercambia" in desc_lower and "capa" in desc_lower:
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona una segunda carta para intercambiar capas."
+                if target_card.owner != player:
+                    return "Solo puedes intercambiar capas con cartas propias."
+                p, l_a, m_a = card.position
+                _, l_b, m_b = target_card.position
+                if m_a != m_b:
+                    return "Las cartas deben estar en el mismo meridiano."
+                self.board.swap_cards(card, target_card)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: intercambia capas con {target_card.definition.name}")
+                return None
+
+            # ─── Swap HP ───
+            if "intercambia" in desc_lower and "hp" in desc_lower:
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona una segunda carta para intercambiar HP."
+                hp_a = card.current_hp
+                hp_b = target_card.current_hp
+                card.current_hp = min(hp_b, card.definition.hp)
+                target_card.current_hp = min(hp_a, target_card.definition.hp)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: intercambia HP con {target_card.definition.name}")
+                return None
+
+            # ─── Swap colors ───
+            if "intercambia" in desc_lower and "color" in desc_lower:
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona una segunda carta para intercambiar colores."
+                color_a = self._temp_colors.get(card.card_id, card.definition.color)
+                color_b = self._temp_colors.get(target_card.card_id, target_card.definition.color)
+                self._temp_colors[card.card_id] = color_b
+                self._temp_colors[target_card.card_id] = color_a
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: intercambia colores con {target_card.definition.name}")
+                return None
+
+            # ─── Swap hand with deck ───
+            if "intercambia" in desc_lower and "mano" in desc_lower and "reserva" in desc_lower:
+                if not self.hands[player]:
+                    return "No tienes cartas en la mano."
+                if not self.decks[player]:
+                    return "No quedan cartas en la reserva."
+                hand_card = self.hands[player].pop()
+                deck_card = self.decks[player].pop()
+                self.hands[player].append(deck_card)
+                self.decks[player].append(hand_card)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: intercambia {hand_card.definition.name} de la mano con reserva")
+                return None
+
+            # ─── Swap hand with graveyard ───
+            if "intercambia" in desc_lower and "mano" in desc_lower and "cementerio" in desc_lower:
+                if not self.hands[player]:
+                    return "No tienes cartas en la mano."
+                if not self.discard_piles[player]:
+                    return "No hay cartas en el cementerio."
+                hand_card = self.hands[player].pop()
+                grave_card = self.discard_piles[player].pop()
+                self.hands[player].append(grave_card)
+                self.discard_piles[player].append(hand_card)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: intercambia {hand_card.definition.name} de mano con cementerio")
+                return None
+
+            # ─── Create link ignoring distance ───
+            if "vínculo" in desc_lower and "ignorando" in desc_lower:
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona una segunda carta para vincular."
+                err = self.link_cards(player, card, target_card, bypass_distance=True)
+                if err:
+                    return err
+                # link_cards already deducts actions; refund since we already charge cost
+                self.actions_remaining += 1  # link_cards deducted 1, we charge 'cost'
+                self.actions_remaining -= cost
+                return None
+
+            # ─── Temp link (disuelve al final del turno) ───
+            if "vínculo" in desc_lower and ("temporal" in desc_lower or "disuelve" in desc_lower):
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona una segunda carta para vínculo temporal."
+                err = self.link_cards(player, card, target_card, bypass_distance=True, is_temp=True)
+                if err:
+                    return err
+                self.actions_remaining += 1
+                self.actions_remaining -= cost
+                return None
+
+            # ─── Break all squad links ───
+            if "rompe" in desc_lower and "vínculo" in desc_lower and "escuadrón" in desc_lower:
+                enemy = 1 - player
+                squads = self.get_player_squads(enemy)
+                if not squads:
+                    return "El enemigo no tiene escuadrones."
+                # Target first squad (or use target_squad_idx from targets)
+                squad_idx = targets.get("squad_index", 0)
+                if squad_idx >= len(squads):
+                    return "Escuadrón no encontrado."
+                squad = squads[squad_idx]
+                self.network.break_all_squad_links(squad)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: rompe vínculos de escuadrón enemigo ({squad.squad_type})")
+                return None
+
+            # ─── Destroy specific link ───
+            if "destruye" in desc_lower and "vínculo" in desc_lower and "escuadrón" not in desc_lower:
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona las dos cartas del vínculo a destruir."
+                if not self.network.has_link(card, target_card):
+                    return "Esas cartas no están vinculadas."
+                self.network.remove_link(card, target_card)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: destruye vínculo con {target_card.definition.name}")
+                return None
+
+            # ─── Link armor reduction ───
+            if "vínculo" in desc_lower and "armadura" in desc_lower:
+                enemy = 1 - player
+                squads = self.get_player_squads(enemy)
+                if not squads:
+                    return "El enemigo no tiene escuadrones."
+                squad_idx = targets.get("squad_index", 0)
+                if squad_idx >= len(squads):
+                    return "Escuadrón no encontrado."
+                squad = squads[squad_idx]
+                for cid in squad.members:
+                    for neighbor in list(self.network.links.get(cid, set())):
+                        key = tuple(sorted((cid, neighbor)))
+                        self.network.link_armor[key] = max(0, self.network.link_armor.get(key, 0) - 1)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: -1 armadura a vínculos del escuadrón enemigo")
+                return None
+
+            # ─── Link cost free this turn ───
+            if "costos de vínculo" in desc_lower or "costos de vínculo" in desc_lower:
+                self._link_cost_free = True
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: costos de vínculo = 0 hasta final del turno")
+                return None
+
+            # ─── Change card color ───
+            if "cambia" in desc_lower and "color" in desc_lower and "intercambia" not in desc_lower:
+                target_card = get_target_card("target_id") or card
+                # Determine target color (from ability text or default)
+                new_color_str = None
+                from prototype.card import Color as CardColor
+                for color in CardColor:
+                    if color.value.lower() in desc_lower:
+                        new_color_str = color
+                        break
+                if not new_color_str:
+                    # Generic "cambia el color" — default to player's choice (just pick Incoloro)
+                    new_color_str = CardColor.INCOLORO
+                self._temp_colors[target_card.card_id] = new_color_str
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: cambia color de {target_card.definition.name} a {new_color_str.value}")
+                return None
+
+            # ─── Squad color override ───
+            if "escuadrón se considera del color" in desc_lower:
+                enemy = 1 - player
+                squads = self.get_player_squads(player) or self.get_player_squads(enemy)
+                # Apply color to all members of target squad
+                squad_idx = targets.get("squad_index", 0)
+                if squad_idx >= len(squads):
+                    return "Escuadrón no encontrado."
+                from prototype.card import Color as CardColor
+                new_color = CardColor.INCOLORO
+                for color in CardColor:
+                    if color.value.lower() in desc_lower:
+                        new_color = color
+                        break
+                for cid in squads[squad_idx].members:
+                    self._temp_colors[cid] = new_color
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: escuadrón se considera {new_color.value}")
+                return None
+
+            # ─── Jump to free cell ───
+            if "salta" in desc_lower and "celda libre" in desc_lower:
+                p, layer, meridian = card.position
+                # Find a free cell in any layer
+                placed = False
+                for li in range(3):
+                    for m in range(15):
+                        if self.board.cells[p][li][m] is None:
+                            old_li = layer - 1
+                            self.board.cells[p][old_li][meridian] = None
+                            self.board.cells[p][li][m] = card.card_id
+                            card.position = (p, li + 1, m)
+                            placed = True
+                            break
+                    if placed:
+                        break
+                if not placed:
+                    return "No hay celdas libres en tu territorio."
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: salta a L{card.position[1]}:{card.position[2]}")
+                return None
+
+            # ─── Teleport ally L1↔L2 ───
+            if "teletransporta" in desc_lower:
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona una carta aliada para teletransportar."
+                if target_card.owner != player:
+                    return "Solo puedes teletransportar aliados."
+                if not target_card.position or target_card.position[0] == -1:
+                    return "Carta sin posición válida."
+                tp, t_layer, t_m = target_card.position
+                if t_layer not in (1, 2):
+                    return "Solo puedes teletransportar entre L1 y L2."
+                new_layer = 2 if t_layer == 1 else 1
+                new_li = new_layer - 1
+                if self.board.cells[tp][new_li][t_m] is not None:
+                    return "Celda de destino ocupada."
+                old_li = t_layer - 1
+                self.board.cells[tp][old_li][t_m] = None
+                self.board.cells[tp][new_li][t_m] = target_card.card_id
+                target_card.position = (tp, new_layer, t_m)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: teletransporta {target_card.definition.name} a L{new_layer}")
+                return None
+
+            # ─── Attack enemy node directly ───
+            if "ataca" in desc_lower and "nodo" in desc_lower:
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona un nodo enemigo para atacar."
+                if target_card.owner == player:
+                    return "No puedes atacar tus propias cartas."
+                dmg = card.definition.damage_bonus
+                target_card.current_hp -= dmg
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: ataca {target_card.definition.name} por {dmg} daño (HP: {target_card.current_hp})")
+                if target_card.current_hp <= 0:
+                    self._log(f"  {target_card.definition.name} DESTRUIDO.")
+                    self._destroy_card(target_card)
+                return None
+
+            # ─── Fight (both take 2 damage) ───
+            if "lucha" in desc_lower and "daño" in desc_lower:
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona un nodo enemigo para luchar."
+                card.current_hp -= 2
+                target_card.current_hp -= 2
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: lucha con {target_card.definition.name} — ambos reciben 2 daño")
+                if card.current_hp <= 0:
+                    self._log(f"  {card.definition.name} DESTRUIDO en combate.")
+                    self._destroy_card(card)
+                if target_card.current_hp <= 0:
+                    self._log(f"  {target_card.definition.name} DESTRUIDO en combate.")
+                    self._destroy_card(target_card)
+                return None
+
+            # ─── Destroy ally + damage grimoire ───
+            if "destruye" in desc_lower and "grimorio" in desc_lower:
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona un aliado para destruir."
+                if target_card.owner != player:
+                    return "Debes destruir un aliado."
+                import re
+                dmg = 5
+                match = re.search(r'inflige\s+(\d+)\s+de\s+daño', desc_lower)
+                if match:
+                    dmg = int(match.group(1))
+                enemy = 1 - player
+                self._destroy_card(target_card)
+                self.seals[enemy] -= dmg
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: destruye a {target_card.definition.name}, {dmg} daño al grimorio enemigo")
+                if self.seals[enemy] <= 0:
+                    self._end_game(player)
+                return None
+
             # ─── Fallback: ability not yet implemented ───
             self.actions_remaining -= cost
             self._log(f"  {card.definition.name}: usa habilidad ({desc[:50]}...) — efecto no implementado")
@@ -627,7 +955,8 @@ class GameState:
         buffs = self._temp_buffs.get(card_id, [])
         return sum(b["delta"] for b in buffs if b["attr"] == "d")
 
-    def can_link(self, player: int, card_a: CardInstance, card_b: CardInstance) -> Optional[str]:
+    def can_link(self, player: int, card_a: CardInstance, card_b: CardInstance,
+                 bypass_distance: bool = False) -> Optional[str]:
         if player != self.active_player:
             return "No es tu turno."
         if self.phase != Phase.ACTIONS:
@@ -654,14 +983,13 @@ class GameState:
         b_is_frontier_spy = (card_b.definition.is_spy and card_b.position and card_b.position[0] == -1)
         if a_is_frontier_spy and not b_is_frontier_spy:
             if card_b.owner != player:
-                # Spy linking to enemy — allowed for Eco de la Frontera
                 pass
         if b_is_frontier_spy and not a_is_frontier_spy:
             if card_a.owner != player:
                 pass
 
         # Normal distance check
-        if not a_is_frontier_spy and not b_is_frontier_spy:
+        if not bypass_distance and not a_is_frontier_spy and not b_is_frontier_spy:
             dist = self.board.spatial_distance(card_a.position, card_b.position)
             if dist is None:
                 return "Distancia espacial inválida para vínculo."
@@ -676,24 +1004,37 @@ class GameState:
 
         return None
 
-    def link_cards(self, player: int, card_a: CardInstance, card_b: CardInstance) -> Optional[str]:
-        err = self.can_link(player, card_a, card_b)
+    def link_cards(self, player: int, card_a: CardInstance, card_b: CardInstance,
+                   bypass_distance: bool = False, is_temp: bool = False) -> Optional[str]:
+        err = self.can_link(player, card_a, card_b, bypass_distance=bypass_distance)
         if err:
             return err
 
-        dist = self.board.spatial_distance(card_a.position, card_b.position)
-        if dist:
-            cost = {"corta": 1, "media": 1, "larga": 3}[dist]
-            if dist == "media" and card_a.definition.color != card_b.definition.color:
-                cost = 2
+        if bypass_distance or (card_a.definition.is_spy and card_a.position and card_a.position[0] == -1):
+            cost = 1
         else:
-            cost = 1  # spy links
+            dist = self.board.spatial_distance(card_a.position, card_b.position)
+            if dist:
+                cost = {"corta": 1, "media": 1, "larga": 3}[dist]
+                if dist == "media" and card_a.definition.color != card_b.definition.color:
+                    cost = 2
+            else:
+                cost = 1
 
         if card_a.definition.is_logistron or card_b.definition.is_logistron:
             cost = 1
+        
+        # Check global link cost free flag
+        if self._link_cost_free:
+            cost = 0
 
         self.network.add_link(card_a, card_b)
         self.actions_remaining -= cost
+        
+        if is_temp:
+            pair = tuple(sorted((card_a.card_id, card_b.card_id)))
+            self._temp_links.add(pair)
+        
         self._log(f"J{player+1} vincula {card_a.definition.name} <-> {card_b.definition.name}.")
         return None
 
@@ -725,7 +1066,7 @@ class GameState:
 
         # Military faction: free ascension
         for squad in squads:
-            if squad.dominant_color == Color.MILITAR:
+            if squad.get_dominant_color(self._temp_colors) == Color.MILITAR:
                 # Find a card to ascend
                 for cid in squad.members:
                     card = self.all_cards.get(cid)
@@ -741,7 +1082,7 @@ class GameState:
         # Sabios: extra draw per sage squad
         extra_draws = 0
         for squad in squads:
-            if squad.dominant_color == Color.SABIO:
+            if squad.get_dominant_color(self._temp_colors) == Color.SABIO:
                 extra_draws += 1
                 # Archivera bonus
                 for cid in squad.members:
@@ -768,7 +1109,7 @@ class GameState:
         self.phase = Phase.ACTIONS
         # Politicos: swap positions
         for squad in squads:
-            if squad.dominant_color == Color.POLITICO:
+            if squad.get_dominant_color(self._temp_colors) == Color.POLITICO:
                 self._log(f"  [Político] Puedes intercambiar posiciones de 2 cartas por escuadrón.")
 
     def start_attack_phase(self):
@@ -792,7 +1133,7 @@ class GameState:
 
         # Faction effects at end of turn
         for squad in squads:
-            dom = squad.dominant_color
+            dom = squad.get_dominant_color(self._temp_colors)
             if dom == Color.SELLADOR:
                 bonus = 10
                 # Abadesa bonus
@@ -847,6 +1188,20 @@ class GameState:
                         card.current_hp = min(card.current_hp, card.definition.hp)
         self._temp_buffs = {}
 
+        # Clear temporary colors
+        self._temp_colors = {}
+
+        # Dissolve temporary links
+        for a, b in list(self._temp_links):
+            card_a = self.all_cards.get(a)
+            card_b = self.all_cards.get(b)
+            if card_a and card_b:
+                self.network.remove_link(card_a, card_b)
+        self._temp_links = set()
+
+        # Reset link cost free flag
+        self._link_cost_free = False
+
         # Switch player
         self.active_player = 1 - self.active_player
         self.turn_number += 1
@@ -899,16 +1254,16 @@ class GameState:
                 # Temp buff D bonus
                 extra += self.get_temp_buff_bonus(card.card_id)
                 # Guerrero faction: +1 per node in L2/L3
-                if attacking_squad.dominant_color == Color.GUERRERO:
+                if attacking_squad.get_dominant_color(self._temp_colors) == Color.GUERRERO:
                     if card.position and card.position[1] >= 2:
                         extra += 1
                 # Naturaleza faction: units give +1 damage and +1 pot
-                if attacking_squad.dominant_color == Color.NATURALEZA:
+                if attacking_squad.get_dominant_color(self._temp_colors) == Color.NATURALEZA:
                     extra += 1
                     pot += 1
 
         # Check for Guardián del Bosque (Naturaleza triangle)
-        if attacking_squad.squad_type == "triangle" and attacking_squad.dominant_color == Color.NATURALEZA:
+        if attacking_squad.squad_type == "triangle" and attacking_squad.get_dominant_color(self._temp_colors) == Color.NATURALEZA:
             for cid in attacking_squad.members:
                 card = self.all_cards.get(cid)
                 if card and "Guardián" in card.definition.name:
@@ -928,7 +1283,7 @@ class GameState:
             def_pot = calculate_potenciamiento(defending_squad, all_squads, self.network, self.all_cards) // 2
             # Festivo: +2 armor to links
             armor = 0
-            if defending_squad.dominant_color == Color.FESTIVO:
+            if defending_squad.get_dominant_color(self._temp_colors) == Color.FESTIVO:
                 armor = 2
             # Danzante makes links unbreakable (armor boost)
             for cid in defending_squad.members:
@@ -1011,7 +1366,7 @@ class GameState:
         """Try to resolve a card ability."""
         # Check conditions
         if ability.ability_type == AbilityType.COLOR:
-            if squad.dominant_color != ability.color_required:
+            if squad.get_dominant_color(self._temp_colors) != ability.color_required:
                 return
         if ability.ability_type == AbilityType.FORMATION:
             if squad.squad_type.replace("_ampliado", "") != ability.formation_required:
@@ -1111,7 +1466,7 @@ class GameState:
             return
         for i, s in enumerate(squads):
             names = [self.all_cards[cid].definition.name for cid in s.members if self.all_cards.get(cid)]
-            dom = s.dominant_color
+            dom = s.get_dominant_color(self._temp_colors)
             color_str = dom.value if dom else "incoloro"
             print(f"  [{i}] {s.squad_type} | color: {color_str} | daño base: {s.base_damage} | potenciamiento: {s.empowerment}")
             print(f"      Miembros: {', '.join(names)}")

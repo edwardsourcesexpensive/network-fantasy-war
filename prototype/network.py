@@ -49,6 +49,18 @@ class Network:
             self.link_armor.pop(key, None)
         self.links.pop(cid, None)
 
+    def break_all_squad_links(self, squad: "Squad"):
+        """Remove all links belonging to members of a squad."""
+        all_pairs = set()
+        for cid in squad.members:
+            for neighbor in list(self.links.get(cid, set())):
+                pair = tuple(sorted((cid, neighbor)))
+                all_pairs.add(pair)
+        for a, b in all_pairs:
+            self.links[a].discard(b)
+            self.links[b].discard(a)
+            self.link_armor.pop((a, b), None)
+
     def network_distance(self, card_a: CardInstance, card_b: CardInstance) -> Optional[int]:
         a, b = card_a.card_id, card_b.card_id
         if a == b:
@@ -387,12 +399,16 @@ class Squad:
 
     @property
     def dominant_color(self) -> Optional[Color]:
+        return self.get_dominant_color({})
+
+    def get_dominant_color(self, color_overrides: dict[int, Color]) -> Optional[Color]:
         color_counts = defaultdict(int)
         total = 0
         for cid in self.members:
             card = self.cards.get(cid)
             if card and not card.definition.is_logistron:
-                color_counts[card.definition.color] += 1
+                effective_color = color_overrides.get(cid, card.definition.color)
+                color_counts[effective_color] += 1
                 total += 1
         for color, count in color_counts.items():
             if count > total / 2:

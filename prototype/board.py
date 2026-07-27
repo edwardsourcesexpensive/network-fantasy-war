@@ -93,6 +93,26 @@ class Board:
                 return m
         return None
 
+    def swap_cards(self, card_a: CardInstance, card_b: CardInstance):
+        """Swap the board positions of two cards. Bypasses adjacency checks."""
+        pos_a = card_a.position
+        pos_b = card_b.position
+        if not pos_a or not pos_b or pos_a[0] == -1 or pos_b[0] == -1:
+            return False
+        p_a, l_a, m_a = pos_a
+        p_b, l_b, m_b = pos_b
+        li_a = l_a - 1
+        li_b = l_b - 1
+        
+        # Swap cell contents
+        self.cells[p_a][li_a][m_a] = card_b.card_id
+        self.cells[p_b][li_b][m_b] = card_a.card_id
+        
+        # Update card positions
+        card_a.position = (p_b, l_b, m_b)
+        card_b.position = (p_a, l_a, m_a)
+        return True
+
     def spatial_distance(self, pos1: tuple, pos2: tuple) -> Optional[str]:
         """
         Calculate spatial distance between two positions.
