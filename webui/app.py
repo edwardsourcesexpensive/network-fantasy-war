@@ -483,6 +483,7 @@ def game_state(game):
         ],
         "game_over": game.game_over,
         "winner": game.winner,
+        "attached": {str(k): v for k, v in game._attached.items()},
         "board": board,
         "hands": hands,
         "squads": squads,

@@ -52,6 +52,7 @@ def ability_implementation_status(ability: Ability) -> str:
             ("rompe", "vínculo" in desc and "escuadrón" not in desc),    # destroy specific link (alias)
             ("muévete", "meridiano" in desc),                            # move + conditional link
             ("escuadrón", "daño" in desc or "daño base" in desc),       # squad damage buff
+            ("adjunta", "logistrón" in desc),                            # attach parasite
             ("costos de vínculo", True),                                 # link cost free
             ("cambia", "color" in desc),                                 # change color
             ("escuadrón se considera del color", True),                  # squad color
@@ -218,6 +219,9 @@ class GameState:
         # Temporary squad damage buffs (cleared in exit_phase)
         # {frozenset(members): +N damage}
         self._temp_squad_buffs: dict[frozenset, int] = {}
+
+        # Parasite attachments: {parasite_card_id: host_card_id}
+        self._attached: dict[int, int] = {}
 
         # Event log for UI
         self.log: list[str] = []
@@ -983,7 +987,23 @@ class GameState:
                     self._end_game(player)
                 return None
 
-            # ─── Squad damage buff ───
+            # ─── Attach parasite to enemy Logistron ───
+            if "adjunta" in desc_lower and "logistrón" in desc_lower:
+                if card.card_id in self._attached:
+                    host = self.all_cards.get(self._attached[card.card_id])
+                    host_name = host.definition.name if host else "?"
+                    return f"Ya está adjuntado a {host_name}."
+                target_card = get_target_card("target_id")
+                if not target_card:
+                    return "Selecciona un Logistrón enemigo."
+                if target_card.owner == player:
+                    return "Debe ser un Logistrón enemigo."
+                if not target_card.definition.is_logistron:
+                    return f"{target_card.definition.name} no es un Logistrón."
+                self._attached[card.card_id] = target_card.card_id
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: se adjunta a {target_card.definition.name}")
+                return None
             if "escuadrón" in desc_lower and ("daño" in desc_lower or "daño base" in desc_lower):
                 squads = self.get_player_squads(player)
                 if not squads:
@@ -1087,6 +1107,12 @@ class GameState:
             return f"{card_a.definition.name} sin capacidad (V={card_a.definition.link_capacity})."
         if not self.network.can_link(card_b):
             return f"{card_b.definition.name} sin capacidad (V={card_b.definition.link_capacity})."
+
+        # Parasite block: host cannot create new links
+        if card_a.card_id in self._attached.values():
+            return f"{card_a.definition.name} está parasitado, no puede crear vínculos."
+        if card_b.card_id in self._attached.values():
+            return f"{card_b.definition.name} está parasitado, no puede crear vínculos."
 
         # Reticencia check
         for card, other in [(card_a, card_b), (card_b, card_a)]:
@@ -1225,6 +1251,19 @@ class GameState:
 
         self._log(f"  Roba {drawn} carta(s). Mano: {len(self.hands[player])} | Sellos: {self.seals[player]}")
         self.phase = Phase.ACTIONS
+        # Parasite damage: deal 1 HP to all parasitized hosts
+        for parasite_id, host_id in list(self._attached.items()):
+            host = self.all_cards.get(host_id)
+            if host and host.position and host.position[0] != -1:
+                host.current_hp -= 1
+                parasite = self.all_cards.get(parasite_id)
+                pname = parasite.definition.name if parasite else "?"
+                self._log(f"  🦠 {pname} drena 1 HP a {host.definition.name} ({host.current_hp}/{host.definition.hp})")
+                if host.current_hp <= 0:
+                    self._log(f"  {host.definition.name} MUERE por parásito.")
+                    self._destroy_card(host)
+                    # Parasite is freed
+                    del self._attached[parasite_id]
         # Politicos: swap positions
         for squad in squads:
             if squad.get_dominant_color(self._temp_colors) == Color.POLITICO:
@@ -1645,6 +1684,14 @@ class GameState:
             if card.card_id in self.spies_infiltrated[p]:
                 self.spies_infiltrated[p].remove(card.card_id)
         self.discard_piles[card.owner].append(card)
+
+        # Clean up attachments: if this card was a host, free parasites
+        freed = [pid for pid, hid in self._attached.items() if hid == card.card_id]
+        for pid in freed:
+            del self._attached[pid]
+        # If this card was a parasite, remove attachment
+        if card.card_id in self._attached:
+            del self._attached[card.card_id]
 
         # Trigger on_kill abilities for the killer
         if killer:

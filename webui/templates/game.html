@@ -414,6 +414,24 @@ function showCardDetail(cid) {
     '<span class="stat">' + card.color + '</span> | HP:' + card.hp + '/' + card.max_hp + 
     ' | D:' + card.d + ' | V:' + card.v_used + '/' + card.v;
   
+  // Parasite indicator
+  const attached = state.attached || {};
+  const cardIdStr = String(card.id);
+  if (attached[cardIdStr]) {
+    // This card is a parasite
+    const hostId = attached[cardIdStr];
+    document.getElementById('detail-stats').innerHTML += 
+      '<br><span style="color:#e67e22;font-size:9px">🦠 Adjuntado a carta #' + hostId + '</span>';
+  }
+  // Check if this card is a host
+  for (const [pid, hid] of Object.entries(attached)) {
+    if (hid === card.id) {
+      document.getElementById('detail-stats').innerHTML += 
+        '<br><span style="color:#e94560;font-size:9px">🦠 Parasitado (no puede crear vínculos)</span>';
+      break;
+    }
+  }
+  
   const abDiv = document.getElementById('detail-abilities');
   if (card.abilities_meta && card.abilities_meta.length) {
     let abHtml = '';

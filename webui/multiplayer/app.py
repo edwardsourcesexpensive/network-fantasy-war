@@ -125,6 +125,7 @@ def filtered_state(game, player_id, pending_attack=None):
         "deck_sizes": [len(game.decks[0]), len(game.decks[1])],
         "hand_sizes": [len(game.hands[0]), len(game.hands[1])],
         "discard_sizes": [len(game.discard_piles[0]), len(game.discard_piles[1])],
+        "attached": {str(k): v for k, v in game._attached.items()},
         "player_id": player_id,
         "board": board,
         "links": links,
