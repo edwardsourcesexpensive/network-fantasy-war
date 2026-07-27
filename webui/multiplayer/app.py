@@ -46,6 +46,7 @@ def filtered_state(game, player_id, pending_attack=None):
                         "v_used": game.network.link_count(card),
                         "color": card.definition.color.value,
                         "abilities": [a.description for a in card.definition.abilities] if card.definition.abilities else [],
+                        "abilities_meta": [{"desc": a.description, "type": a.ability_type.name, "cost": a.action_cost} for a in card.definition.abilities],
                         "allowed_layers": card.definition.allowed_layers,
                     })
                 else:
@@ -494,6 +495,16 @@ def on_action(data):
         direction = args.get('direction', 0)
         if card:
             err = game.move_card(player_id, card, direction)
+        else:
+            err = "Carta no encontrada."
+
+    elif action == 'use_ability':
+        card_id = args.get('card_id')
+        ability_index = args.get('ability_index', 0)
+        targets = args.get('targets', {})
+        card = game.all_cards.get(card_id)
+        if card:
+            err = game.use_ability(player_id, card, ability_index, targets)
         else:
             err = "Carta no encontrada."
 

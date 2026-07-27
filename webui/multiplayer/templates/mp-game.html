@@ -48,6 +48,10 @@ body.p1-turn{background:#1a2e1a}
 #card-detail h3{color:#e94560;margin-bottom:4px}
 #card-detail .stat{color:#4fc3f7}
 #card-detail .ability{color:#aaa;margin:2px 0;padding-left:8px;border-left:2px solid #333}
+#card-detail .ability-btn{display:block;width:100%;margin:3px 0;padding:4px 8px;background:#1a3a1a;color:#4fc3f7;border:1px solid #4fc3f7;border-radius:3px;cursor:pointer;font-family:monospace;font-size:10px;text-align:left}
+#card-detail .ability-btn:hover{background:#2a5a2a;border-color:#7fdf7f}
+#card-detail .ability-btn[disabled]{opacity:0.4;cursor:default}
+#card-detail .ability-passive{color:#888;margin:2px 0;padding-left:8px;border-left:2px solid #333;font-size:10px}
 #card-detail .close{position:absolute;top:4px;right:8px;cursor:pointer;color:#888}
 #card-detail .close:hover{color:#e94560}
 #squads-panel{margin:6px 10px;padding:8px 12px;background:#16213e;border-radius:4px;display:none}
@@ -395,7 +399,18 @@ function showCardDetail(cell) {
     '<span class="stat">D:' + (cell.d || 0) + '</span> ' +
     '<span class="stat">V:' + (cell.v_used || 0) + '/' + (cell.v || 0) + '</span>';
   let ah = '';
-  if (cell.abilities) {
+  if (cell.abilities_meta && cell.abilities_meta.length) {
+    cell.abilities_meta.forEach((a, i) => {
+      if (a.type === 'ACTIVE' && a.cost > 0) {
+        const enoughActions = state.actions >= a.cost;
+        const canUse = myTurn && enoughActions && !isAttack;
+        const disabled = canUse ? '' : 'disabled';
+        ah += '<button class="ability-btn" onclick="activateAbility(\'' + cell.id + '\',' + i + ')" ' + disabled + ' title="Coste: ' + a.cost + ' acción(es)">⚡ [' + a.cost + '] ' + a.desc.substring(a.desc.indexOf(']')+2) + '</button>';
+      } else {
+        ah += '<div class="ability-passive">' + a.desc + '</div>';
+      }
+    });
+  } else if (cell.abilities) {
     cell.abilities.forEach(a => { ah += '<div class="ability">' + a + '</div>'; });
   }
   document.getElementById('detail-abilities').innerHTML = ah || '<span class="stat">Sin habilidades</span>';
@@ -443,6 +458,12 @@ function attackCard(cid) {
   const idx = window._attackSquad;
   delete window._attackSquad;
   doAction('attack', {squad_index: idx, target: 'card', target_id: cid});
+}
+
+function activateAbility(cardId, abilityIndex) {
+  selectedBoard = cardId;
+  selectedHand = null;
+  doAction('use_ability', {card_id: cardId, ability_index: abilityIndex, targets: {}});
 }
 
 function doAttackGrimoire() {

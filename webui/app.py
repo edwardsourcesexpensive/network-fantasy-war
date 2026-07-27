@@ -324,6 +324,18 @@ def api_action():
             if err: result["error"] = err
             else: result["ok"] = True
     
+    elif action == 'use_ability':
+        card_id = args.get('card_id')
+        ability_index = args.get('ability_index', 0)
+        targets = args.get('targets', {})
+        card = game.all_cards.get(card_id)
+        if card:
+            err = game.use_ability(player, card, ability_index, targets)
+            if err: result["error"] = err
+            else: result["ok"] = True
+        else:
+            result["error"] = "Carta no encontrada."
+    
     result["state"] = game_state(game)
     return jsonify(result)
 
@@ -356,6 +368,7 @@ def game_state(game):
                         "owner": card.owner,
                         "foreign": owner_mark,
                         "abilities": [a.description for a in card.definition.abilities] if card.definition.abilities else [],
+                        "abilities_meta": [{"desc": a.description, "type": a.ability_type.name, "cost": a.action_cost} for a in card.definition.abilities],
                     })
                 else:
                     row.append(None)
@@ -388,6 +401,7 @@ def game_state(game):
                 "is_spy": card.definition.is_spy,
                 "is_logistron": card.definition.is_logistron,
                 "abilities": [a.description[:50] for a in card.definition.abilities],
+                "abilities_meta": [{"desc": a.description, "type": a.ability_type.name, "cost": a.action_cost} for a in card.definition.abilities],
             })
         hands.append(hand)
     

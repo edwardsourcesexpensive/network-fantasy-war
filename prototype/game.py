@@ -44,6 +44,10 @@ class GameState:
         # Attacked squads this turn
         self._attacked_squads: set[int] = set()  # squad hashes
 
+        # Temporary buffs applied this turn (cleared in exit_phase)
+        # {card_id: [{"attr": "d", "delta": 2}, ...]}
+        self._temp_buffs: dict[int, list[dict]] = {}
+
         # Event log for UI
         self.log: list[str] = []
 
@@ -263,6 +267,261 @@ class GameState:
             self._log(f"  Vínculos rotos: {', '.join(broken)}")
         return None
 
+    # ═══════════════════════════════════════════════════════════════
+    # Active Abilities
+    # ═══════════════════════════════════════════════════════════════
+
+    def can_use_ability(self, player: int, card: CardInstance,
+                        ability_index: int = 0) -> Optional[str]:
+        """Check if a card can use an active ability."""
+        if player != self.active_player:
+            return "No es tu turno."
+        if self.phase != Phase.ACTIONS:
+            return "No estás en la fase de acciones."
+        if not card.position or card.position[0] == -1:
+            return "La carta no está en el tablero."
+
+        active_abilities = [a for a in card.definition.abilities
+                           if a.ability_type.name == 'ACTIVE']
+        if ability_index < 0 or ability_index >= len(active_abilities):
+            return "Habilidad no encontrada."
+        ability = active_abilities[ability_index]
+
+        cost = ability.action_cost
+        if self.actions_remaining < cost:
+            return f"Necesitas {cost} acciones (tienes {self.actions_remaining})."
+        return None
+
+    def use_ability(self, player: int, card: CardInstance,
+                    ability_index: int = 0, targets: dict = None) -> Optional[str]:
+        """Activate an active ability on a card.
+
+        Supported effects (keyword matching on description):
+        - "roba N carta(s)": draw cards
+        - "gana N sello(s)": gain seals
+        - "cura N HP": heal a card
+        - "repara N sello(s)": repair seals
+        - "asciende": ascend the card (reuse existing logic)
+        - "Destrúyete": self-destruct + effect
+        - "+N HP": temporary HP buff
+        - "+N D": temporary damage buff
+        - "pierde N sello(s)": enemy loses seals
+        - "mira": peek at deck/hand (info-only, logged)
+        - "descarta": discard effects
+        """
+        targets = targets or {}
+        err = self.can_use_ability(player, card, ability_index)
+        if err:
+            return err
+
+        active_abilities = [a for a in card.definition.abilities
+                           if a.ability_type.name == 'ACTIVE']
+        ability = active_abilities[ability_index]
+        desc = ability.description
+        desc_lower = desc.lower()
+        cost = ability.action_cost
+
+        # -- Helper: find a card by target_id --
+        def get_target_card(key: str = "target_id") -> Optional[CardInstance]:
+            tid = targets.get(key)
+            if tid is not None:
+                return self.all_cards.get(tid)
+            return None
+
+        try:
+            # ─── Draw effects ───
+            if "roba" in desc_lower and "control" not in desc_lower and "vínculo" not in desc_lower:
+                # Count draws mentioned in description
+                import re
+                draw_count = 1
+                match = re.search(r'roba\s+(\d+)', desc_lower)
+                if match:
+                    draw_count = int(match.group(1))
+                total_drawn = 0
+                for _ in range(draw_count):
+                    drawn = self._draw_card(player)
+                    if drawn:
+                        total_drawn += 1
+                    else:
+                        self.seals[player] -= 1
+                        self._log(f"  ¡Fatiga! -1 sello ({self.seals[player]})")
+                        if self.seals[player] <= 0:
+                            self._end_game(1 - player)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → roba {total_drawn} carta(s)")
+                return None
+
+            # ─── Gain seals ───
+            if "gana" in desc_lower and any(w in desc_lower for w in ["sello", "sellos"]):
+                import re
+                seal_count = 1
+                match = re.search(r'gana\s+(\d+)\s+sello', desc_lower)
+                if match:
+                    seal_count = int(match.group(1))
+                self.seals[player] += seal_count
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → +{seal_count} sellos ({self.seals[player]})")
+                return None
+
+            # ─── Repair seals ───
+            if "repara" in desc_lower and any(w in desc_lower for w in ["sello", "sellos"]):
+                import re
+                seal_count = 1
+                match = re.search(r'repara\s+(\d+)\s+sello', desc_lower)
+                if match:
+                    seal_count = int(match.group(1))
+                self.seals[player] += seal_count
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → repara {seal_count} sellos ({self.seals[player]})")
+                return None
+
+            # ─── Heal HP ───
+            if "cura" in desc_lower and "hp" in desc_lower:
+                import re
+                heal_amount = 2
+                match = re.search(r'cura\s+(\d+)\s*hp', desc_lower)
+                if match:
+                    heal_amount = int(match.group(1))
+                target_card = get_target_card("target_id") or card
+                target_card.current_hp = min(target_card.current_hp + heal_amount,
+                                            target_card.definition.hp)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → cura {heal_amount} HP a {target_card.definition.name} ({target_card.current_hp}/{target_card.definition.hp})")
+                return None
+
+            # ─── Ascend ───
+            if "asciende" in desc_lower or "asciende" in desc:
+                # Check if card can ascend (position valid)
+                if not card.position or card.position[0] == -1:
+                    return "La carta no está en posición de ascender."
+                p, layer, meridian = card.position
+                if layer >= 3:
+                    return "Ya está en la capa máxima."
+                new_layer = layer + 1
+                new_li = new_layer - 1
+
+                # Check destination is free
+                if self.board.cells[p][new_li][meridian] is not None:
+                    return "Celda de destino ocupada."
+
+                # Move the card up one layer (bypass allowed_layers check)
+                old_li = layer - 1
+                self.board.cells[p][old_li][meridian] = None
+                self.board.cells[p][new_li][meridian] = card.card_id
+                card.position = (p, new_layer, meridian)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → asciende a L{new_layer}")
+                return None
+
+            # ─── Self-destruct ───
+            if "destrúyete" in desc_lower or "destruyete" in desc_lower:
+                name = card.definition.name
+                seal_boost = 0
+                if "grimorio gana" in desc_lower:
+                    import re
+                    seal_boost = 5
+                    match = re.search(r'gana\s+(\d+)\s+sello', desc_lower)
+                    if match:
+                        seal_boost = int(match.group(1))
+                    self.seals[player] += seal_boost
+                self._destroy_card(card)
+                self.actions_remaining -= cost
+                self._log(f"  {name}: se autodestruye. Grimorio +{seal_boost} sellos")
+                return None
+
+            # ─── Opponent loses seals ───
+            if "pierde" in desc_lower and any(w in desc_lower for w in ["sello", "sellos"]):
+                import re
+                seal_count = 2
+                match = re.search(r'pierde\s+(\d+)\s+sello', desc_lower)
+                if match:
+                    seal_count = int(match.group(1))
+                enemy = 1 - player
+                self.seals[enemy] = max(0, self.seals[enemy] - seal_count)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → enemigo pierde {seal_count} sellos ({self.seals[enemy]})")
+                if self.seals[enemy] <= 0:
+                    self._end_game(player)
+                return None
+
+            # ─── Temporary +HP buff ───
+            if any(w in desc_lower for w in ["gana +", "gana +"]) and "hp" in desc_lower:
+                import re
+                hp_bonus = 1
+                match = re.search(r'\+(\d+)\s*hp', desc_lower)
+                if match:
+                    hp_bonus = int(match.group(1))
+                target_card = get_target_card("target_id") or card
+                self._temp_buffs.setdefault(target_card.card_id, []).append(
+                    {"attr": "hp", "delta": hp_bonus}
+                )
+                target_card.current_hp += hp_bonus
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → {target_card.definition.name} +{hp_bonus} HP temporal")
+                return None
+
+            # ─── Temporary +D buff ───
+            if any(w in desc_lower for w in ["+", "+"]) and "d" in desc_lower and "hp" not in desc_lower:
+                import re
+                d_bonus = 1
+                match = re.search(r'\+(\d+)\s*d', desc_lower)
+                if match:
+                    d_bonus = int(match.group(1))
+                target_card = get_target_card("target_id") or card
+                self._temp_buffs.setdefault(target_card.card_id, []).append(
+                    {"attr": "d", "delta": d_bonus}
+                )
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → {target_card.definition.name} +{d_bonus} D temporal")
+                return None
+
+            # ─── Scry / peek ───
+            if "mira" in desc_lower and any(w in desc_lower for w in ["carta", "cartas", "reserva", "tope"]):
+                import re
+                count = 3
+                match = re.search(r'mira\s+(\d+)', desc_lower)
+                if match:
+                    count = int(match.group(1))
+                # Reveal top N cards to the log
+                top_cards = self.decks[player][-count:] if len(self.decks[player]) >= count else self.decks[player][:]
+                names = [c.definition.name for c in reversed(top_cards)]
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → mira top {len(names)}: {', '.join(names)}")
+                return None
+
+            # ─── Discard ───
+            if "descarta" in desc_lower:
+                import re
+                discard_count = 1
+                match = re.search(r'descarta\s+(\d+)', desc_lower)
+                if match:
+                    discard_count = int(match.group(1))
+                # Discard from player's hand
+                discarded = []
+                for _ in range(discard_count):
+                    if self.hands[player]:
+                        dc = self.hands[player].pop()
+                        self.discard_piles[player].append(dc)
+                        discarded.append(dc.definition.name)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: usa habilidad → descarta: {', '.join(discarded) if discarded else '(mano vacía)'}")
+                return None
+
+            # ─── Fallback: ability not yet implemented ───
+            self.actions_remaining -= cost
+            self._log(f"  {card.definition.name}: usa habilidad ({desc[:50]}...) — efecto no implementado")
+            return None
+
+        except Exception as e:
+            # Safety net: log error, refund actions, don't crash
+            self._log(f"  ⚠ Error en habilidad de {card.definition.name}: {str(e)}")
+            return f"Error al ejecutar habilidad: {str(e)}"
+
+    def get_temp_buff_bonus(self, card_id: int) -> int:
+        """Get temporary D bonus from active buffs for attack calculations."""
+        buffs = self._temp_buffs.get(card_id, [])
+        return sum(b["delta"] for b in buffs if b["attr"] == "d")
+
     def can_link(self, player: int, card_a: CardInstance, card_b: CardInstance) -> Optional[str]:
         if player != self.active_player:
             return "No es tu turno."
@@ -473,6 +732,16 @@ class GameState:
 
         self._log(f"  Fin del turno. Sellos J{player+1}: {self.seals[player]}")
 
+        # Clear temporary buffs
+        for cid, buffs in self._temp_buffs.items():
+            card = self.all_cards.get(cid)
+            if card:
+                for b in buffs:
+                    if b["attr"] == "hp":
+                        card.current_hp = max(0, card.current_hp - b["delta"])
+                        card.current_hp = min(card.current_hp, card.definition.hp)
+        self._temp_buffs = {}
+
         # Switch player
         self.active_player = 1 - self.active_player
         self.turn_number += 1
@@ -522,6 +791,8 @@ class GameState:
             card = self.all_cards.get(cid)
             if card:
                 extra += card.definition.damage_bonus
+                # Temp buff D bonus
+                extra += self.get_temp_buff_bonus(card.card_id)
                 # Guerrero faction: +1 per node in L2/L3
                 if attacking_squad.dominant_color == Color.GUERRERO:
                     if card.position and card.position[1] >= 2:

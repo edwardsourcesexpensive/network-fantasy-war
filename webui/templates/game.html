@@ -42,6 +42,10 @@ body.p1-turn{background:#1a2e1a}
 #card-detail h3{color:#e94560;margin-bottom:4px}
 #card-detail .stat{color:#4fc3f7}
 #card-detail .ability{color:#aaa;margin:2px 0;padding-left:8px;border-left:2px solid #333}
+#card-detail .ability-btn{display:block;width:100%;margin:3px 0;padding:4px 8px;background:#1a3a1a;color:#4fc3f7;border:1px solid #4fc3f7;border-radius:3px;cursor:pointer;font-family:monospace;font-size:10px;text-align:left}
+#card-detail .ability-btn:hover{background:#2a5a2a;border-color:#7fdf7f}
+#card-detail .ability-btn[disabled]{opacity:0.4;cursor:default}
+#card-detail .ability-passive{color:#888;margin:2px 0;padding-left:8px;border-left:2px solid #333;font-size:10px}
 #card-detail .close{position:absolute;top:4px;right:8px;cursor:pointer;color:#888}
 #card-detail .close:hover{color:#e94560}
 
@@ -402,7 +406,21 @@ function showCardDetail(cid) {
     ' | D:' + card.d + ' | V:' + card.v_used + '/' + card.v;
   
   const abDiv = document.getElementById('detail-abilities');
-  if (card.abilities && card.abilities.length) {
+  if (card.abilities_meta && card.abilities_meta.length) {
+    let abHtml = '';
+    card.abilities_meta.forEach((a, i) => {
+      if (a.type === 'ACTIVE' && a.cost > 0) {
+        const myTurn = state.active_player === 0 || (gameMode !== 'ai');
+        const enoughActions = state.actions >= a.cost;
+        const canUse = myTurn && enoughActions && state.phase === 'actions';
+        const disabled = canUse ? '' : 'disabled';
+        abHtml += '<button class="ability-btn" onclick="activateAbility(' + card.id + ',' + i + ')" ' + disabled + ' title="Coste: ' + a.cost + ' acción(es)">⚡ [' + a.cost + '] ' + a.desc.substring(a.desc.indexOf(']')+2) + '</button>';
+      } else {
+        abHtml += '<div class="ability-passive">' + a.desc + '</div>';
+      }
+    });
+    abDiv.innerHTML = abHtml;
+  } else if (card.abilities && card.abilities.length) {
     abDiv.innerHTML = card.abilities.map(a => '<div class="ability">' + a + '</div>').join('');
   } else {
     abDiv.innerHTML = '<div class="ability" style="color:#555">Sin habilidades</div>';
@@ -540,6 +558,16 @@ function defend(idx) {
 }
 
 function attackSquad(idx) { action('attack', {squad_index: idx, target: 'grimoire'}); }
+
+async function activateAbility(cardId, abilityIndex) {
+  const r = await api('/api/action', {action: 'use_ability', args: {card_id: cardId, ability_index: abilityIndex, targets: {}}});
+  if (r.error) { alert(r.error); logError(r.error); }
+  if (r.state) loadState(r.state);
+  // Auto AI turn
+  if (gameMode === 'ai' && r.state && !r.state.game_over && r.state.active_player === 1) {
+    setTimeout(runAITurn, 500);
+  }
+}
 
 function renderLog(s) {
   const div = document.getElementById('log');
