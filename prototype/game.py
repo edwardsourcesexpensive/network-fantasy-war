@@ -73,11 +73,11 @@ def ability_implementation_status(ability: Ability) -> str:
 
     # ─── PASSIVE abilities (_resolve_ability handles these) ───
     if trigger == "start_of_turn":
-        if "roba" in desc:
+        if "roba" in desc or "robo" in desc:
             return "implemented"
         if "mira" in desc:
             return "implemented"
-        if "asciende" in desc:
+        if "asciende" in desc or "ascender" in desc:
             return "implemented"
         if "acción" in desc or "accion" in desc:
             return "implemented"
@@ -131,21 +131,33 @@ def ability_implementation_status(ability: Ability) -> str:
             return "implemented"
         return "not_implemented"
 
-    # COLOR/FORMATION abilities
+    # COLOR/FORMATION abilities — same trigger keywords as GENERIC above
     if atype == AbilityType.COLOR or atype == AbilityType.FORMATION:
         if trigger == "end_of_turn":
             if "sellador" in desc.lower() or "sello" in desc:
-                return "implemented"  # SELLADOR faction bonus
+                return "implemented"
             if "saboteador" in desc.lower() or "vínculo" in desc:
-                return "partial"  # logged
+                return "partial"
             if "monstruo" in desc.lower():
                 return "partial"
+            if "recupera" in desc and "hp" in desc:
+                return "implemented"
+            if "restaura" in desc and "armadura" in desc:
+                return "partial"  # armor restore not fully implemented
+            return "not_implemented"
         if trigger == "start_of_turn":
+            if "roba" in desc or "robo" in desc:
+                return "implemented"
+            if "acción" in desc or "accion" in desc:
+                return "implemented"
+            if "asciende" in desc or "ascender" in desc:
+                return "implemented"
+            if "vínculo" in desc and "gratis" in desc:
+                return "implemented"
             return "not_implemented"
         if trigger == "on_attack":
             return "implemented"  # Color checks in attack()
         if trigger == "permanent":
-            # Festivo armor: checked in attack()
             if "armadura" in desc.lower() or "festivo" in desc.lower():
                 return "implemented"
             return "not_implemented"
@@ -1399,7 +1411,7 @@ class GameState:
         # Execute based on trigger
         if ability.trigger == "start_of_turn":
             # ─── Draw ───
-            if "roba" in desc:
+            if "roba" in desc or "robo" in desc:
                 count = 1
                 import re
                 m = re.search(r'roba\s+(\d+)', desc)
@@ -1425,7 +1437,7 @@ class GameState:
                 self._log(f"  {card.definition.name}: mira top {len(names)}: {', '.join(names)}")
 
             # ─── Auto-ascend ───
-            elif "asciende" in desc:
+            elif "asciende" in desc or "ascender" in desc:
                 # Find a card to ascend in the same squad (or self)
                 target = card
                 for cid in squad.members:
