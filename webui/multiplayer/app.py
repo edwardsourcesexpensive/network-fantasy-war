@@ -164,6 +164,35 @@ def api_decks():
     return jsonify(result)
 
 
+@app.route('/api/decks/<deck_key>')
+def api_deck_detail(deck_key):
+    """Return detailed card list for a specific deck."""
+    if deck_key not in DECKS:
+        return jsonify({"error": "Deck no encontrado"}), 404
+    deck = DECKS[deck_key]
+    cards = []
+    for c in deck:
+        abilities = [a.description for a in c.abilities] if c.abilities else []
+        cards.append({
+            "name": c.name,
+            "color": c.color.value,
+            "hp": c.hp,
+            "v": c.link_capacity,
+            "d": c.damage_bonus,
+            "layers": c.allowed_layers,
+            "formations": c.allowed_formations if c.allowed_formations else [],
+            "is_spy": c.is_spy,
+            "is_logistron": c.is_logistron,
+            "abilities": abilities,
+        })
+    return jsonify({
+        "key": deck_key,
+        "name": DECK_NAMES[deck_key],
+        "count": len(cards),
+        "cards": sorted(cards, key=lambda x: (x["color"], x["name"]))
+    })
+
+
 @app.route('/rules')
 def serve_rules():
     """Serve the rules reference PDF."""

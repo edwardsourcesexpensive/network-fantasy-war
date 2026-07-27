@@ -533,18 +533,60 @@ async function showDecks() {
     for (const [key, d] of Object.entries(decks)) {
       const colorTags = Object.entries(d.colors).map(([c, n]) => 
         '<span style="color:#4fc3f7">' + c + '</span>:' + n).join(' ');
-      html += '<div style="background:#0f3460;border:1px solid #333;border-radius:4px;padding:10px;margin:6px 0">' +
+      html += '<div class="deck-item" data-deck="' + key + '" style="background:#0f3460;border:1px solid #333;border-radius:4px;padding:10px;margin:6px 0;cursor:pointer" onclick="toggleDeckDetail(\'' + key + '\', this)">' +
         '<strong style="color:#e94560;font-size:13px">' + d.name + '</strong>' +
         '<span style="color:#888;font-size:10px;margin-left:8px">(' + key + ' · ' + d.count + ' cartas)</span>' +
         '<div style="margin-top:4px;color:#aaa;font-size:10px">' +
           'V prom: ' + d.avg_v + ' | D prom: ' + d.avg_d + ' | Espías: ' + d.spies + ' | Logistrones: ' + d.logistrones +
         '</div>' +
         '<div style="color:#888;font-size:9px;margin-top:2px">' + colorTags + '</div>' +
+        '<div class="deck-cards" id="deck-cards-' + key + '" style="display:none;margin-top:8px;border-top:1px solid #333;padding-top:6px"></div>' +
       '</div>';
     }
     content.innerHTML = html;
   } catch(e) {
     content.innerHTML = '<span style="color:#e94560">Error al cargar decks.</span>';
+  }
+}
+
+async function toggleDeckDetail(key, el) {
+  const cardsDiv = document.getElementById('deck-cards-' + key);
+  if (cardsDiv.style.display === 'block') {
+    cardsDiv.style.display = 'none';
+    return;
+  }
+  if (cardsDiv.innerHTML) {
+    cardsDiv.style.display = 'block';
+    return;
+  }
+  cardsDiv.innerHTML = '<span style="color:#888">Cargando cartas...</span>';
+  cardsDiv.style.display = 'block';
+  try {
+    const r = await fetch('/api/decks/' + key);
+    const deck = await r.json();
+    let html = '';
+    const colorMap = {
+      'Saboteador': '#e94560', 'Espía': '#9b59b6', 'Monstruo': '#e67e22',
+      'Militar': '#3498db', 'Guerrero': '#e74c3c', 'Sellador': '#f1c40f',
+      'Festivo': '#1abc9c', 'Político': '#2ecc71', 'Incoloro': '#95a5a6',
+      'Naturaleza': '#27ae60', 'Alquimista': '#8e44ad', 'Sabio': '#2980b9',
+      'Logistrón': '#7f8c8d'
+    };
+    for (const c of deck.cards) {
+      const clr = colorMap[c.color] || '#aaa';
+      const tags = [];
+      if (c.is_spy) tags.push('🕵️ Espía');
+      if (c.is_logistron) tags.push('🔌 Logistrón');
+      const ab = c.abilities.length ? '<div style="color:#888;font-size:8px;margin-top:1px">' + c.abilities.map(a => a.substring(0,60)).join('<br>') + '</div>' : '';
+      html += '<div style="background:#0a1a2e;border:1px solid #222;border-radius:3px;padding:5px 8px;margin:3px 0;font-size:10px">' +
+        '<span style="color:' + clr + ';font-weight:bold">' + c.name + '</span>' +
+        ' <span style="color:#888">HP:' + c.hp + ' D:' + c.d + ' V:' + c.v + ' L:' + c.layers.join(',') + '</span>' +
+        (tags.length ? ' <span style="color:#4fc3f7;font-size:9px">' + tags.join(' ') + '</span>' : '') +
+        ab + '</div>';
+    }
+    cardsDiv.innerHTML = html;
+  } catch(e) {
+    cardsDiv.innerHTML = '<span style="color:#e94560">Error al cargar.</span>';
   }
 }
 </script>
