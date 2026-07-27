@@ -90,6 +90,10 @@ def ability_implementation_status(ability: Ability) -> str:
             return "implemented"
         if "vínculo" in desc:
             return "partial"
+        if "restaura" in desc and "armadura" in desc:
+            return "partial"
+        if "descarte" in desc or "cementerio" in desc:
+            return "implemented"
         if "sello" in desc:
             return "implemented"
         return "not_implemented"
@@ -1493,6 +1497,13 @@ class GameState:
                 else:
                     card.current_hp = min(card.current_hp + heal, card.definition.hp)
                     self._log(f"  {card.definition.name}: recupera {heal} HP ({card.current_hp}/{card.definition.hp})")
+
+            # ─── Recover from graveyard ───
+            elif "descarte" in desc or "cementerio" in desc:
+                if self.discard_piles[player]:
+                    recovered = self.discard_piles[player].pop()
+                    self.hands[player].append(recovered)
+                    self._log(f"  {card.definition.name}: recupera {recovered.definition.name} del cementerio")
 
             # ─── Vínculo enemigo destruible ───
             elif "vínculo" in desc:

@@ -471,6 +471,16 @@ def game_state(game):
         "seals": game.seals,
         "hand_sizes": [len(game.hands[0]), len(game.hands[1])],
         "deck_sizes": [len(game.decks[0]), len(game.decks[1])],
+        "discard_piles": [
+            [{"name": c.definition.name, "color": c.definition.color.value,
+              "hp": c.definition.hp, "d": c.definition.damage_bonus,
+              "v": c.definition.link_capacity, "id": c.card_id}
+             for c in game.discard_piles[0]],
+            [{"name": c.definition.name, "color": c.definition.color.value,
+              "hp": c.definition.hp, "d": c.definition.damage_bonus,
+              "v": c.definition.link_capacity, "id": c.card_id}
+             for c in game.discard_piles[1]],
+        ],
         "game_over": game.game_over,
         "winner": game.winner,
         "board": board,

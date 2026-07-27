@@ -129,8 +129,16 @@ body.phase-attack .phase-attack{display:flex}
   <button class="btn" onclick="flipBoard()">🔄 Flip</button>
   <button class="btn" onclick="window.open('/rules','_blank')" style="background:#0f3460;color:#4fc3f7;font-size:10px">📜 Reglas</button>
   <button class="btn" onclick="showDecks()" style="background:#0f3460;color:#ffd700;font-size:10px">📚 Decks</button>
+  <button class="btn" id="graveyard-btn" onclick="toggleGraveyard()" style="background:#2a1a1a;color:#888;font-size:10px;display:none">💀 Cementerio (<span id="grave-count">0</span>)</button>
 </div>
- <div id="squads-panel" class="phase-attack"></div>
+<div id="graveyard-panel" style="display:none;background:#1a1a1a;border:1px solid #444;border-radius:4px;padding:8px;margin-bottom:8px;max-height:200px;overflow-y:auto">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <span style="color:#888;font-size:10px;font-weight:bold">💀 Cementerio — solo lectura</span>
+    <button onclick="document.getElementById('graveyard-panel').style.display='none'" style="background:none;border:none;color:#888;cursor:pointer;font-size:14px">✕</button>
+  </div>
+  <div id="graveyard-content" style="color:#888;font-size:10px"></div>
+</div>
+<div id="squads-panel" class="phase-attack"></div>
  <div id="log"></div>
  </div>
 
@@ -253,6 +261,7 @@ function loadState(s) {
   renderStatus(s);
   renderSquads(s);
   renderLog(s);
+  renderGraveyard(s);
   updatePlayerIndicator(s);
 }
 
@@ -580,6 +589,44 @@ function logError(msg) {
   const logDiv = document.getElementById('log');
   logDiv.innerHTML = '<div style="color:#e94560;padding:4px;margin:2px;background:#2a0a0a;border-radius:3px">⚠ ' + msg + '</div>' + logDiv.innerHTML;
   logDiv.scrollTop = 0;
+}
+
+// ═══ GRAVEYARD ═══
+function renderGraveyard(s) {
+  const btn = document.getElementById('graveyard-btn');
+  const count = document.getElementById('grave-count');
+  const p = s.active_player;
+  if (!s.discard_piles || !s.discard_piles[p]) {
+    btn.style.display = 'none';
+    return;
+  }
+  const pile = s.discard_piles[p];
+  count.textContent = pile.length;
+  btn.style.display = pile.length > 0 ? 'inline-block' : 'none';
+  
+  const content = document.getElementById('graveyard-content');
+  if (pile.length === 0) {
+    content.innerHTML = '<span style="color:#555">Vacío</span>';
+  } else {
+    const colorMap = {
+      'Saboteador':'#e94560','Espía':'#9b59b6','Monstruo':'#e67e22',
+      'Militar':'#3498db','Guerrero':'#e74c3c','Sellador':'#f1c40f',
+      'Festivo':'#1abc9c','Político':'#2ecc71','Incoloro':'#95a5a6',
+      'Naturaleza':'#27ae60','Alquimista':'#8e44ad','Sabio':'#2980b9',
+      'Logistrón':'#7f8c8d'
+    };
+    content.innerHTML = pile.map(c =>
+      '<div style="padding:2px 4px;border-bottom:1px solid #222">' +
+      '<span style="color:' + (colorMap[c.color] || '#aaa') + '">' + c.name + '</span>' +
+      ' <span style="color:#666">HP:' + c.hp + ' D:' + c.d + ' V:' + c.v + '</span>' +
+      '</div>'
+    ).join('');
+  }
+}
+
+function toggleGraveyard() {
+  const panel = document.getElementById('graveyard-panel');
+  panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
 }
 
 async function action(act, args={}) {
