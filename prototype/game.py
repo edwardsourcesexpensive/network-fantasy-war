@@ -18,6 +18,111 @@ class Phase(Enum):
     EXIT = "exit"
 
 
+def ability_implementation_status(ability: Ability) -> str:
+    """Return implementation status for a card ability.
+    
+    Returns one of:
+      - "implemented": fully functional
+      - "partial": partially implemented (e.g., logged but no mechanical effect)
+      - "not_implemented": description only, no code
+    """
+    desc = ability.description.lower()
+    atype = ability.ability_type
+    trigger = ability.trigger
+
+    # ─── ACTIVE abilities (use_ability handles these) ───
+    if atype == AbilityType.ACTIVE and ability.action_cost > 0:
+        # Keyword-matched effects in use_ability()
+        implemented_kw = [
+            ("roba", "control" not in desc and "vínculo" not in desc),  # draw
+            ("gana", any(w in desc for w in ["sello", "sellos"])),      # gain seals
+            ("repara", any(w in desc for w in ["sello", "sellos"])),    # repair seals
+            ("cura", "hp" in desc),                                      # heal
+            ("asciende", True),                                          # ascend
+            ("destrúyete", True) or ("destruyete", True),                # self-destruct
+            ("pierde", any(w in desc for w in ["sello", "sellos"])),    # enemy loses seals
+            ("mira", any(w in desc for w in ["carta", "cartas", "reserva", "tope"])),  # scry
+            ("descarta", True),                                          # discard
+        ]
+        for kw, cond in implemented_kw:
+            if kw in desc and cond:
+                return "implemented"
+        
+        # +HP or +D temp buff
+        if any(w in desc for w in ["gana +", "gana +"]) and "hp" in desc:
+            return "implemented"
+        if "+" in desc and "d" in desc and "hp" not in desc:
+            return "implemented"
+
+        # Fallthrough: active but not keyword-matched
+        return "not_implemented"
+
+    # ─── PASSIVE abilities (_resolve_ability handles these) ───
+    if trigger == "start_of_turn":
+        if "roba" in desc:
+            return "implemented"
+        return "not_implemented"
+
+    if trigger == "end_of_turn":
+        if "vínculo" in desc:
+            return "partial"  # logged but no real link break
+        return "not_implemented"
+
+    if trigger == "on_enter":
+        # Vanguardia / Línea de fuego: checked in play_card()
+        if "vanguardia" in desc or "línea de fuego" in desc:
+            return "implemented"
+        return "not_implemented"
+
+    if trigger == "on_ascend":
+        # Caudillismo: auto-link in ascend()
+        if "caudillismo" in desc.lower() or "vínculo gratis" in desc.lower():
+            return "implemented"
+        return "not_implemented"
+
+    if trigger == "permanent":
+        # Reticencia: checked in can_link()
+        if "reticencia" in desc.lower():
+            return "implemented"
+        # Sigilo: not implemented
+        if "sigilo" in desc.lower():
+            return "not_implemented"
+        return "not_implemented"
+
+    if trigger == "on_attack":
+        # Guerrero +1 per L2/L3: checked in attack()
+        # Naturaleza units: checked in attack()
+        # Guardián del Bosque: checked in attack()
+        # Engendro del Vacío: checked in attack()
+        return "implemented"  # Most on_attack are checked inline in attack()
+
+    if trigger == "on_kill":
+        return "not_implemented"
+
+    # COLOR/FORMATION abilities
+    if atype == AbilityType.COLOR or atype == AbilityType.FORMATION:
+        if trigger == "end_of_turn":
+            if "sellador" in desc.lower() or "sello" in desc:
+                return "implemented"  # SELLADOR faction bonus
+            if "saboteador" in desc.lower() or "vínculo" in desc:
+                return "partial"  # logged
+            if "monstruo" in desc.lower():
+                return "partial"
+        if trigger == "start_of_turn":
+            return "not_implemented"
+        if trigger == "on_attack":
+            return "implemented"  # Color checks in attack()
+        if trigger == "permanent":
+            # Festivo armor: checked in attack()
+            if "armadura" in desc.lower() or "festivo" in desc.lower():
+                return "implemented"
+            return "not_implemented"
+        return "not_implemented"
+
+    # Default
+    return "not_implemented"
+
+
 class GameState:
     """Complete state of a Network Fantasy War match."""
 

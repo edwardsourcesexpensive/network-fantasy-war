@@ -53,17 +53,33 @@ def api_deck_detail(deck_key):
     """Return detailed card list for a specific deck."""
     if deck_key not in DECKS:
         return jsonify({"error": "Deck no encontrado"}), 404
+    from prototype.game import ability_implementation_status
     deck = DECKS[deck_key]
     cards = []
     for c in deck:
-        abilities = [a.description for a in c.abilities] if c.abilities else []
+        abilities_data = []
+        impl_count = 0
+        for a in (c.abilities or []):
+            status = ability_implementation_status(a)
+            if status == "implemented":
+                impl_count += 1
+            abilities_data.append({
+                "desc": a.description,
+                "type": a.ability_type.name,
+                "cost": a.action_cost,
+                "status": status,
+            })
+        total = len(abilities_data)
         cards.append({
             "name": c.name, "color": c.color.value,
             "hp": c.hp, "v": c.link_capacity, "d": c.damage_bonus,
             "layers": c.allowed_layers,
             "formations": c.allowed_formations if c.allowed_formations else [],
             "is_spy": c.is_spy, "is_logistron": c.is_logistron,
-            "abilities": abilities,
+            "abilities": [a["desc"] for a in abilities_data],
+            "abilities_detail": abilities_data,
+            "impl_count": impl_count,
+            "total_abilities": total,
         })
     return jsonify({
         "key": deck_key, "name": DECK_NAMES[deck_key], "count": len(cards),

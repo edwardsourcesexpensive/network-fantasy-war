@@ -696,9 +696,34 @@ async function toggleDeckDetail(key, el) {
       const tags = [];
       if (c.is_spy) tags.push('🕵️ Espía');
       if (c.is_logistron) tags.push('🔌 Logistrón');
-      const ab = c.abilities.length ? '<div style="color:#888;font-size:8px;margin-top:1px">' + c.abilities.join('<br>') + '</div>' : '';
+      
+      // Build ability list with implementation indicators
+      let ab = '';
+      if (c.abilities_detail && c.abilities_detail.length) {
+        ab = '<div style="color:#888;font-size:8px;margin-top:2px">';
+        c.abilities_detail.forEach(a => {
+          let dot;
+          if (a.status === 'implemented') dot = '<span title="Implementada" style="color:#4caf50">●</span>';
+          else if (a.status === 'partial') dot = '<span title="Parcial" style="color:#ff9800">◐</span>';
+          else dot = '<span title="No implementada" style="color:#e94560">○</span>';
+          ab += dot + ' ' + a.desc + '<br>';
+        });
+        ab += '</div>';
+      } else if (c.abilities && c.abilities.length) {
+        ab = '<div style="color:#888;font-size:8px;margin-top:2px">' + c.abilities.join('<br>') + '</div>';
+      }
+      
+      // Implementation badge
+      let implBadge = '';
+      if (c.total_abilities > 0) {
+        const pct = Math.round(c.impl_count / c.total_abilities * 100);
+        let badgeColor = '#e94560';
+        if (pct === 100) badgeColor = '#4caf50';
+        else if (pct >= 50) badgeColor = '#ff9800';
+        implBadge = ' <span title="' + c.impl_count + '/' + c.total_abilities + ' habilidades implementadas" style="font-size:8px;background:' + badgeColor + ';color:#000;padding:0 4px;border-radius:2px">' + c.impl_count + '/' + c.total_abilities + '</span>';
+      }
       html += '<div style="background:#0a1a2e;border:1px solid #222;border-radius:3px;padding:5px 8px;margin:3px 0;font-size:10px">' +
-        '<span style="color:' + clr + ';font-weight:bold">' + c.name + '</span>' +
+        '<span style="color:' + clr + ';font-weight:bold">' + c.name + '</span>' + implBadge +
         ' <span style="color:#888">HP:' + c.hp + ' D:' + c.d + ' V:' + c.v + ' L:' + c.layers.join(',') + '</span>' +
         (tags.length ? ' <span style="color:#4fc3f7;font-size:9px">' + tags.join(' ') + '</span>' : '') +
         ab + '</div>';
