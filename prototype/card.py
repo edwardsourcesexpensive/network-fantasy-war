@@ -286,7 +286,7 @@ _c("Kamikaze del Abismo", Color.GUERRERO, 3, 2, 2, 1, [1,2,3], ["triangle"], [
 ])
 
 _c("Demagogo de la Frontera", Color.POLITICO, 3, 2, 0, 2, [1,2,3], ["triangle","square"], [
-    Ability("[1]: Roba el control de 1 vínculo enemigo", AbilityType.ACTIVE, "active", action_cost=1)
+    Ability("[1]: Destruye 1 vínculo enemigo", AbilityType.ACTIVE, "active", action_cost=1)
 ])
 
 _c("Burócrata Imperial", Color.POLITICO, 5, 1, 0, 2, [1], ["triangle","square","pentagon"], [

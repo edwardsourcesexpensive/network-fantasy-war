@@ -49,6 +49,8 @@ def ability_implementation_status(ability: Ability) -> str:
             ("vínculo", "armadura" in desc),                             # link armor reduction
             ("rompe", "vínculo" in desc and "escuadrón" in desc),        # break squad links
             ("destruye", "vínculo" in desc),                             # destroy specific link
+            ("rompe", "vínculo" in desc and "escuadrón" not in desc),    # destroy specific link (alias)
+            ("muévete", "meridiano" in desc),                            # move + conditional link
             ("costos de vínculo", True),                                 # link cost free
             ("cambia", "color" in desc),                                 # change color
             ("escuadrón se considera del color", True),                  # squad color
@@ -802,7 +804,7 @@ class GameState:
                 return None
 
             # ─── Destroy specific link ───
-            if "destruye" in desc_lower and "vínculo" in desc_lower and "escuadrón" not in desc_lower:
+            if ("destruye" in desc_lower or "rompe" in desc_lower) and "vínculo" in desc_lower and "escuadrón" not in desc_lower:
                 target_card = get_target_card("target_id")
                 if not target_card:
                     return "Selecciona las dos cartas del vínculo a destruir."
@@ -974,6 +976,61 @@ class GameState:
                 self._log(f"  {card.definition.name}: destruye a {target_card.definition.name}, {dmg} daño al grimorio enemigo")
                 if self.seals[enemy] <= 0:
                     self._end_game(player)
+                return None
+
+            # ─── Move 1 meridian + conditional Nature link ───
+            if "muévete" in desc_lower and "meridiano" in desc_lower:
+                p, layer, meridian = card.position
+                direction = targets.get("direction", 1)  # 1=right, -1=left
+                import re
+                m = re.search(r'muévete\s+(-?\d+)', desc_lower)
+                if m:
+                    direction = int(m.group(1))
+                new_m = meridian + direction
+                li = layer - 1
+                if new_m < 0 or new_m >= 15:
+                    return "Fuera del tablero."
+                if self.board.cells[p][li][new_m] is not None:
+                    return "Celda ocupada."
+
+                # Move
+                self.board.cells[p][li][meridian] = None
+                self.board.cells[p][li][new_m] = card.card_id
+                card.position = (p, layer, new_m)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: se mueve a L{layer}:{new_m}")
+
+                # Check for adjacent Naturaleza for free link
+                if "naturaleza" in desc_lower and "vínculo gratis" in desc_lower:
+                    color_naturaleza = Color.NATURALEZA
+                    # Scan same-layer at dh=2
+                    for check_m in [new_m - 2, new_m + 2]:
+                        if 0 <= check_m < 15:
+                            neighbor_cid = self.board.cells[p][li][check_m]
+                            if neighbor_cid:
+                                neighbor = self.all_cards.get(neighbor_cid)
+                                if neighbor and neighbor.definition.color == color_naturaleza:
+                                    if self.network.can_link(card) and self.network.can_link(neighbor):
+                                        self.network.add_link(card, neighbor)
+                                        self._log(f"  {card.definition.name}: vínculo gratis con {neighbor.definition.name} (Naturaleza)")
+                                        break
+                    # Also scan cross-layer dv=1, dh<=1
+                    linked = False
+                    for dl in [-1, 1]:
+                        if linked: break
+                        check_li = li + dl
+                        if 0 <= check_li < 3:
+                            for check_m in [new_m - 1, new_m, new_m + 1]:
+                                if 0 <= check_m < 15:
+                                    neighbor_cid = self.board.cells[p][check_li][check_m]
+                                    if neighbor_cid:
+                                        neighbor = self.all_cards.get(neighbor_cid)
+                                        if neighbor and neighbor.definition.color == color_naturaleza:
+                                            if self.network.can_link(card) and self.network.can_link(neighbor):
+                                                self.network.add_link(card, neighbor)
+                                                self._log(f"  {card.definition.name}: vínculo gratis cross-layer con {neighbor.definition.name}")
+                                                linked = True
+                                                break
                 return None
 
             # ─── Fallback: ability not yet implemented ───
