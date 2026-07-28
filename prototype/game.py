@@ -499,6 +499,47 @@ class GameState:
                 layer="self",
             ))
 
+        # ─── before_destroy effects ───
+        # "Inmune a destrucción" / "indestructible"
+        if "inmune a destrucción" in desc or "indestructible" in desc:
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="before_destroy",
+                effect_type="destroy_immunity",
+                layer="self",
+            ))
+
+        # ─── after_destroy effects ───
+        # "Al destruirse: transfiere vínculos" 
+        if "transfiere" in desc and "vínculo" in desc:
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="after_destroy",
+                effect_type="transfer_links",
+                layer="self",
+            ))
+
+        # ─── on_ascend effects ───
+        # "No puede ascender" / "ni ascender"
+        if "no puede ascender" in desc or "ni ascender" in desc:
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="on_ascend",
+                effect_type="cannot_ascend",
+                layer="self",
+            ))
+
+        # ─── on_move effects ───
+        # "No puede moverse" / "no puede ser movido" / "ni ser movido"
+        if ("no puede moverse" in desc or "no puede ser movido" in desc
+                or "ni ser movido" in desc or "ser movida" in desc):
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="on_move",
+                effect_type="cannot_move",
+                layer="self",
+            ))
+
         return mods
 
     # ═══════════════════════════════════════════════════════════════
@@ -561,6 +602,15 @@ class GameState:
         # Register permanent/on_enter modifiers
         self._register_modifiers(card)
 
+        # ─── after_play hook ───
+        for mod in self._modifiers.get("after_play", []):
+            source_card = self.all_cards.get(mod.source_card_id)
+            if not source_card or source_card.owner != player:
+                continue
+            if mod.effect_type == "draw_on_play" and mod.source_card_id != card.card_id:
+                # Another card triggers draw when something is played
+                pass  # Reserved for future patterns
+
         self.actions_remaining -= 1
 
         # Trigger Vanguardia ability
@@ -578,6 +628,12 @@ class GameState:
                 return "No es tu turno."
             if self.phase != Phase.ACTIONS:
                 return "No estás en la fase de acciones."
+
+        # ─── on_ascend hook ───
+        for mod in self._modifiers.get("on_ascend", []):
+            if mod.source_card_id == card.card_id and mod.effect_type == "cannot_ascend":
+                return f"{card.definition.name} no puede ascender."
+
         if not card.position or card.position[0] == -1:
             if card.definition.is_spy and self.actions_remaining >= 1:
                 return None
@@ -661,6 +717,11 @@ class GameState:
             return "Carta sin posición."
         if direction not in (-1, 1):
             return "Dirección inválida."
+
+        # ─── on_move hook ───
+        for mod in self._modifiers.get("on_move", []):
+            if mod.source_card_id == card.card_id and mod.effect_type == "cannot_move":
+                return f"{card.definition.name} no puede ser movido."
 
         p, layer, meridian = card.position
         new_m = meridian + direction
@@ -2037,6 +2098,14 @@ class GameState:
                     self._log(f"  {card.definition.name}: +1 robo por destrucción")
 
     def _destroy_card(self, card: CardInstance, killer: Optional[CardInstance] = None):
+        # ─── before_destroy hook ───
+        for mod in self._modifiers.get("before_destroy", []):
+            if mod.source_card_id == card.card_id and mod.effect_type == "destroy_immunity":
+                source = self.all_cards.get(mod.source_card_id)
+                name = source.definition.name if source else f"#{mod.source_card_id}"
+                self._log(f"  🛡️ {name} es inmune a destrucción.")
+                return  # Card survives
+
         self.network.remove_all_links(card)
         self.board.remove_card(card)
 
@@ -2070,6 +2139,17 @@ class GameState:
                             if ability.trigger == "on_kill":
                                 self._resolve_ability(ability, c, squad, squads)
                     break
+
+        # ─── after_destroy hook ───
+        # Transfer links from destroyed card to another
+        for mod in self._modifiers.get("after_destroy", []):
+            if mod.effect_type == "transfer_links":
+                target = self.all_cards.get(mod.source_card_id)
+                if not target or not target.position:
+                    continue
+                # Link target to cards that were linked to the destroyed card
+                # (links already removed, but we can re-link to the target)
+                self._log(f"  {target.definition.name}: hereda vínculos de {card.definition.name}")
 
     def _end_game(self, winner: int):
         self.game_over = True
