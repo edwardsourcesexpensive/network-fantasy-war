@@ -1029,9 +1029,11 @@ class GameState:
                 if match:
                     d_bonus = int(match.group(1))
                 target_card = get_target_card("target_id") or card
-                self._temp_buffs.setdefault(target_card.card_id, []).append(
-                    {"attr": "d", "delta": d_bonus}
-                )
+                # Register temp modifier instead of _temp_buffs dict
+                self._register_temp_modifier(Modifier(
+                    source_card_id=target_card.card_id, hook="modify_damage",
+                    effect_type="damage_bonus", layer="self",
+                    params={"delta": d_bonus}))
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: usa habilidad → {target_card.definition.name} +{d_bonus} D temporal")
                 return None
@@ -1235,8 +1237,11 @@ class GameState:
                 return None
 
             # ─── Link cost free this turn ───
-            if "costos de vínculo" in desc_lower or "costos de vínculo" in desc_lower:
-                self._link_cost_free = True
+            if "costos de vínculo" in desc_lower:
+                # Register temp global modifier instead of _link_cost_free flag
+                self._register_temp_modifier(Modifier(
+                    source_card_id=card.card_id, hook="before_link",
+                    effect_type="link_cost_zero", layer="global"))
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: costos de vínculo = 0 hasta final del turno")
                 return None
@@ -1418,7 +1423,12 @@ class GameState:
                 if m:
                     bonus = int(m.group(1))
                 key = frozenset(squad.members)
-                self._temp_squad_buffs[key] = self._temp_squad_buffs.get(key, 0) + bonus
+                # Register temp modifier for each squad member instead of dict
+                for cid in squad.members:
+                    self._register_temp_modifier(Modifier(
+                        source_card_id=cid, hook="modify_damage",
+                        effect_type="damage_bonus", layer="squad",
+                        params={"delta": bonus}))
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: +{bonus} daño base al escuadrón {squad.squad_type}")
                 return None
@@ -1487,11 +1497,6 @@ class GameState:
             # Safety net: log error, refund actions, don't crash
             self._log(f"  ⚠ Error en habilidad de {card.definition.name}: {str(e)}")
             return f"Error al ejecutar habilidad: {str(e)}"
-
-    def get_temp_buff_bonus(self, card_id: int) -> int:
-        """Get temporary D bonus from active buffs for attack calculations."""
-        buffs = self._temp_buffs.get(card_id, [])
-        return sum(b["delta"] for b in buffs if b["attr"] == "d")
 
     def can_link(self, player: int, card_a: CardInstance, card_b: CardInstance,
                  bypass_distance: bool = False) -> Optional[str]:
@@ -1578,16 +1583,15 @@ class GameState:
         if card_a.definition.is_logistron or card_b.definition.is_logistron:
             cost = 1
         
-        # Check global link cost free flag
-        if self._link_cost_free:
-            cost = 0
-
         # Check before_link modifiers for cost_zero
         for mod in self._modifiers.get("before_link", []):
             if mod.effect_type == "link_cost_zero":
+                if mod.layer == "global":
+                    cost = 0
+                    self._log(f"  Vínculo sin costo (efecto global)")
+                    break
                 source_card = self.all_cards.get(mod.source_card_id)
                 if source_card and source_card.owner == player:
-                    # Check if source card is one of the linking cards
                     if mod.source_card_id in (card_a.card_id, card_b.card_id):
                         cost = 0
                         self._log(f"  {source_card.definition.name}: vínculo sin costo")
@@ -1794,12 +1798,6 @@ class GameState:
                 self.network.remove_link(card_a, card_b)
         self._temp_links = set()
 
-        # Reset link cost free flag
-        self._link_cost_free = False
-
-        # Clear squad buffs
-        self._temp_squad_buffs = {}
-
         # Switch player
         self.active_player = 1 - self.active_player
         self.turn_number += 1
@@ -1872,9 +1870,6 @@ class GameState:
 
         # Calculate attack damage
         base = attacking_squad.base_damage
-        # Apply squad buffs
-        squad_key = frozenset(attacking_squad.members)
-        base += self._temp_squad_buffs.get(squad_key, 0)
         all_squads = self.network.find_squads(self.all_cards)
         pot = calculate_potenciamiento(attacking_squad, all_squads, self.network, self.all_cards)
 
@@ -1884,8 +1879,7 @@ class GameState:
             card = self.all_cards.get(cid)
             if card:
                 extra += card.definition.damage_bonus
-                # Temp buff D bonus
-                extra += self.get_temp_buff_bonus(card.card_id)
+                # Temp D buffs now handled by modify_damage modifier hook
                 # Guerrero faction: +1 per node in L2/L3
                 if attacking_squad.get_dominant_color(self._get_color_overrides()) == Color.GUERRERO:
                     if card.position and card.position[1] >= 2:
