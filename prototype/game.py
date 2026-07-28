@@ -249,17 +249,9 @@ class GameState:
         # Attacked squads this turn
         self._attacked_squads: set[int] = set()  # squad hashes
 
-        # Temporary buffs applied this turn (cleared in exit_phase)
-        # {card_id: [{"attr": "d", "delta": 2}, ...]}
-        self._temp_buffs: dict[int, list[dict]] = {}
-
         # Temporary color overrides (cleared in exit_phase)
         # {card_id: Color}
         self._temp_colors: dict[int, Color] = {}
-
-        # Temporary links that dissolve at end of turn
-        # set of (card_id, card_id) tuples
-        self._temp_links: set[tuple] = set()
 
         # Global flag: link costs are 0 this turn
         self._link_cost_free: bool = False
@@ -1304,10 +1296,11 @@ class GameState:
                 if match:
                     hp_bonus = int(match.group(1))
                 target_card = get_target_card("target_id") or card
-                self._temp_buffs.setdefault(target_card.card_id, []).append(
-                    {"attr": "hp", "delta": hp_bonus}
-                )
                 target_card.current_hp += hp_bonus
+                self._register_temp_modifier(Modifier(
+                    source_card_id=target_card.card_id, hook="end_of_turn",
+                    effect_type="revert_hp_buff", layer="self",
+                    params={"delta": hp_bonus}))
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: usa habilidad → {target_card.definition.name} +{hp_bonus} HP temporal")
                 return None
@@ -1907,7 +1900,10 @@ class GameState:
         
         if is_temp:
             pair = tuple(sorted((card_a.card_id, card_b.card_id)))
-            self._temp_links.add(pair)
+            self._register_temp_modifier(Modifier(
+                source_card_id=card_a.card_id, hook="end_of_turn",
+                effect_type="dissolve_temp_link", layer="self",
+                params={"pair": pair}))
         
         self._log(f"J{player+1} vincula {card_a.definition.name} <-> {card_b.definition.name}.")
         return None
@@ -2097,29 +2093,30 @@ class GameState:
 
         self._log(f"  Fin del turno. Sellos J{player+1}: {self.seals[player]}")
 
-        # Clear temporary buffs
-        for cid, buffs in self._temp_buffs.items():
-            card = self.all_cards.get(cid)
-            if card:
-                for b in buffs:
-                    if b["attr"] == "hp":
-                        card.current_hp = max(0, card.current_hp - b["delta"])
-                        card.current_hp = min(card.current_hp, card.definition.hp)
-        self._temp_buffs = {}
+        # Clear temporary HP buffs (revert before modifier cleanup)
+        for mod in self._modifiers.get("end_of_turn", []):
+            if mod.is_temporary and mod.effect_type == "revert_hp_buff":
+                card = self.all_cards.get(mod.source_card_id)
+                if card:
+                    delta = mod.params.get("delta", 0)
+                    card.current_hp = max(0, card.current_hp - delta)
+                    card.current_hp = min(card.current_hp, card.definition.hp)
+
+        # Dissolve temporary links (before modifier cleanup)
+        for mod in self._modifiers.get("end_of_turn", []):
+            if mod.is_temporary and mod.effect_type == "dissolve_temp_link":
+                pair = mod.params.get("pair")
+                if pair:
+                    card_a = self.all_cards.get(pair[0])
+                    card_b = self.all_cards.get(pair[1])
+                    if card_a and card_b:
+                        self.network.remove_link(card_a, card_b)
 
         # Clear temporary colors
         self._temp_colors = {}
 
         # Clear temporary modifiers
         self._unregister_temp_modifiers()
-
-        # Dissolve temporary links
-        for a, b in list(self._temp_links):
-            card_a = self.all_cards.get(a)
-            card_b = self.all_cards.get(b)
-            if card_a and card_b:
-                self.network.remove_link(card_a, card_b)
-        self._temp_links = set()
 
         # Switch player
         self.active_player = 1 - self.active_player
