@@ -18,6 +18,33 @@ class Phase(Enum):
     EXIT = "exit"
 
 
+@dataclass
+class Modifier:
+    """A passive modifier registered by a card on the board.
+
+    When a card with permanent/on_enter abilities enters the board, its
+    abilities are parsed into Modifier objects and registered under the
+    relevant hooks. When the card leaves the board, its modifiers are
+    removed.
+
+    Attributes:
+        source_card_id: which card created this modifier
+        hook: which hook does this fire on (e.g. 'modify_squad')
+        effect_type: what kind of effect (e.g. 'color_override', 'ignore_color')
+        params: effect-specific parameters
+        layer: scope — 'self', 'squad', 'network', 'global'
+        priority: lower fires first (default 100)
+        is_temporary: if True, cleaned in exit_phase (for temp buffs/colors)
+    """
+    source_card_id: int
+    hook: str
+    effect_type: str
+    params: dict = field(default_factory=dict)
+    layer: str = "self"
+    priority: int = 100
+    is_temporary: bool = False
+
+
 def ability_implementation_status(ability: Ability) -> str:
     """Return implementation status for a card ability.
     
@@ -223,6 +250,30 @@ class GameState:
         # Parasite attachments: {parasite_card_id: host_card_id}
         self._attached: dict[int, int] = {}
 
+        # Modifier engine: hook → list of active Modifier objects
+        # Permanent modifiers registered when cards enter the board,
+        # unregistered when they leave. Temp modifiers from active abilities
+        # are registered with is_temporary=True and cleaned in exit_phase.
+        self._modifiers: dict[str, list[Modifier]] = {
+            "modify_squad": [],
+            "modify_damage": [],
+            "before_attack": [],
+            "after_attack": [],
+            "grimoire_defense": [],
+            "before_link": [],
+            "after_link": [],
+            "before_play": [],
+            "after_play": [],
+            "before_destroy": [],
+            "after_destroy": [],
+            "on_ascend": [],
+            "on_move": [],
+            "modify_actions": [],
+            "conditional_draw": [],
+            "spy_infiltrate": [],
+            "color_faction": [],
+        }
+
         # Event log for UI
         self.log: list[str] = []
 
@@ -257,6 +308,100 @@ class GameState:
 
     def _log(self, msg: str):
         self.log.append(msg)
+
+    # ═══════════════════════════════════════════════════════════════
+    # Modifier Engine
+    # ═══════════════════════════════════════════════════════════════
+
+    def _register_modifiers(self, card: CardInstance):
+        """Parse a card's abilities into Modifier objects and register them."""
+        for ability in card.definition.abilities:
+            if ability.trigger not in ("permanent", "on_enter"):
+                continue
+            modifiers = self._parse_ability_to_modifiers(ability, card)
+            for mod in modifiers:
+                if mod.hook in self._modifiers:
+                    self._modifiers[mod.hook].append(mod)
+                    self._log(f"  [mod] {card.definition.name}: +{mod.effect_type} on {mod.hook}")
+
+    def _unregister_modifiers(self, card_id: int):
+        """Remove all modifiers belonging to a card (when it leaves the board)."""
+        for hook_name, hook_list in self._modifiers.items():
+            before = len(hook_list)
+            hook_list[:] = [m for m in hook_list if m.source_card_id != card_id]
+            removed = before - len(hook_list)
+            if removed:
+                self._log(f"  [mod] card#{card_id}: -{removed} modifiers from {hook_name}")
+
+    def _parse_ability_to_modifiers(self, ability: Ability, card: CardInstance) -> list[Modifier]:
+        """Convert an ability description into zero or more Modifier objects.
+
+        This is the central registry of known passive effects. Each pattern
+        match produces one or more Modifier objects keyed to the right hook.
+        """
+        desc = ability.description.lower()
+        cid = card.card_id
+        mods = []
+
+        # ─── modify_squad effects ───
+        # "Incoloro: no cuenta para la mayoría de color de ningún escuadrón"
+        if "no cuenta para la mayoría de color" in desc:
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="modify_squad",
+                effect_type="ignore_color",
+                layer="self",
+            ))
+
+        # "En cuadrado Guerrero: los Guerreros ignoran restricciones de formación"
+        if "ignoran restricciones de formación" in desc:
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="modify_squad",
+                effect_type="ignore_formation",
+                params={
+                    "formation": ability.formation_required or "any",
+                    "color": ability.color_required.value if ability.color_required else "any",
+                },
+                layer="squad",
+            ))
+
+        # "Escuadrones conectados reducen en 1 la distancia de red para potenciamiento"
+        if "reducen" in desc and "distancia" in desc and "potenciamiento" in desc:
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="modify_squad",
+                effect_type="reduce_potenciamiento_distance",
+                layer="network",
+                params={"delta": -1},
+            ))
+
+        # "En frontera: puede vincularse con L3 enemigo y propio sin formar polígonos"
+        if "sin formar polígonos" in desc and "vincularse" in desc:
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="modify_squad",
+                effect_type="ignore_polygon_requirement",
+                layer="self",
+            ))
+
+        # "Cuenta como 2 logistrones para efectos que los mencionen"
+        if "cuenta como" in desc and "logistron" in desc:
+            try:
+                import re
+                m = re.search(r'cuenta como (\d+)', desc)
+                count = int(m.group(1)) if m else 2
+            except:
+                count = 2
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="modify_squad",
+                effect_type="logistron_multiplier",
+                layer="self",
+                params={"multiplier": count},
+            ))
+
+        return mods
 
     # ═══════════════════════════════════════════════════════════════
     # Actions
@@ -314,6 +459,10 @@ class GameState:
 
         self.board.place_card(player, card, layer, meridian)
         self.hands[player].pop(hand_index)
+
+        # Register permanent/on_enter modifiers
+        self._register_modifiers(card)
+
         self.actions_remaining -= 1
 
         # Trigger Vanguardia ability
@@ -1379,6 +1528,20 @@ class GameState:
                       if self.all_cards.get(cid) and self.all_cards[cid].owner == player)
             if own > len(squad.members) / 2:
                 result.append(squad)
+
+        # ─── Apply modify_squad modifiers ───
+        for mod in self._modifiers.get("modify_squad", []):
+            source_card = self.all_cards.get(mod.source_card_id)
+            if not source_card or source_card.owner != player:
+                continue
+
+            if mod.effect_type == "ignore_color":
+                # Find squad containing the source card and mark it as color-ignored
+                for squad in result:
+                    if mod.source_card_id in squad.members:
+                        squad.ignored_color_cards.add(mod.source_card_id)
+                        break
+
         return result
 
     def attack(self, attacking_squad: Squad, target: str,
@@ -1679,6 +1842,10 @@ class GameState:
     def _destroy_card(self, card: CardInstance, killer: Optional[CardInstance] = None):
         self.network.remove_all_links(card)
         self.board.remove_card(card)
+
+        # Unregister all modifiers from this card
+        self._unregister_modifiers(card.card_id)
+
         # Remove from spy tracking
         for p in [0, 1]:
             if card.card_id in self.spies_infiltrated[p]:

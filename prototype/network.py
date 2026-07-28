@@ -360,6 +360,7 @@ class Squad:
         self.squad_type = squad_type
         self.cards = cards
         self.internal_nodes = internal_nodes
+        self.ignored_color_cards: set[int] = set()  # cards excluded from color majority
 
     @property
     def base_damage(self) -> int:
@@ -405,6 +406,8 @@ class Squad:
         color_counts = defaultdict(int)
         total = 0
         for cid in self.members:
+            if cid in self.ignored_color_cards:
+                continue
             card = self.cards.get(cid)
             if card and not card.definition.is_logistron:
                 effective_color = color_overrides.get(cid, card.definition.color)
