@@ -76,6 +76,8 @@ body.p1-turn{background:#1a2e1a}
 <body>
 
 <div id="controls">
+  <div id="status-bar" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;font-size:11px"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
   <span id="actions-counter" style="color:#4fc3f7;font-size:12px;padding:4px 8px;background:#0f3460;border-radius:3px;margin-right:8px">Acciones: -</span>
   <span class="phase-actions">
     <button class="btn primary" onclick="doAction('play')">Jugar carta</button>
@@ -92,6 +94,7 @@ body.p1-turn{background:#1a2e1a}
   <button class="btn" onclick="window.open('/rules','_blank')" style="background:#0f3460;color:#4fc3f7;font-size:10px">📜 Reglas</button>
   <button class="btn" onclick="showDecks()" style="background:#0f3460;color:#ffd700;font-size:10px">📚 Decks</button>
   <span id="player-indicator"></span>
+</div>
 </div>
 
 <!-- Decks modal -->
@@ -302,6 +305,17 @@ function loadState(s) {
   document.body.className = 'p' + s.active_player + '-turn';
   
   document.getElementById('actions-counter').textContent = 'Acciones: ' + (s.actions !== undefined ? s.actions : '-');
+  
+  // Status bar with emojis (matching single-player UI)
+  const statusBar = document.getElementById('status-bar');
+  if (statusBar && s.turn !== undefined) {
+    statusBar.innerHTML = '<span>Turno ' + s.turn + '</span>' +
+      '<span class=\"active\">J' + (s.active_player+1) + '</span>' +
+      '<span>Fase: ' + s.phase + '</span>' +
+      '<span>🃏 J1:' + (s.hand_sizes ? s.hand_sizes[0] : '?') + ' J2:' + (s.hand_sizes ? s.hand_sizes[1] : '?') + '</span>' +
+      '<span>📦 J1:' + (s.deck_sizes ? s.deck_sizes[0] : '?') + ' J2:' + (s.deck_sizes ? s.deck_sizes[1] : '?') + '</span>' +
+      (s.game_over ? '<span class=\"active\">🏆 J' + (s.winner+1) + ' GANA!</span>' : '');
+  }
   
   const indicator = document.getElementById('player-indicator');
   indicator.textContent = myTurn ? 'TU TURNO' : 'Turno de: Jugador ' + (s.active_player + 1);
