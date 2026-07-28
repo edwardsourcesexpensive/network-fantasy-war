@@ -107,9 +107,12 @@ def filtered_state(game, player_id, pending_attack=None):
                         tc = game.all_cards.get(lid)
                         if tc and tc.position:
                             tp, tl, tm = tc.position
+                            # Check if either card is a logistron
+                            has_logi = c.definition.is_logistron or tc.definition.is_logistron
                             links_pairs.append({
                                 "from": f"{owner_p},{owner_li_idx},{owner_m}",
                                 "to": f"{tp},{tl-1},{tm}",
+                                "has_logistron": has_logi,
                             })
     
     return {
