@@ -999,8 +999,15 @@ class GameState:
                     seal_count = int(match.group(1))
                 enemy = 1 - player
                 self.seals[enemy] = max(0, self.seals[enemy] - seal_count)
+                # Also check for "Tú ganas N sello/s" in the same ability
+                gain_match = re.search(r'(?:tú\s+)?ganas?\s+(\d+)\s+sello', desc_lower)
+                if gain_match:
+                    gain = int(gain_match.group(1))
+                    self.seals[player] += gain
+                    self._log(f"  {card.definition.name}: usa habilidad → enemigo pierde {seal_count} sellos, tú ganas {gain} sello ({self.seals[enemy]} / {self.seals[player]})")
+                else:
+                    self._log(f"  {card.definition.name}: usa habilidad → enemigo pierde {seal_count} sellos ({self.seals[enemy]})")
                 self.actions_remaining -= cost
-                self._log(f"  {card.definition.name}: usa habilidad → enemigo pierde {seal_count} sellos ({self.seals[enemy]})")
                 if self.seals[enemy] <= 0:
                     self._end_game(player)
                 return None
