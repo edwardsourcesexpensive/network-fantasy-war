@@ -144,30 +144,46 @@ class Network:
             for s in component_squads:
                 processed.update(s.members)
 
-        # Detect lines (pairs of linked cards not in any cycle)
-        for cid in list(normal_ids):
-            if cid in processed:
-                continue
-            if cid not in self.links:
-                processed.add(cid)
-                continue
-            
-            # Find a linked neighbor that's also unprocessed
-            for neighbor in self.links[cid]:
-                if neighbor in normal_ids and neighbor not in processed:
-                    squad = Squad(
-                        members={cid, neighbor},
-                        squad_type="line",
-                        cards=cards,
-                        internal_nodes=0,
-                    )
-                    squads.append(squad)
-                    processed.add(cid)
-                    processed.add(neighbor)
-                    break
-            else:
-                processed.add(cid)
-
+        # Detect lines: greedily pair remaining linked normal cards
+        # Build the subgraph of remaining unprocessed cards
+        remaining_ids = {cid for cid in normal_ids if cid not in processed and cid in self.links}
+        if remaining_ids:
+            # BFS to find connected components, then form lines from each
+            visited = set()
+            for cid in remaining_ids:
+                if cid in visited:
+                    continue
+                # BFS to get this component
+                component = set()
+                queue = [cid]
+                while queue:
+                    node = queue.pop(0)
+                    if node in visited:
+                        continue
+                    visited.add(node)
+                    component.add(node)
+                    for neighbor in self.links.get(node, set()):
+                        if neighbor in remaining_ids and neighbor not in visited:
+                            queue.append(neighbor)
+                
+                # Form lines from all linked pairs in this component
+                paired = set()  # track which cards have been paired already
+                for a in component:
+                    for b in self.links.get(a, set()):
+                        if b in component and b > a:  # each pair once
+                            squads.append(Squad(
+                                members={a, b},
+                                squad_type="line",
+                                cards=cards,
+                                internal_nodes=0,
+                            ))
+                            paired.add(a)
+                            paired.add(b)
+                
+                # Remaining unpaired cards in this component
+                for c in component - paired:
+                    processed.add(c)
+        
         # Handle any remaining cards as singletons
         for cid in normal_ids:
             if cid not in processed:
@@ -213,14 +229,6 @@ class Network:
 
         # Post-process: reclassify pentagons that contain a 4-cycle as square_ampliado
         squads = self._reclassify_pentagons_as_ampliado(squads, cards)
-
-        # Remaining connected nodes form lines
-        if remaining and len(remaining) >= 2:
-            squads.append(Squad(
-                members=remaining.copy(),
-                squad_type="line",
-                cards=cards
-            ))
 
         return squads
 
