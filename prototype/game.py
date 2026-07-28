@@ -133,6 +133,27 @@ def ability_implementation_status(ability: Ability) -> str:
         # Vanguardia / Línea de fuego: checked in play_card()
         if "vanguardia" in desc or "línea de fuego" in desc:
             return "implemented"
+        # New on_enter patterns via modifier system
+        if ("roba" in desc or "robo" in desc) and "control" not in desc:
+            return "implemented"
+        if "mira" in desc or "scry" in desc:
+            return "implemented"
+        if "hp" in desc and any(w in desc for w in ["recupera", "gana", "+"]):
+            return "implemented"
+        if any(w in desc for w in ["sello", "sellos"]):
+            return "implemented"
+        if "muévete" in desc or ("mueve" in desc and "meridiano" in desc):
+            return "implemented"
+        if "mueve" in desc and "carta" in desc:
+            return "implemented"
+        if "asciende" in desc or "ascender" in desc:
+            return "implemented"
+        if ("rompe" in desc or "romper" in desc) and "vínculo" in desc:
+            return "implemented"
+        if "vinc" in desc and ("adyacente" in desc or "sin costo" in desc):
+            return "implemented"
+        if "descarta" in desc:
+            return "implemented"
         return "not_implemented"
 
     if trigger == "on_ascend":
@@ -275,6 +296,7 @@ class GameState:
             "start_of_turn": [],
             "end_of_turn": [],
             "on_kill": [],
+            "on_enter": [],
         }
 
         # Event log for UI
@@ -759,6 +781,103 @@ class GameState:
                     params={"count": 1},
                 ))
 
+        # ─── on_enter effects ───
+        if ability.trigger == "on_enter":
+            # Draw: "Al entrar: roba N"
+            if ("roba" in desc or "robo" in desc) and "control" not in desc and "vínculo" not in desc:
+                count = 1
+                m = _re2.search(r'roba\s+(\d+)', desc)
+                if m:
+                    count = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="draw", layer="self",
+                    params={"count": count},
+                ))
+            # Scry: "Al entrar: scry N" / "mira N cartas"
+            elif "mira" in desc or "scry" in desc:
+                count = 2
+                m = _re2.search(r'(?:mira|scry)\s+(\d+)', desc)
+                if m:
+                    count = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="scry", layer="self",
+                    params={"count": count},
+                ))
+            # Heal: "+N HP a una carta aliada" / "recupera N HP"
+            elif ("hp" in desc and any(w in desc for w in ["recupera", "gana", "+"])):
+                amount = 1
+                m = _re2.search(r'\+(\d+)\s*hp', desc) or _re2.search(r'recupera\s+(\d+)\s*hp', desc)
+                if m:
+                    amount = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="heal_ally", layer="self",
+                    params={"amount": amount},
+                ))
+            # Gain seals: "+N sello" / "gana N sello"
+            elif any(w in desc for w in ["sello", "sellos"]):
+                amount = 1
+                m = _re2.search(r'\+(\d+)\s*sello', desc) or _re2.search(r'gana\s+(\d+)\s+sello', desc)
+                if m:
+                    amount = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="gain_seals", layer="self",
+                    params={"amount": amount},
+                ))
+            # Move self: "muévete N meridiano"
+            elif "muévete" in desc or "mueve" in desc and "meridiano" in desc:
+                dist = 1
+                m = _re2.search(r'mu[eé]vete?\s+(\d+)\s+meridiano', desc)
+                if m:
+                    dist = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="move_self", layer="self",
+                    params={"distance": dist},
+                ))
+            # Move ally: "mueve N carta propia"
+            elif "mueve" in desc and "carta" in desc:
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="move_ally", layer="self",
+                    params={"distance": 1},
+                ))
+            # Ascend ally: "asciende a L2 sin costo"
+            elif "asciende" in desc or "ascender" in desc:
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="ascend_ally", layer="self",
+                    params={"free": True},
+                ))
+            # Break link: "rompe N vínculo"
+            elif ("rompe" in desc or "romper" in desc) and "vínculo" in desc:
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="break_link", layer="self",
+                    params={"count": 1},
+                ))
+            # Link immediately: "vincúlala con 1 carta adyacente sin costo"
+            elif "vinc" in desc and ("adyacente" in desc or "sin costo" in desc):
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="auto_link", layer="self",
+                    params={"free": True},
+                ))
+            # Discard: "descarta N"
+            elif "descarta" in desc:
+                count = 1
+                m = _re2.search(r'descarta\s+(\d+)', desc)
+                if m:
+                    count = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_enter",
+                    effect_type="discard", layer="self",
+                    params={"count": count},
+                ))
+
         return mods
 
     # ═══════════════════════════════════════════════════════════════
@@ -820,6 +939,11 @@ class GameState:
 
         # Register permanent/on_enter modifiers
         self._register_modifiers(card)
+
+        # ─── Dispatch on_enter modifiers ───
+        for mod in self._modifiers.get("on_enter", []):
+            if mod.source_card_id == card.card_id:
+                self._apply_on_enter(mod, card, player)
 
         # ─── after_play hook ───
         for mod in self._modifiers.get("after_play", []):
@@ -2295,6 +2419,117 @@ class GameState:
             amount = params.get("amount", 5)
             self.seals[player] += amount
             self._log(f"  {card.definition.name}: +{amount} sellos ({self.seals[player]})")
+
+    def _apply_on_enter(self, mod: Modifier, card: CardInstance, player: int):
+        """Execute an on_enter modifier effect when a card is played."""
+        effect_type = mod.effect_type
+        params = mod.params
+
+        if effect_type == "draw":
+            count = params.get("count", 1)
+            total = 0
+            for _ in range(count):
+                drawn = self._draw_card(player)
+                if drawn:
+                    total += 1
+            self._log(f"  {card.definition.name} (on_enter): +{total} robo(s)")
+
+        elif effect_type == "scry":
+            count = params.get("count", 2)
+            top_cards = self.decks[player][-count:] if len(self.decks[player]) >= count else self.decks[player][:]
+            names = [c.definition.name for c in reversed(top_cards)]
+            self._log(f"  {card.definition.name} (on_enter): mira top {len(names)}: {', '.join(names)}")
+
+        elif effect_type == "heal_ally":
+            amount = params.get("amount", 1)
+            # Heal any allied card (or self by default)
+            card.current_hp = min(card.current_hp + amount, card.definition.hp)
+            self._log(f"  {card.definition.name} (on_enter): +{amount} HP ({card.current_hp}/{card.definition.hp})")
+
+        elif effect_type == "gain_seals":
+            amount = params.get("amount", 1)
+            self.seals[player] += amount
+            self._log(f"  {card.definition.name} (on_enter): +{amount} sellos ({self.seals[player]})")
+
+        elif effect_type == "move_self":
+            dist = params.get("distance", 1)
+            # Move card horizontally by dist meridians
+            if card.position:
+                p, layer, meridian = card.position
+                for direction in [1, -1]:  # try right first, then left
+                    new_m = meridian + direction * dist
+                    li = layer - 1
+                    if 0 <= new_m < 15 and self.board.cells[p][li][new_m] is None:
+                        self.board.cells[p][li][meridian] = None
+                        self.board.cells[p][li][new_m] = card.card_id
+                        card.position = (p, layer, new_m)
+                        self._log(f"  {card.definition.name} (on_enter): se mueve a L{layer}:{new_m}")
+                        break
+
+        elif effect_type == "move_ally":
+            self._log(f"  {card.definition.name} (on_enter): mueve carta aliada (pendiente selección UI)")
+
+        elif effect_type == "ascend_ally":
+            # Find another allied card to ascend for free
+            for cid in list(self.all_cards.keys()):
+                ally = self.all_cards.get(cid)
+                if (ally and ally.owner == player and ally.card_id != card.card_id
+                        and ally.position and ally.position[1] < 3 and ally.position[0] != -1):
+                    err = self.ascend(player, ally, free=True)
+                    if not err:
+                        self._log(f"  {card.definition.name} (on_enter): asciende {ally.definition.name} gratis")
+                        break
+
+        elif effect_type == "break_link":
+            # Break an enemy link at short distance
+            count = params.get("count", 1)
+            enemy = 1 - player
+            broken = 0
+            for cid in list(self.all_cards.keys()):
+                if broken >= count:
+                    break
+                enemy_card = self.all_cards.get(cid)
+                if not enemy_card or enemy_card.owner != enemy or not enemy_card.position:
+                    continue
+                for linked_id in list(self.network.links.get(cid, set())):
+                    if broken >= count:
+                        break
+                    linked = self.all_cards.get(linked_id)
+                    if linked:
+                        self.network.remove_link(enemy_card, linked)
+                        broken += 1
+                        self._log(f"  {card.definition.name} (on_enter): rompe vínculo {enemy_card.definition.name} <-> {linked.definition.name}")
+                        break
+
+        elif effect_type == "auto_link":
+            # Link this card to an adjacent allied card
+            if card.position:
+                p, layer, meridian = card.position
+                for dm in [-2, -1, 1, 2]:
+                    for dl in [-1, 0, 1]:
+                        check_m = meridian + dm
+                        check_l = layer + dl
+                        if 0 <= check_m < 15 and 1 <= check_l <= 3:
+                            li = check_l - 1
+                            neighbor_cid = self.board.cells[p][li][check_m]
+                            if neighbor_cid and self.network.can_link(card):
+                                neighbor = self.all_cards.get(neighbor_cid)
+                                if neighbor:
+                                    dist = self.board.spatial_distance(card.position, neighbor.position)
+                                    if dist:
+                                        self.network.add_link(card, neighbor)
+                                        self._log(f"  {card.definition.name} (on_enter): vínculo gratis con {neighbor.definition.name}")
+                                        return
+
+        elif effect_type == "discard":
+            count = params.get("count", 1)
+            discarded = []
+            for _ in range(count):
+                if self.hands[player]:
+                    dc = self.hands[player].pop()
+                    self.discard_piles[player].append(dc)
+                    discarded.append(dc.definition.name)
+            self._log(f"  {card.definition.name} (on_enter): descarta {', '.join(discarded) if discarded else '(mano vacía)'}")
 
     # ═══════════════════════════════════════════════════════════════
     # Helpers
