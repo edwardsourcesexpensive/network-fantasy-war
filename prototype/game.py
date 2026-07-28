@@ -88,6 +88,12 @@ def ability_implementation_status(ability: Ability) -> str:
             ("ataca", "nodo" in desc),                                   # direct node attack
             ("lucha", "daño" in desc),                                   # fight
             ("destruye", "grimorio" in desc),                            # destroy ally + damage
+            # Fase F additions
+            ("descarta", "roba" in desc),                               # discard then draw
+            ("indestructible", "este turno" in desc),                   # temp indestructible
+            ("pierden", "hp" in desc),                                  # damage enemy squad/type
+            ("ganan", "+" in desc and any(w in desc.split() for w in ['d', 'daño'])),  # squad-wide D buff
+            ("ganan", "hp" in desc and "permanente" in desc),           # permanent HP buff
         ]
         for kw, cond in implemented_kw:
             if kw in desc and cond:
@@ -156,9 +162,29 @@ def ability_implementation_status(ability: Ability) -> str:
             return "implemented"
         return "not_implemented"
 
+    if trigger == "active":
+        # New patterns added in Fase F
+        if "descarta" in desc.lower() and "roba" in desc.lower():
+            return "implemented"
+        if "indestructible" in desc.lower() and "este turno" in desc.lower():
+            return "implemented"
+        if "ganan" in desc.lower() and "hp" in desc.lower() and "permanente" in desc.lower():
+            return "implemented"
+        if "pierden" in desc.lower() and "hp" in desc.lower():
+            return "implemented"
+        if "ganan" in desc.lower() and "+" in desc and "d" in desc.lower() and "este turno" in desc.lower():
+            return "implemented"
+        # Existing patterns
+        # (draw, self-destruct, seals, heal, ascend, scry, discard, swap, etc.)
+        # handled via keyword matching in use_ability()
+        return "not_implemented"
+
     if trigger == "on_ascend":
         # Caudillismo: auto-link in ascend()
         if "caudillismo" in desc.lower() or "vínculo gratis" in desc.lower():
+            return "implemented"
+        # Cannot ascend
+        if "no puede ascender" in desc.lower() or "ni ascender" in desc.lower():
             return "implemented"
         return "not_implemented"
 
@@ -1408,7 +1434,7 @@ class GameState:
                 return None
 
             # ─── Opponent loses seals ───
-            if "pierde" in desc_lower and any(w in desc_lower for w in ["sello", "sellos"]):
+            if "pierde" in desc_lower and any(w in desc_lower for w in ["sello", "sellos"]) and "hp" not in desc_lower:
                 import re
                 seal_count = 2
                 match = re.search(r'pierde\s+(\d+)\s+sello', desc_lower)
@@ -1448,20 +1474,23 @@ class GameState:
 
             # ─── Temporary +D buff ───
             if any(w in desc_lower for w in ["+", "+"]) and "d" in desc_lower and "hp" not in desc_lower:
-                import re
-                d_bonus = 1
-                match = re.search(r'\+(\d+)\s*d', desc_lower)
-                if match:
-                    d_bonus = int(match.group(1))
-                target_card = get_target_card("target_id") or card
-                # Register temp modifier instead of _temp_buffs dict
-                self._register_temp_modifier(Modifier(
-                    source_card_id=target_card.card_id, hook="modify_damage",
-                    effect_type="damage_bonus", layer="self",
-                    params={"delta": d_bonus}))
-                self.actions_remaining -= cost
-                self._log(f"  {card.definition.name}: usa habilidad → {target_card.definition.name} +{d_bonus} D temporal")
-                return None
+                # Skip if squad-wide (handled below)
+                if "ganan" in desc_lower or "escuadrón" in desc_lower:
+                    pass  # handled by Temp D buff squad-wide
+                else:
+                    import re
+                    d_bonus = 1
+                    match = re.search(r'\+(\d+)\s*d', desc_lower)
+                    if match:
+                        d_bonus = int(match.group(1))
+                    target_card = get_target_card("target_id") or card
+                    self._register_temp_modifier(Modifier(
+                        source_card_id=target_card.card_id, hook="modify_damage",
+                        effect_type="damage_bonus", layer="self",
+                        params={"delta": d_bonus}))
+                    self.actions_remaining -= cost
+                    self._log(f"  {card.definition.name}: usa habilidad → {target_card.definition.name} +{d_bonus} D temporal")
+                    return None
 
             # ─── Scry / peek ───
             if "mira" in desc_lower and any(w in desc_lower for w in ["carta", "cartas", "reserva", "tope"]):
@@ -1913,9 +1942,103 @@ class GameState:
                                                 break
                 return None
 
+            # ─── Discard then draw ───
+            if "descarta" in desc_lower and "roba" in desc_lower:
+                dc_match = re.search(r'descarta\s+(\d+)', desc_lower)
+                discard_count = int(dc_match.group(1)) if dc_match else 1
+                dr_match = re.search(r'roba\s+(\d+)', desc_lower)
+                draw_count = int(dr_match.group(1)) if dr_match else 1
+                for _ in range(min(discard_count, len(self.hands[player]))):
+                    if self.hands[player]:
+                        self.discard_piles[player].append(self.hands[player].pop())
+                for _ in range(draw_count):
+                    self._draw_card(player)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: descarta {discard_count}, roba {draw_count}")
+                return None
+
+            # ─── Temp D buff squad-wide ───
+            if ("ganan" in desc_lower or "gana" in desc_lower) and "+" in desc and "d" in desc_lower:
+                d_match = re.search(r'\+(\d+)\s*(d|daño)', desc_lower)
+                delta = int(d_match.group(1)) if d_match else 1
+                if "este turno" in desc_lower:
+                    squad = self.network.find_squads(self.all_cards).get(card.card_id)
+                    if squad:
+                        for cid in squad.members:
+                            mem = self.all_cards.get(cid)
+                            if mem and mem.owner == player:
+                                self._register_temp_modifier(Modifier(
+                                    source_card_id=cid, hook="modify_damage",
+                                    effect_type="damage_bonus", layer="self",
+                                    params={"delta": delta}))
+                    self.actions_remaining -= cost
+                    self._log(f"  {card.definition.name}: escuadrón +{delta} D este turno")
+                    return None
+
+            # ─── Temp indestructible ───
+            if "indestructible" in desc_lower and "este turno" in desc_lower:
+                for cid_list in self.board.cells[player]:
+                    for cid in cid_list:
+                        if cid is not None:
+                            self._register_temp_modifier(Modifier(
+                                source_card_id=cid, hook="before_destroy",
+                                effect_type="destroy_immunity", layer="self",
+                                params={"duration": "turn"}))
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: cartas aliadas indestructibles este turno")
+                return None
+
+            # ─── Permanent +HP buff ───
+            if "ganan" in desc_lower and "hp" in desc_lower and "permanente" in desc_lower:
+                hp_match = re.search(r'\+(\d+)\s*hp', desc_lower)
+                hp_bonus = int(hp_match.group(1)) if hp_match else 2
+                for cid_list in self.board.cells[player]:
+                    for cid in cid_list:
+                        if cid is not None:
+                            mem = self.all_cards.get(cid)
+                            if mem:
+                                mem.current_hp += hp_bonus
+                                mem.definition.hp += hp_bonus
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: cartas aliadas +{hp_bonus} HP permanente")
+                return None
+
+            # ─── Damage enemy squad ───
+            if "pierden" in desc_lower and "hp" in desc_lower:
+                hp_match = re.search(r'pierden?\s+(\d+)\s*hp', desc_lower)
+                dmg = int(hp_match.group(1)) if hp_match else 1
+                target_card = get_target_card("target_id")
+                if target_card:
+                    squad = self.network.find_squads(self.all_cards).get(target_card.card_id)
+                    if squad:
+                        for cid in list(squad.members):
+                            mem = self.all_cards.get(cid)
+                            if mem:
+                                mem.current_hp -= dmg
+                                self._log(f"  {mem.definition.name}: -{dmg} HP ({mem.current_hp}/{mem.definition.hp})")
+                                if mem.current_hp <= 0:
+                                    self._destroy_card(mem)
+                self.actions_remaining -= cost
+                return None
+
+            # ─── Damage specific card type ───
+            if "pierden" in desc_lower and "logistron" in desc_lower:
+                hp_match = re.search(r'pierden?\s+(\d+)\s*hp', desc_lower)
+                dmg = int(hp_match.group(1)) if hp_match else 2
+                enemy = 1 - player
+                for cid_list in self.board.cells[enemy]:
+                    for cid in cid_list:
+                        if cid is not None:
+                            mem = self.all_cards.get(cid)
+                            if mem and "Logistrón" in mem.definition.name:
+                                mem.current_hp -= dmg
+                                self._log(f"  {mem.definition.name}: -{dmg} HP ({mem.current_hp}/{mem.definition.hp})")
+                                if mem.current_hp <= 0:
+                                    self._destroy_card(mem)
+                self.actions_remaining -= cost
+                return None
+
             # ─── Fallback: ability not yet implemented ───
-            self.actions_remaining -= cost
-            self._log(f"  {card.definition.name}: usa habilidad ({desc[:50]}...) — efecto no implementado")
             return None
 
         except Exception as e:
