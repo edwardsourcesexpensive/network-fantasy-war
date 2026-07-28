@@ -173,9 +173,27 @@ def api_deck_detail(deck_key):
     if deck_key not in DECKS:
         return jsonify({"error": "Deck no encontrado"}), 404
     deck = DECKS[deck_key]
+    import sys, os as _os
+    _here = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    if _here not in sys.path:
+        sys.path.insert(0, _here)
+    from prototype.game import ability_implementation_status
+    
     cards = []
     for c in deck:
         abilities = [a.description for a in c.abilities] if c.abilities else []
+        abilities_data = []
+        impl_count = 0
+        for a in (c.abilities or []):
+            status = ability_implementation_status(a)
+            if status == "implemented":
+                impl_count += 1
+            abilities_data.append({
+                "desc": a.description,
+                "type": a.ability_type.name,
+                "cost": a.action_cost,
+                "status": status,
+            })
         cards.append({
             "name": c.name,
             "color": c.color.value,
@@ -187,6 +205,9 @@ def api_deck_detail(deck_key):
             "is_spy": c.is_spy,
             "is_logistron": c.is_logistron,
             "abilities": abilities,
+            "abilities_detail": abilities_data,
+            "impl_count": impl_count,
+            "total_abilities": len(c.abilities) if c.abilities else 0,
         })
     return jsonify({
         "key": deck_key,
