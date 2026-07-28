@@ -16,6 +16,7 @@ app.secret_key = 'nfw-secret-key-2024'
 # Store game state per session
 games = {}
 pending_attacks = {}  # sid -> {attacker, squad_idx, target}
+ai_states = {}  # sid -> {attack_queue: [squad_indices], done_setup: bool}
 
 def get_game():
     """Get or create game for current session."""
@@ -249,85 +250,107 @@ def api_action():
     
     elif action == 'ai_turn':
         result["log"] = []
-        # Ensure actions phase is active
-        game.phase = Phase.ACTIONS
-        game.actions_remaining = 10  # give AI plenty of actions
-        # Actions phase: play up to 4 cards with valid layer selection
-        for _ in range(4):
-            if game.phase != Phase.ACTIONS:
-                break
-            if not game.hands[player]:
-                break
-            card = game.hands[player][0]
-            if card.definition.is_spy:
-                continue
+        sid = session.get('game_id')
+        ai_state = ai_states.get(sid, {})
+        
+        # ─── Phase 1: Play cards + link (only once) ───
+        if not ai_state.get('done_setup'):
+            game.phase = Phase.ACTIONS
+            game.actions_remaining = 10
             
-            # Determine valid entry layers
-            has_vg = any("Vanguardia" in a.description for a in card.definition.abilities)
-            has_lf = any("Línea de fuego" in a.description for a in card.definition.abilities)
-            valid_layers = [1]
-            if has_vg or has_lf: valid_layers.append(2)
-            if has_lf: valid_layers.append(3)
-            valid_layers = [l for l in valid_layers if l in card.definition.allowed_layers]
-            
-            played = False
-            for layer in valid_layers:
-                for m in range(15):
-                    if game.board.cells[player][layer-1][m] is None:
-                        res = game.play_card(player, 0, layer, m)
-                        if res is None:
-                            result["log"].append(f"AI juega {card.definition.name} en L{layer}:{m}")
-                            played = True
-                            break
-                if played:
+            # Play up to 4 cards with valid layer selection
+            for _ in range(4):
+                if game.phase != Phase.ACTIONS:
                     break
-            if not played:
-                break
-        
-        # Link adjacent cards — link all possible adjacent pairs
-        placed = []
-        for li in range(3):
-            for m in range(15):
-                if game.board.cells[player][li][m] is not None:
-                    placed.append((li, m))
-        
-        for ci_idx, ci in enumerate(placed):
-            for cj in placed[ci_idx+1:]:
-                if ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2:
-                    cid_a = game.board.cells[player][ci[0]][ci[1]]
-                    cid_b = game.board.cells[player][cj[0]][cj[1]]
-                    a_card = game.all_cards.get(cid_a)
-                    b_card = game.all_cards.get(cid_b)
-                    if not a_card or not b_card:
-                        continue
-                    if game.network.link_count(a_card) >= a_card.definition.link_capacity:
-                        continue
-                    if game.network.link_count(b_card) >= b_card.definition.link_capacity:
-                        continue
-                    res = game.link_cards(player, a_card, b_card)
-                    if res is None:
-                        result["log"].append(f"AI vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
-        
-        # Attack phase
-        if game.phase == Phase.ACTIONS:
-            game.start_attack_phase()
-            result["log"].append("AI entra en fase de ataque")
-        
-        if game.phase == Phase.ATTACK:
-            squads = game.get_player_squads(player)
-            enemy_squads = game.get_player_squads(1 - player)
-            for sq_idx, squad in enumerate(squads):
-                if sq_idx > 1:  # limit to 2 attacks
+                if not game.hands[player]:
                     break
-                # Auto-defend: use best enemy squad if available
-                best_defense = enemy_squads[0] if enemy_squads else None
-                err = game.attack(squad, 'grimoire', defending_squad=best_defense)
-                if err is None:
-                    result["log"].append(f"AI ataca grimorio con escuadron {sq_idx} ({squad.squad_type})")
-                    if game.game_over:
+                card = game.hands[player][0]
+                if card.definition.is_spy:
+                    continue
+                
+                has_vg = any("Vanguardia" in a.description for a in card.definition.abilities)
+                has_lf = any("Línea de fuego" in a.description for a in card.definition.abilities)
+                valid_layers = [1]
+                if has_vg or has_lf: valid_layers.append(2)
+                if has_lf: valid_layers.append(3)
+                valid_layers = [l for l in valid_layers if l in card.definition.allowed_layers]
+                
+                played = False
+                for layer in valid_layers:
+                    for m in range(15):
+                        if game.board.cells[player][layer-1][m] is None:
+                            res = game.play_card(player, 0, layer, m)
+                            if res is None:
+                                result["log"].append(f"AI juega {card.definition.name} en L{layer}:{m}")
+                                played = True
+                                break
+                    if played:
                         break
+                if not played:
+                    break
+            
+            # Link adjacent cards
+            placed = []
+            for li in range(3):
+                for m in range(15):
+                    if game.board.cells[player][li][m] is not None:
+                        placed.append((li, m))
+            
+            for ci_idx, ci in enumerate(placed):
+                for cj in placed[ci_idx+1:]:
+                    if ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2:
+                        cid_a = game.board.cells[player][ci[0]][ci[1]]
+                        cid_b = game.board.cells[player][cj[0]][cj[1]]
+                        a_card = game.all_cards.get(cid_a)
+                        b_card = game.all_cards.get(cid_b)
+                        if not a_card or not b_card:
+                            continue
+                        if game.network.link_count(a_card) >= a_card.definition.link_capacity:
+                            continue
+                        if game.network.link_count(b_card) >= b_card.definition.link_capacity:
+                            continue
+                        res = game.link_cards(player, a_card, b_card)
+                        if res is None:
+                            result["log"].append(f"AI vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
+            
+            # Start attack phase
+            if game.phase == Phase.ACTIONS:
+                game.start_attack_phase()
+                result["log"].append("AI entra en fase de ataque")
+            
+            # Build attack queue
+            squads = game.get_player_squads(player)
+            attack_queue = list(range(min(len(squads), 2)))  # max 2 attacks
+            ai_state = {'done_setup': True, 'attack_queue': attack_queue}
+            ai_states[sid] = ai_state
         
-        # End turn
+        # ─── Phase 2: Process attacks one at a time ───
+        attack_queue = ai_state.get('attack_queue', [])
+        
+        if game.phase == Phase.ATTACK and attack_queue:
+            squads = game.get_player_squads(player)
+            sq_idx = attack_queue.pop(0)
+            ai_states[sid] = ai_state  # update with remaining queue
+            
+            if sq_idx < len(squads):
+                squad = squads[sq_idx]
+                # Set up pending attack so human can defend
+                pending_attacks[sid] = {
+                    'attacker': player,
+                    'squad_idx': sq_idx,
+                    'target': 'grimoire',
+                    'target_id': None,
+                    'squad_type': squad.squad_type,
+                    'squad_damage': squad.base_damage,
+                }
+                result["pending_attack"] = pending_attacks[sid]
+                result["log"].append(f"⚔️ AI ataca con escuadrón {sq_idx} ({squad.squad_type}) — ¡defiéndete!")
+                result["ok"] = True
+                result["state"] = game_state(game)
+                return jsonify(result)
+        
+        # ─── Phase 3: All attacks done, end turn ───
+        ai_states.pop(sid, None)
         game.exit_phase()
         if not game.game_over:
             game.start_turn()
