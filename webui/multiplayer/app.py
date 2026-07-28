@@ -938,7 +938,7 @@ def on_action(data):
         # Phase B: Link all remaining adjacent pairs
         for ci_idx, ci in enumerate(placed):
             for cj in placed[ci_idx+1:]:
-                same_layer = ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2
+                same_layer = ci[0] == cj[0] and abs(ci[1] - cj[1]) == 2  # only dh=2 is valid for same-layer links
                 cross_layer = abs(ci[0] - cj[0]) == 1 and abs(ci[1] - cj[1]) <= 1
                 if same_layer or cross_layer:
                     cid_a = game.board.cells[1][ci[0]][ci[1]]
