@@ -57,8 +57,8 @@ def ability_implementation_status(ability: Ability) -> str:
     atype = ability.ability_type
     trigger = ability.trigger
 
-    # ─── ACTIVE abilities (use_ability handles these) ───
-    if atype == AbilityType.ACTIVE and ability.action_cost > 0:
+    # ─── ACTIVE / FORMATION / GENERAL abilities (use_ability handles these) ───
+    if trigger == "active" and atype in (AbilityType.ACTIVE, AbilityType.FORMATION, AbilityType.GENERAL):
         # Keyword-matched effects in use_ability()
         implemented_kw = [
             ("roba", "control" not in desc and "vínculo" not in desc),  # draw
@@ -94,6 +94,16 @@ def ability_implementation_status(ability: Ability) -> str:
             ("pierden", "hp" in desc),                                  # damage enemy squad/type
             ("ganan", "+" in desc and any(w in desc.split() for w in ['d', 'daño'])),  # squad-wide D buff
             ("ganan", "hp" in desc and "permanente" in desc),           # permanent HP buff
+            # Phase G additions
+            ("no pueden atacar", True),                                 # cannot attack
+            ("no reciben potenciamiento", True),                         # block formation
+            ("niega el efecto de facción", True),                       # negate faction
+            ("rompe todos los vínculos enemigos", True),                 # mass break links
+            ("destruye todos los logistrones", True),                   # mass destroy type
+            ("conecta", "no vinculadas" in desc and "vínculos gratis" in desc),  # mass link
+            ("jugar cartas de tu cementerio", True),                    # grave play
+            ("intercambia d", "enemig" in desc),                        # swap D
+            ("intercambia hp", "escuadrón" in desc),                    # swap squad HP
         ]
         for kw, cond in implemented_kw:
             if kw in desc and cond:
@@ -322,6 +332,10 @@ class GameState:
         # Spy state
         self.spies_infiltrated: dict[int, list[int]] = {0: [], 1: []}  # player -> [card_ids in enemy territory]
 
+        # Phase G flags
+        self._block_enemy_formation: bool = False
+        self._grave_play: dict[int, bool] = {0: False, 1: False}
+
         # Attacked squads this turn
         self._attacked_squads: set[int] = set()  # squad hashes
 
@@ -387,9 +401,9 @@ class GameState:
             instance = CardInstance(
                 card_id=i + (player * 1000),
                 definition=cdef,
-                current_hp=cdef.hp,
                 owner=player
             )
+            instance.current_hp = cdef.hp
             self.decks[player].append(instance)
             self.all_cards[instance.card_id] = instance
 
@@ -2036,6 +2050,128 @@ class GameState:
                                 if mem.current_hp <= 0:
                                     self._destroy_card(mem)
                 self.actions_remaining -= cost
+                return None
+
+            # ─── G1: Cannot attack this turn ───
+            if "no pueden atacar" in desc_lower and "este turno" in desc_lower:
+                enemy = 1 - player
+                for cid_list in self.board.cells[enemy]:
+                    for cid in cid_list:
+                        if cid is not None and self.all_cards.get(cid):
+                            # Flag for attack() to check
+                            self.all_cards[cid]._cannot_attack = True
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: cartas enemigas no pueden atacar este turno")
+                return None
+
+            # ─── G2: Block enemy formation bonus ───
+            if "no reciben potenciamiento" in desc_lower and "este turno" in desc_lower:
+                self._block_enemy_formation = True
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: escuadrones enemigos no reciben potenciamiento")
+                return None
+
+            # ─── G3: Negate faction effect ───
+            if "niega el efecto de facción" in desc_lower:
+                target_card = get_target_card("target_id")
+                if target_card:
+                    target_card._faction_disabled = True
+                    self.actions_remaining -= cost
+                    self._log(f"  {card.definition.name}: niega efecto de facción de {target_card.definition.name}")
+                    return None
+
+            # ─── G4: Break all enemy links ───
+            if "rompe todos los vínculos enemigos" in desc_lower:
+                enemy = 1 - player
+                broken = []
+                for cid, node in list(self.network.nodes.items()):
+                    card_obj = self.all_cards.get(cid)
+                    if card_obj and card_obj.owner == enemy:
+                        for neighbor in list(node.connected):
+                            self.network.remove_link(cid, neighbor)
+                            broken.append(cid)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: rompe {len(broken)} vínculos enemigos")
+                return None
+
+            # ─── G5: Destroy all enemy Logistrones ───
+            if "destruye todos los logistrones" in desc_lower:
+                enemy = 1 - player
+                for cid_list in self.board.cells[enemy]:
+                    for cid in cid_list:
+                        if cid is not None:
+                            mem = self.all_cards.get(cid)
+                            if mem and "Logistrón" in mem.definition.name:
+                                self._destroy_card(mem)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: destruye todos los Logistrones enemigos")
+                return None
+
+            # ─── G6: Mass free link ───
+            if "conecta" in desc_lower and "no vinculadas" in desc_lower and "vínculos gratis" in desc_lower:
+                linked = 0
+                for cid, node in self.network.nodes.items():
+                    card_obj = self.all_cards.get(cid)
+                    if card_obj and card_obj.owner == player:
+                        for cid2, node2 in self.network.nodes.items():
+                            card2 = self.all_cards.get(cid2)
+                            if card2 and card2.owner == player and cid != cid2:
+                                if self.network.can_link(card_obj) and self.network.can_link(card2):
+                                    if cid2 not in node.connected:
+                                        self.network.add_link(card_obj, card2)
+                                        linked += 1
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: conecta {linked} cartas con vínculos gratis")
+                return None
+
+            # ─── G7: Play from graveyard this turn ───
+            if "jugar cartas de tu cementerio" in desc_lower:
+                self._grave_play[player] = True
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: puede jugar cartas de cementerio este turno")
+                return None
+
+            # ─── G8: Swap D with enemy ───
+            if "intercambia d" in desc_lower and "enemig" in desc_lower:
+                enemy = 1 - player
+                for cid_list in self.board.cells[player]:
+                    for cid in cid_list:
+                        if cid is not None:
+                            ally = self.all_cards.get(cid)
+                            if ally:
+                                enemy_cid = self.board.cells[enemy][0][ally.position[2]] if ally.position else None
+                                if enemy_cid:
+                                    enemy_card = self.all_cards.get(enemy_cid)
+                                    if enemy_card:
+                                        ally.definition.damage, enemy_card.definition.damage = enemy_card.definition.damage, ally.definition.damage
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: intercambia D con enemigo")
+                return None
+
+            # ─── G9: Swap squad HP with defender ───
+            if "intercambia hp" in desc_lower and "escuadrón" in desc_lower:
+                target_card = get_target_card("target_id")
+                if target_card:
+                    my_squad = self.network.find_squads(self.all_cards).get(card.card_id)
+                    enemy_squad = self.network.find_squads(self.all_cards).get(target_card.card_id)
+                    if my_squad and enemy_squad:
+                        my_hps = {}
+                        for cid in my_squad.members:
+                            mem = self.all_cards.get(cid)
+                            if mem:
+                                my_hps[cid] = mem.current_hp
+                        for cid in enemy_squad.members:
+                            mem = self.all_cards.get(cid)
+                            if mem:
+                                enemy_hp = mem.current_hp
+                                # Get corresponding ally at same position
+                                if mem.position:
+                                    ally_cid = self.board.cells[player][mem.position[1]-1][mem.position[2]]
+                                    if ally_cid and ally_cid in my_hps:
+                                        mem.current_hp = my_hps[ally_cid]
+                                        self.all_cards[ally_cid].current_hp = enemy_hp
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: intercambia HP de escuadrones")
                 return None
 
             # ─── Fallback: ability not yet implemented ───

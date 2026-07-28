@@ -63,6 +63,15 @@ class CardInstance:
     owner: int
     position: Optional[tuple] = None
 
+    def __init__(self, card_id: int, definition: CardDef, owner: int):
+        self.card_id = card_id
+        self.definition = definition
+        self.current_hp = definition.hp
+        self.owner = owner
+        self.position = None
+        self._cannot_attack = False
+        self._faction_disabled = False
+
     @property
     def is_alive(self):
         return self.current_hp > 0
