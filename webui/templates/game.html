@@ -117,6 +117,7 @@ body.phase-attack .phase-attack{display:flex}
   <button class="btn" onclick="action('play')">▶ Jugar carta</button>
   <button class="btn" onclick="action('link')">🔗 Vincular</button>
   <button class="btn" onclick="action('ascend')">⬆ Ascender</button>
+  <button class="btn" onclick="action('move', {direction:1})">↔ Mover →</button>
   <span class="phase-actions">
    <button class="btn primary" onclick="action('next_phase')">⚔️ Atacar →</button>
   </span>
@@ -534,7 +535,7 @@ function selectBoard(cid) {
 }
 
 function renderStatus(s) {
-  document.getElementById('status-bar').innerHTML = '<span>Turno ' + s.turn + '</span><span class="active">J' + (s.active_player+1) + '</span><span>Fase: ' + s.phase + '</span><span>Acciones: ' + s.actions + '</span><span>🃏 J1:' + s.hand_sizes[0] + ' J2:' + s.hand_sizes[1] + '</span>' + (s.game_over ? '<span class="active">🏆 J' + (s.winner+1) + ' GANA!</span>' : '');
+  document.getElementById('status-bar').innerHTML = '<span>Turno ' + s.turn + '</span><span class="active">J' + (s.active_player+1) + '</span><span>Fase: ' + s.phase + '</span><span>Acciones: ' + s.actions + '</span><span>🃏 J1:' + s.hand_sizes[0] + ' J2:' + s.hand_sizes[1] + '</span>' + '<span>📦 J1:' + (s.deck_sizes?.[0] ?? '?') + ' J2:' + (s.deck_sizes?.[1] ?? '?') + '</span>' + (s.game_over ? '<span class="active">🏆 J' + (s.winner+1) + ' GANA!</span>' : '');
 }
 
 function renderSquads(s) {
@@ -658,6 +659,10 @@ async function action(act, args={}) {
   if (act === 'ascend') {
     if (selectedBoard === null) { const m='Selecciona una carta en el tablero'; alert(m); logError(m); return; }
     args = {card_id: selectedBoard};
+  }
+  if (act === 'move') {
+    if (selectedBoard === null) { const m='Selecciona una carta en el tablero'; alert(m); logError(m); return; }
+    args = {card_id: selectedBoard, direction: args.direction || 1};
   }
   if (act === 'link') {
     if (!args.card_a && selectedBoard) {

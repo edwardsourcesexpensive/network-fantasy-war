@@ -315,10 +315,13 @@ def api_action():
         
         if game.phase == Phase.ATTACK:
             squads = game.get_player_squads(player)
+            enemy_squads = game.get_player_squads(1 - player)
             for sq_idx, squad in enumerate(squads):
                 if sq_idx > 1:  # limit to 2 attacks
                     break
-                err = game.attack(squad, 'grimoire')
+                # Auto-defend: use best enemy squad if available
+                best_defense = enemy_squads[0] if enemy_squads else None
+                err = game.attack(squad, 'grimoire', defending_squad=best_defense)
                 if err is None:
                     result["log"].append(f"AI ataca grimorio con escuadron {sq_idx} ({squad.squad_type})")
                     if game.game_over:
