@@ -163,12 +163,62 @@ def ability_implementation_status(ability: Ability) -> str:
         return "not_implemented"
 
     if trigger == "permanent":
-        # Reticencia: checked in can_link()
+        # Patterns handled by modifier parser
         if "reticencia" in desc.lower():
             return "implemented"
-        # Sigilo: not implemented
-        if "sigilo" in desc.lower():
-            return "not_implemented"
+        # Sigilo / cannot_be_attacked
+        if "sigilo" in desc.lower() or ("no puede ser atacado" in desc.lower()):
+            return "implemented"
+        # Ignore color: "no cuenta para la mayoría de color"
+        if "no cuenta para la mayoría de color" in desc.lower():
+            return "implemented"
+        # Ignore formation restrictions
+        if "ignoran restricciones de formación" in desc.lower():
+            return "implemented"
+        # Reduce potenciamiento distance
+        if "reducen" in desc.lower() and "distancia" in desc.lower():
+            return "implemented"
+        # Ignore polygon requirement in frontier
+        if "sin formar polígonos" in desc.lower() and "vincularse" in desc.lower():
+            return "implemented"
+        # Logistron multiplier: "cuenta como N logistrones"
+        if "cuenta como" in desc.lower() and "logistron" in desc.lower():
+            return "implemented"
+        # Damage bonus
+        if "gana" in desc.lower() and "+" in desc and "d" in desc.split():
+            if "defensa" not in desc.lower():
+                return "implemented"
+        if "+" in desc and any(w in desc for w in [" d ", " D ", " D.", " D,"]):
+            if "defensa" not in desc.lower():
+                return "implemented"
+        # Grimoire defense
+        if "grimorio tiene" in desc.lower() and "defensa" in desc.lower():
+            return "implemented"
+        if "no pierde más de" in desc.lower():
+            return "implemented"
+        # Cannot ascend
+        if "no puede ascender" in desc.lower() or "ni ascender" in desc.lower():
+            return "implemented"
+        # Cannot move
+        if "no puede moverse" in desc.lower() or "no puede ser movido" in desc.lower():
+            return "implemented"
+        # Destroy immunity
+        if "inmune a destrucción" in desc.lower() or "indestructible" in desc.lower():
+            return "implemented"
+        # Transfer links
+        if "transfiere" in desc.lower() and "vínculo" in desc.lower():
+            return "implemented"
+        # Link cost zero / cannot link / link armor
+        if ("vínculo gratis" in desc.lower() or "cuesta 0 vincular" in desc.lower()
+                or "vínculos no cuestan" in desc.lower()):
+            return "implemented"
+        if "no puede vincularse" in desc.lower():
+            return "implemented"
+        if "armadura" in desc.lower() and ("vínculo" in desc.lower() or "vinculo" in desc.lower()):
+            return "implemented"
+        # Draw on link
+        if ("al ser vinculado" in desc.lower() or "al vincular" in desc.lower()) and "roba" in desc.lower():
+            return "implemented"
         return "not_implemented"
 
     if trigger == "on_attack":
@@ -939,6 +989,27 @@ class GameState:
                     effect_type="bonus_vs_grimoire", layer="self",
                     params={"delta": bonus},
                 ))
+
+        # ─── Additional permanent/on_enter patterns ───
+        # Cannot link: "No puede vincularse"
+        if "no puede vincularse" in desc:
+            mods.append(Modifier(
+                source_card_id=cid, hook="before_link",
+                effect_type="cannot_link", layer="self",
+                params={},
+            ))
+        # Link armor: "vínculo(s) tienen/ganan +N de armadura"
+        if "armadura" in desc and ("vínculo" in desc or "vinculo" in desc):
+            amount = 1
+            m = _re2.search(r'\+(\d+)\s*(?:de\s*)?armadura', desc)
+            if m:
+                amount = int(m.group(1))
+            scope = "own" if "~" in desc or "sus vínculos" in desc else "link"
+            mods.append(Modifier(
+                source_card_id=cid, hook="before_link",
+                effect_type="link_armor_bonus", layer="self",
+                params={"amount": amount, "scope": scope},
+            ))
 
         return mods
 
@@ -1914,6 +1985,9 @@ class GameState:
             if mod.effect_type == "link_cost_zero":
                 # Handled in link_cards — reduces cost to 0
                 pass
+            if mod.effect_type == "cannot_link":
+                if mod.source_card_id in (card_a.card_id, card_b.card_id):
+                    return f"{source_card.definition.name} no puede vincularse."
 
         return None
 
@@ -2358,6 +2432,12 @@ class GameState:
                 if card and "Danzante" in card.definition.name:
                     armor += 1
                     break
+            # Link armor from before_link modifiers
+            for mod in self._modifiers.get("before_link", []):
+                if mod.effect_type == "link_armor_bonus":
+                    source_card = self.all_cards.get(mod.source_card_id)
+                    if source_card and source_card.card_id in defending_squad.members:
+                        armor += mod.params.get("amount", 1)
             defense = def_pot + armor
             # Apply ignore_armor from on_attack modifiers
             if ignore_armor_total > 0:
