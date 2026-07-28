@@ -182,6 +182,10 @@ def ability_implementation_status(ability: Ability) -> str:
             return "implemented"
         if "descarta" in desc:
             return "implemented"
+        if "armadura" in desc and "vínculo" in desc:
+            return "implemented"
+        if "vínculo" in desc and ("gana" in desc or "+" in desc):
+            return "implemented"
         return "not_implemented"
 
     if trigger == "active":
@@ -260,6 +264,14 @@ def ability_implementation_status(ability: Ability) -> str:
             # Cost reduction
             ("cuestan 0 acciones", True),
             ("cuesta 0", "vincular" in desc.lower()),
+            # Phase K additions (parser handles, status must match)
+            ("vanguardia", True),
+            ("línea de fuego", True),
+            ("ganan +", "d" in desc.split() or "daño" in desc.lower()),
+            ("gana +1 v", "permanente" in desc.lower()),
+            ("gana +2 hp", True),
+            ("todas las cartas", "ganan" in desc.lower() and ("hp" in desc.lower() or "d" in desc.lower())),
+            ("no puede ascender", "regenera" in desc.lower()),
         ]
         for kw, cond in implemented_perm_kw:
             if kw in desc.lower() and cond:
@@ -295,6 +307,12 @@ def ability_implementation_status(ability: Ability) -> str:
                 ("restaura", True),
                 ("inflige", "daño" in desc),
                 ("rompe", "vínculo" in desc),
+                # Phase K
+                ("autofobia", True),
+                ("exactamente", "vínculo" in desc),
+                ("roba", "vínculo" in desc),
+                ("logistrón", "rompe" in desc),
+                ("nodo enemigo", "rompe" in desc),
             ]
             for kw, cond in implemented_eot_kw:
                 if kw in desc.lower() and cond:
