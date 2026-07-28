@@ -908,8 +908,16 @@ class GameState:
                         self._log(f"  ¡Fatiga! -1 sello ({self.seals[player]})")
                         if self.seals[player] <= 0:
                             self._end_game(1 - player)
+                # Check for "gana N sello" in the same ability
+                gain_match = re.search(r'(?:tú\s+)?ganas?\s+(\d+)\s+sello', desc_lower)
+                if gain_match:
+                    gain = int(gain_match.group(1))
+                    self.seals[player] += gain
                 self.actions_remaining -= cost
-                self._log(f"  {card.definition.name}: usa habilidad → roba {total_drawn} carta(s)")
+                if gain_match:
+                    self._log(f"  {card.definition.name}: usa habilidad → roba {total_drawn} carta(s), gana {gain} sello")
+                else:
+                    self._log(f"  {card.definition.name}: usa habilidad → roba {total_drawn} carta(s)")
                 return None
 
             # ─── Gain seals ───
