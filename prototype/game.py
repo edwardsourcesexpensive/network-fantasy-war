@@ -425,6 +425,59 @@ class GameState:
                 params={"multiplier": count},
             ))
 
+        # ─── before_attack effects ───
+        # "Sigilo: ~ no puede ser atacado"
+        if "sigilo" in desc and "no puede ser atacado" in desc:
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="before_attack",
+                effect_type="cannot_be_attacked",
+                layer="self",
+            ))
+
+        # ─── modify_damage effects ───
+        # "+N D" or "gana +N D" (permanent damage bonus, not "de defensa")
+        import re as _re
+        d_match = _re.search(r'gana\s+\+(\d+)\s*[dD]\b', desc)
+        if not d_match:
+            d_match = _re.search(r'\+(\d+)\s*[dD]\b', desc)
+        if d_match and ability.trigger in ("permanent",):
+            delta = int(d_match.group(1))
+            # Exclude false matches like "+5 de defensa" — ensure it's about damage
+            if "defensa" not in desc[max(0, d_match.start()-20):d_match.end()+20]:
+                mods.append(Modifier(
+                    source_card_id=cid,
+                    hook="modify_damage",
+                    effect_type="damage_bonus",
+                    layer="self",
+                    params={"delta": delta},
+                ))
+
+        # ─── grimoire_defense effects ───
+        # "grimorio no pierde más de N sellos por ataque"
+        seal_match = _re.search(r'no pierde más de (\d+)', desc)
+        if seal_match:
+            cap = int(seal_match.group(1))
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="grimoire_defense",
+                effect_type="max_seal_loss",
+                layer="self",
+                params={"max": cap},
+            ))
+
+        # "grimorio tiene +N de defensa contra ataques directos"
+        def_match = _re.search(r'grimorio tiene \+(\d+) de defensa', desc)
+        if def_match:
+            armor = int(def_match.group(1))
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="grimoire_defense",
+                effect_type="grimoire_armor",
+                layer="self",
+                params={"armor": armor},
+            ))
+
         return mods
 
     # ═══════════════════════════════════════════════════════════════
@@ -1606,6 +1659,24 @@ class GameState:
         attacker = self.active_player
         defender = 1 - attacker
 
+        # ─── before_attack hook ───
+        # Cards with sigilo block attacks on themselves; guardaespaldas redirect
+        if target == "card" and target_card_id:
+            for mod in self._modifiers.get("before_attack", []):
+                source_card = self.all_cards.get(mod.source_card_id)
+                if not source_card or source_card.owner != defender:
+                    continue
+                if mod.effect_type == "cannot_be_attacked":
+                    if mod.source_card_id == target_card_id or mod.layer == "squad":
+                        # Check if any squad member is the protected one
+                        squad_members = set()
+                        for sq in self.get_player_squads(defender):
+                            if mod.source_card_id in sq.members:
+                                squad_members = sq.members
+                                break
+                        if mod.source_card_id == target_card_id or target_card_id in squad_members:
+                            return f"{source_card.definition.name} tiene Sigilo: no puede ser atacado."
+
         # Calculate attack damage
         base = attacking_squad.base_damage
         # Apply squad buffs
@@ -1643,6 +1714,17 @@ class GameState:
 
         total_damage = base + pot + extra
 
+        # ─── modify_damage hook ───
+        # Permanent +D modifiers (e.g., "+1 D mientras esté en L2")
+        for mod in self._modifiers.get("modify_damage", []):
+            source_card = self.all_cards.get(mod.source_card_id)
+            if not source_card or source_card.owner != attacker:
+                continue
+            if mod.effect_type == "damage_bonus":
+                # Check condition: is source in attacking squad?
+                if mod.source_card_id in attacking_squad.members:
+                    total_damage += mod.params.get("delta", 0)
+
         self._log(f"  ⚔️ Ataque: {attacking_squad.squad_type} (base={base} pot={pot} extra={extra}) = {total_damage}")
 
         # Defense
@@ -1667,6 +1749,22 @@ class GameState:
         self._log(f"  Daño neto: {total_damage} - {defense} = {net_damage}")
 
         if target == "grimoire":
+            # ─── grimoire_defense hook ───
+            # Cap max seal loss, apply grimoire armor
+            for mod in self._modifiers.get("grimoire_defense", []):
+                source_card = self.all_cards.get(mod.source_card_id)
+                if not source_card or source_card.owner != defender:
+                    continue
+                if mod.effect_type == "max_seal_loss":
+                    cap = mod.params.get("max", 999)
+                    if net_damage > cap:
+                        self._log(f"  🛡️ {source_card.definition.name}: daño capado de {net_damage} a {cap}")
+                        net_damage = cap
+                elif mod.effect_type == "grimoire_armor":
+                    armor_val = mod.params.get("armor", 0)
+                    net_damage = max(0, net_damage - armor_val)
+                    self._log(f"  🛡️ {source_card.definition.name}: +{armor_val} armadura al grimorio")
+
             self.seals[defender] -= net_damage
             self._log(f"  ¡{net_damage} sellos destruidos! Grimorio enemigo: {self.seals[defender]}")
             if self.seals[defender] <= 0:
