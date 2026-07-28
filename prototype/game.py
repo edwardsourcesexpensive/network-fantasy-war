@@ -104,6 +104,12 @@ def ability_implementation_status(ability: Ability) -> str:
             ("jugar cartas de tu cementerio", True),                    # grave play
             ("intercambia d", "enemig" in desc),                        # swap D
             ("intercambia hp", "escuadrón" in desc),                    # swap squad HP
+            # Phase H additions
+            ("restaura tu grimorio", "30" in desc),
+            ("restaura", "sellos rotos" in desc),
+            ("busca", "reserva" in desc and "mano" in desc),
+            ("cambia", "territorio" in desc),
+            ("meridiano temporal", True),
         ]
         for kw, cond in implemented_kw:
             if kw in desc and cond:
@@ -2172,6 +2178,55 @@ class GameState:
                                         self.all_cards[ally_cid].current_hp = enemy_hp
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: intercambia HP de escuadrones")
+                return None
+
+            # ─── H1: Restore grimorio to 30 ───
+            if "restaura tu grimorio" in desc_lower and "30" in desc:
+                self.seals[player] = 30
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: grimorio restaurado a 30 sellos")
+                return None
+
+            # ─── H2: Restore broken seals ───
+            if "restaura" in desc_lower and "sellos rotos" in desc_lower:
+                broken = 30 - self.seals[player]
+                self.seals[player] = 30
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: restaura {broken} sellos rotos")
+                return None
+
+            # ─── H3: Tutor (search deck) ───
+            if "busca" in desc_lower and "reserva" in desc_lower and "mano" in desc_lower:
+                if self.decks[player]:
+                    # Simple: pick top non-spy card
+                    for i, dc in enumerate(self.decks[player]):
+                        if not dc.definition.is_spy:
+                            chosen = self.decks[player].pop(i)
+                            self.hands[player].append(chosen)
+                            self._log(f"  {card.definition.name}: busca {chosen.definition.name} de la reserva")
+                            break
+                    else:
+                        self._log(f"  {card.definition.name}: reserva solo tiene espías (sin efecto)")
+                self.actions_remaining -= cost
+                return None
+
+            # ─── H4: Swap territory ───
+            if "cambiar de territorio" in desc_lower or ("cambia" in desc_lower and "territorio" in desc_lower):
+                # Toggle: 0 (North) ↔ 1 (South) for this player
+                if hasattr(self, '_territory'):
+                    self._territory[player] = 1 - self._territory.get(player, 0)
+                else:
+                    self._territory = {0: 0, 1: 0}
+                    self._territory[player] = 1
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: cambia de territorio → {'Sur' if self._territory.get(player,0) else 'Norte'}")
+                return None
+
+            # ─── H5: Add temporal meridian ───
+            if "meridiano temporal" in desc_lower:
+                self._temp_meridians = getattr(self, '_temp_meridians', 0) + 1
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: +1 meridiano temporal (total: {self._temp_meridians})")
                 return None
 
             # ─── Fallback: ability not yet implemented ───
