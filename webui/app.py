@@ -313,6 +313,23 @@ def api_action():
                         if res is None:
                             result["log"].append(f"AI vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
             
+            # Reposition V>=2 cards to bring them closer together
+            for li in range(3):
+                for m in range(15):
+                    cid = game.board.cells[player][li][m]
+                    if cid:
+                        card = game.all_cards.get(cid)
+                        if card and card.definition.link_capacity >= 2:
+                            # Move toward center (m=7) if far away
+                            if m < 5:
+                                for _ in range(2):
+                                    err = game.move_card(player, card, 1)
+                                    if err: break
+                            elif m > 9:
+                                for _ in range(2):
+                                    err = game.move_card(player, card, -1)
+                                    if err: break
+            
             # Start attack phase
             if game.phase == Phase.ACTIONS:
                 game.start_attack_phase()

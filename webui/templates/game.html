@@ -117,7 +117,6 @@ body.phase-attack .phase-attack{display:flex}
   <button class="btn" onclick="action('play')">▶ Jugar carta</button>
   <button class="btn" onclick="action('link')">🔗 Vincular</button>
   <button class="btn" onclick="action('ascend')">⬆ Ascender</button>
-  <button class="btn" onclick="action('move', {direction:1})">↔ Mover →</button>
   <span class="phase-actions">
    <button class="btn primary" onclick="action('next_phase')">⚔️ Atacar →</button>
   </span>
@@ -453,6 +452,15 @@ function showCardDetail(cid) {
   } else {
     abDiv.innerHTML = '<div class="ability" style="color:#555">Sin habilidades</div>';
   }
+  // Add move buttons ← → for board cards in actions phase
+  const myTurn2 = state.active_player === 0 || (gameMode !== 'ai');
+  if (myTurn2 && state.phase === 'actions') {
+    abDiv.innerHTML += '<div style="margin-top:6px;display:flex;gap:4px">' +
+      '<button class="btn" onclick="moveCard(' + card.id + ',-1)" style="font-size:10px;padding:3px 8px">← Izq</button>' +
+      '<button class="btn" onclick="moveCard(' + card.id + ',1)" style="font-size:10px;padding:3px 8px">Der →</button>' +
+      '</div>';
+  }
+
   panel.style.display = 'block';
 }
 
@@ -487,6 +495,7 @@ function showHandDetail(idx) {
   } else {
     abDiv.innerHTML = '<div class="ability" style="color:#555">Sin habilidades</div>';
   }
+
   panel.style.display = 'block';
 }
 
@@ -581,6 +590,20 @@ function renderSquads(s) {
   div.style.display = 'none';
 }
 
+function moveCard(cid, direction) {
+  fetch('/api/action', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'move', args: {card_id: cid, direction: direction}})
+  }).then(r => r.json()).then(r => {
+    if (r.error) { alert(r.error); logError(r.error); }
+    if (r.state) loadState(r.state);
+    if (gameMode === 'ai' && r.state && !r.state.game_over && r.state.active_player === 1) {
+      setTimeout(runAITurn, 500);
+    }
+  });
+}
+
 function defend(idx) {
   action('defend', {defender_squad_index: idx});
 }
@@ -659,10 +682,6 @@ async function action(act, args={}) {
   if (act === 'ascend') {
     if (selectedBoard === null) { const m='Selecciona una carta en el tablero'; alert(m); logError(m); return; }
     args = {card_id: selectedBoard};
-  }
-  if (act === 'move') {
-    if (selectedBoard === null) { const m='Selecciona una carta en el tablero'; alert(m); logError(m); return; }
-    args = {card_id: selectedBoard, direction: args.direction || 1};
   }
   if (act === 'link') {
     if (!args.card_a && selectedBoard) {
