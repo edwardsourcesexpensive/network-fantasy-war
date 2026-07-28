@@ -289,6 +289,7 @@ class GameState:
             "end_of_turn": [],
             "on_kill": [],
             "on_enter": [],
+            "on_attack": [],
         }
 
         # Event log for UI
@@ -868,6 +869,75 @@ class GameState:
                     source_card_id=cid, hook="on_enter",
                     effect_type="discard", layer="self",
                     params={"count": count},
+                ))
+
+        # ─── on_attack effects ───
+        if ability.trigger == "on_attack":
+            # Ignore armor: "ignora N de armadura/defensa"
+            if "ignora" in desc and any(w in desc for w in ["armadura", "defensa"]):
+                amount = 1
+                m = _re2.search(r'ignora\s+(\d+)', desc)
+                if m:
+                    amount = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_attack",
+                    effect_type="ignore_armor", layer="self",
+                    params={"amount": amount},
+                ))
+            # Double damage: "daño duplicado" / "daño base duplicado"
+            elif "duplicado" in desc and ("daño" in desc or "daño" in desc):
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_attack",
+                    effect_type="double_damage", layer="self",
+                    params={},
+                ))
+            # Bonus vs nodes/structures: "+N daño a nodos"
+            elif "nodo" in desc and any(w in desc for w in ["+", "extra", "adicional"]):
+                bonus = 2
+                m = _re2.search(r'\+(\d+)', desc)
+                if m:
+                    bonus = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_attack",
+                    effect_type="bonus_vs_nodes", layer="self",
+                    params={"delta": bonus},
+                ))
+            # Bonus vs high HP: "+N daño contra cartas con HP >= X"
+            elif "hp" in desc and ">=" in desc:
+                bonus = 1
+                m = _re2.search(r'\+(\d+)\s*daño', desc)
+                if m:
+                    bonus = int(m.group(1))
+                hp_threshold = 5
+                m2 = _re2.search(r'hp\s*>=\s*(\d+)', desc)
+                if m2:
+                    hp_threshold = int(m2.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_attack",
+                    effect_type="bonus_vs_high_hp", layer="self",
+                    params={"delta": bonus, "hp_threshold": hp_threshold},
+                ))
+            # Bonus per link: "+1 daño por cada vínculo"
+            elif "vínculo" in desc and any(w in desc for w in ["+", "extra"]):
+                max_bonus = 3
+                m = _re2.search(r'máx\s*\+?(\d+)', desc) or _re2.search(r'max\s*\+?(\d+)', desc)
+                if m:
+                    max_bonus = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_attack",
+                    effect_type="bonus_per_link", layer="self",
+                    params={"max": max_bonus},
+                ))
+            # Bonus vs grimoires: "+N daño contra grimorios"
+            elif "grimorio" in desc and any(w in desc for w in ["+", "extra"]):
+                bonus = 4
+                m = _re2.search(r'\+(\d+)', desc)
+                if m:
+                    bonus = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_attack",
+                    effect_type="bonus_vs_grimoire", layer="self",
+                    params={"delta": bonus},
                 ))
 
         return mods
@@ -2235,6 +2305,42 @@ class GameState:
                 if mod.source_card_id in attacking_squad.members:
                     total_damage += mod.params.get("delta", 0)
 
+        # ─── on_attack hook ───
+        # Attack-triggered effects (ignore_armor, double_damage, conditional bonuses)
+        ignore_armor_total = 0
+        double_damage = False
+        for mod in self._modifiers.get("on_attack", []):
+            source_card = self.all_cards.get(mod.source_card_id)
+            if not source_card or source_card.owner != attacker:
+                continue
+            if mod.source_card_id not in attacking_squad.members:
+                continue
+            condition = mod.params.get("condition", {})
+            if condition and not self._evaluate_condition(condition, source_card):
+                continue
+            if mod.effect_type == "ignore_armor":
+                ignore_armor_total = max(ignore_armor_total, mod.params.get("amount", 1))
+            elif mod.effect_type == "double_damage":
+                double_damage = True
+            elif mod.effect_type == "bonus_vs_nodes":
+                if target == "card" and target_card_id:
+                    target_card = self.all_cards.get(target_card_id)
+                    if target_card:
+                        total_damage += mod.params.get("delta", 2)
+            elif mod.effect_type == "bonus_vs_high_hp":
+                if target == "card" and target_card_id:
+                    target_card = self.all_cards.get(target_card_id)
+                    if target_card and target_card.current_hp >= mod.params.get("hp_threshold", 5):
+                        total_damage += mod.params.get("delta", 1)
+            elif mod.effect_type == "bonus_per_link":
+                link_count = self.network.link_count(source_card)
+                total_damage += min(link_count, mod.params.get("max", 3))
+            elif mod.effect_type == "bonus_vs_grimoire":
+                if target == "grimoire":
+                    total_damage += mod.params.get("delta", 4)
+        if double_damage:
+            total_damage *= 2
+
         self._log(f"  ⚔️ Ataque: {attacking_squad.squad_type} (base={base} pot={pot} extra={extra}) = {total_damage}")
 
         # Defense
@@ -2253,6 +2359,11 @@ class GameState:
                     armor += 1
                     break
             defense = def_pot + armor
+            # Apply ignore_armor from on_attack modifiers
+            if ignore_armor_total > 0:
+                old_defense = defense
+                defense = max(0, defense - ignore_armor_total)
+                self._log(f"  ⚡ Ignora {ignore_armor_total} armadura: {old_defense} → {defense}")
             self._log(f"  🛡️ Defensa: {defending_squad.squad_type} (pot={def_pot} armor={armor}) = {defense}")
 
         net_damage = max(0, total_damage - defense)
