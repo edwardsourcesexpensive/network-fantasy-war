@@ -478,6 +478,27 @@ class GameState:
                 params={"armor": armor},
             ))
 
+        # ─── before_link effects ───
+        # "vínculo(s) gratis" or "vincularse cuesta 0" → cost zero for this card
+        if ("vínculo gratis" in desc or "vincular" in desc and "sin costo" in desc
+                or "vínculos no cuestan" in desc or "cuesta 0 vincular" in desc):
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="before_link",
+                effect_type="link_cost_zero",
+                layer="self",
+            ))
+
+        # ─── after_link effects ───
+        # "Al ser vinculado/a/X: roba" → draw on link
+        if ("al ser vinculado" in desc or "al vincular" in desc) and "roba" in desc:
+            mods.append(Modifier(
+                source_card_id=cid,
+                hook="after_link",
+                effect_type="draw_on_link",
+                layer="self",
+            ))
+
         return mods
 
     # ═══════════════════════════════════════════════════════════════
@@ -1388,6 +1409,16 @@ class GameState:
             if self.actions_remaining < cost:
                 return f"Necesitas {cost} acciones (tienes {self.actions_remaining})."
 
+        # ─── before_link hook ───
+        # Modifiers can block or modify link validation
+        for mod in self._modifiers.get("before_link", []):
+            source_card = self.all_cards.get(mod.source_card_id)
+            if not source_card:
+                continue
+            if mod.effect_type == "link_cost_zero":
+                # Handled in link_cards — reduces cost to 0
+                pass
+
         return None
 
     def link_cards(self, player: int, card_a: CardInstance, card_b: CardInstance,
@@ -1414,7 +1445,32 @@ class GameState:
         if self._link_cost_free:
             cost = 0
 
+        # Check before_link modifiers for cost_zero
+        for mod in self._modifiers.get("before_link", []):
+            if mod.effect_type == "link_cost_zero":
+                source_card = self.all_cards.get(mod.source_card_id)
+                if source_card and source_card.owner == player:
+                    # Check if source card is one of the linking cards
+                    if mod.source_card_id in (card_a.card_id, card_b.card_id):
+                        cost = 0
+                        self._log(f"  {source_card.definition.name}: vínculo sin costo")
+
         self.network.add_link(card_a, card_b)
+
+        # ─── after_link hook ───
+        # On-link triggers from permanent modifiers
+        for mod in self._modifiers.get("after_link", []):
+            source_card = self.all_cards.get(mod.source_card_id)
+            if not source_card or source_card.owner != player:
+                continue
+            # Check if source card is involved in this link
+            if mod.source_card_id not in (card_a.card_id, card_b.card_id):
+                continue
+            if mod.effect_type == "draw_on_link":
+                extra = self._draw_card(player)
+                if extra:
+                    self._log(f"  {source_card.definition.name}: +1 robo por vínculo")
+
         self.actions_remaining -= cost
         
         if is_temp:
