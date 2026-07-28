@@ -5,7 +5,7 @@
     "buildCommand": "pip install -r requirements.txt"
   },
   "deploy": {
-    "startCommand": "python webui/app.py",
+    "startCommand": "python -m webui.multiplayer.app",
     "restartPolicyType": "ON_FAILURE"
   }
 }
