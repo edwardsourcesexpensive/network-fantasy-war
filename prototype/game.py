@@ -1125,6 +1125,181 @@ class GameState:
                 params={"amount": amount, "scope": scope},
             ))
 
+
+        # ─── Phase K: new parser patterns ───
+
+        # Vanguardia / Línea de fuego: on_enter at higher layer
+        if "vanguardia" in desc:
+            layer_match = _re2.search(r'[Ll](\d)', desc)
+            target_layer = int(layer_match.group(1)) if layer_match else 2
+            mods.append(Modifier(
+                source_card_id=cid, hook="on_enter",
+                effect_type="vanguard_entry", layer="self",
+                params={"layer": target_layer},
+            ))
+        if "línea de fuego" in desc or "linea de fuego" in desc:
+            layer_match = _re2.search(r'[Ll](\d)', desc)
+            target_layer = int(layer_match.group(1)) if layer_match else 3
+            mods.append(Modifier(
+                source_card_id=cid, hook="on_enter",
+                effect_type="vanguard_entry", layer="self",
+                params={"layer": target_layer},
+            ))
+
+        # Cannot form / only form specific polygons
+        if "no puede formar" in desc:
+            shape = "triángulo" if "triángulo" in desc or "triangulo" in desc else "any"
+            mods.append(Modifier(
+                source_card_id=cid, hook="modify_squad",
+                effect_type="formation_restriction", layer="self",
+                params={"cannot_form": shape},
+            ))
+        if "solo puede formar" in desc:
+            shape = "pentágono" if "pentágono" in desc or "pentagono" in desc else "any"
+            mods.append(Modifier(
+                source_card_id=cid, hook="modify_squad",
+                effect_type="formation_restriction", layer="self",
+                params={"only_form": shape},
+            ))
+
+        # Grimoire invulnerable
+        if "grimorio invulnerable" in desc:
+            mods.append(Modifier(
+                source_card_id=cid, hook="grimoire_defense",
+                effect_type="grimoire_invulnerable", layer="self",
+                params={"condition": condition} if condition else {},
+            ))
+
+        # Caudillismo always active
+        if "caudillismo" in desc and "activos" in desc:
+            mods.append(Modifier(
+                source_card_id=cid, hook="modify_squad",
+                effect_type="caudillismo_always_active", layer="network",
+                params={"condition": condition} if condition else {},
+            ))
+
+        # All color abilities active
+        if "todas las habilidades de color" in desc and "activas" in desc:
+            mods.append(Modifier(
+                source_card_id=cid, hook="modify_squad",
+                effect_type="all_color_abilities_active", layer="network",
+                params={"condition": condition} if condition else {},
+            ))
+
+        # Count as all colors
+        if "cuenta como todos los colores" in desc:
+            mods.append(Modifier(
+                source_card_id=cid, hook="modify_squad",
+                effect_type="all_colors", layer="self",
+            ))
+
+        # Free ascension
+        if "ascensos" in desc and "cuestan 0" in desc:
+            mods.append(Modifier(
+                source_card_id=cid, hook="on_ascend",
+                effect_type="free_ascend", layer="network",
+                params={"condition": condition} if condition else {},
+            ))
+
+        # Guardaespaldas: redirect damage
+        if "guardaespaldas" in desc:
+            if "grimorio" in desc:
+                amount = 3
+                m = _re2.search(r'hasta\s+(\d+)', desc)
+                if m:
+                    amount = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="grimoire_defense",
+                    effect_type="grimoire_damage_redirect", layer="self",
+                    params={"max": amount},
+                ))
+            else:
+                color_filter = None
+                for col in ["sellador", "político", "militar", "guerrillero", "naturaleza", "logistrón"]:
+                    if col in desc:
+                        color_filter = col
+                        break
+                mods.append(Modifier(
+                    source_card_id=cid, hook="modify_damage",
+                    effect_type="damage_redirect", layer="self",
+                    params={"color": color_filter} if color_filter else {},
+                ))
+
+        # Bonus formation power
+        if "potenciamiento adicional" in desc:
+            bonus = 2
+            m = _re2.search(r'\+(\d+)\s*de\s*potenciamiento', desc)
+            if m:
+                bonus = int(m.group(1))
+            mods.append(Modifier(
+                source_card_id=cid, hook="modify_squad",
+                effect_type="bonus_formation_power", layer="network",
+                params={"bonus": bonus, "condition": condition} if condition else {"bonus": bonus},
+            ))
+
+        # Vitality bonus (V)
+        if "gana" in desc and "v" in desc and "permanente" in desc:
+            v_match = _re2.search(r'\+(\d+)\s*v', desc.lower())
+            bonus = int(v_match.group(1)) if v_match else 1
+            mods.append(Modifier(
+                source_card_id=cid, hook="modify_squad",
+                effect_type="vitality_bonus", layer="network",
+                params={"bonus": bonus, "condition": condition} if condition else {"bonus": bonus},
+            ))
+
+        # HP bonus (permanent)
+        if "gana" in desc and "hp" in desc and "permanente" in desc:
+            hp_match = _re2.search(r'\+(\d+)\s*hp', desc)
+            hp_bonus = int(hp_match.group(1)) if hp_match else 1
+            mods.append(Modifier(
+                source_card_id=cid, hook="modify_hp",
+                effect_type="hp_bonus", layer="network",
+                params={"bonus": hp_bonus, "condition": condition} if condition else {"bonus": hp_bonus},
+            ))
+
+        # Link protection
+        if "vínculo" in desc and "no pueden ser destruidos" in desc:
+            mods.append(Modifier(
+                source_card_id=cid, hook="before_destroy",
+                effect_type="link_protection", layer="self",
+            ))
+
+        # Sigilo with condition
+        if "sigilo" in desc and condition:
+            if not any(m.effect_type == "cannot_be_attacked" for m in mods):
+                mods.append(Modifier(
+                    source_card_id=cid, hook="before_attack",
+                    effect_type="cannot_be_attacked", layer="self",
+                    params={"condition": condition},
+                ))
+
+        # Expanded damage regex: "gana +N al daño" / "ganan +N daño base"
+        if not any(m.effect_type == "damage_bonus" for m in mods):
+            d_match2 = _re2.search(r'(?:gana|ganan)\s+\+(\d+)\s*(?:al\s*)?(?:daño|d)', desc.lower())
+            if d_match2:
+                delta = int(d_match2.group(1))
+                if "defensa" not in desc:
+                    mods.append(Modifier(
+                        source_card_id=cid, hook="modify_damage",
+                        effect_type="damage_bonus", layer="network",
+                        params={"delta": delta, "condition": condition} if condition else {"delta": delta},
+                    ))
+
+        # Expanded link_cost_zero: "vínculo(s) ... cuestan 0 acciones"
+        if not any(m.effect_type == "link_cost_zero" for m in mods):
+            if ("vínculo" in desc or "vinculo" in desc) and _re2.search(r'cuestan?\s+0\s+acciones', desc.lower()):
+                mods.append(Modifier(
+                    source_card_id=cid, hook="before_link",
+                    effect_type="link_cost_zero", layer="self",
+                ))
+
+        # Cost reduction: "cartas jugadas en el mismo meridiano cuestan 0"
+        if "meridiano" in desc and "cuestan 0" in desc:
+            mods.append(Modifier(
+                source_card_id=cid, hook="before_play",
+                effect_type="cost_reduction_meridian", layer="self",
+            ))
+
         return mods
 
     # ═══════════════════════════════════════════════════════════════
