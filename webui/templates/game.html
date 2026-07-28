@@ -672,7 +672,7 @@ function toggleGraveyard() {
 }
 
 async function action(act, args={}) {
-  if (gameMode === 'ai' && state && state.active_player === 1) { return; }
+  if (gameMode === 'ai' && state && state.active_player === 1 && act !== 'defend') { return; }
   if (act === 'play') {
     if (selectedHand === null) { const m='Selecciona una carta de tu mano primero'; alert(m); logError(m); return; }
     if (!playTarget) { const m='Click en celda vacía del tablero'; alert(m); logError(m); return; }

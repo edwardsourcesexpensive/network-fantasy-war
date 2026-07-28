@@ -66,7 +66,7 @@ class CardInstance:
     def __init__(self, card_id: int, definition: CardDef, owner: int):
         self.card_id = card_id
         self.definition = definition
-        self.current_hp = definition.hp
+        self.current_hp = definition.hp if definition else 0
         self.owner = owner
         self.position = None
         self._cannot_attack = False

@@ -446,8 +446,8 @@ def calculate_potenciamiento(attacking_squad: Squad, all_squads: list[Squad],
         for a_member in attacking_squad.members:
             for b_member in squad.members:
                 dist = network.network_distance(
-                    CardInstance(a_member, None, 0, 0),
-                    CardInstance(b_member, None, 0, 0)
+                    CardInstance(a_member, None, 0),
+                    CardInstance(b_member, None, 0)
                 )
                 if dist is not None and dist < min_distance:
                     min_distance = dist
