@@ -102,7 +102,7 @@ def ability_implementation_status(ability: Ability) -> str:
         # Fallthrough: active but not keyword-matched
         return "not_implemented"
 
-    # ─── PASSIVE abilities (_resolve_ability handles these) ───
+    # ─── PASSIVE abilities (modifier system handles these) ───
     if trigger == "start_of_turn":
         if "roba" in desc or "robo" in desc:
             return "implemented"
@@ -272,6 +272,9 @@ class GameState:
             "conditional_draw": [],
             "spy_infiltrate": [],
             "color_faction": [],
+            "start_of_turn": [],
+            "end_of_turn": [],
+            "on_kill": [],
         }
 
         # Event log for UI
@@ -394,7 +397,7 @@ class GameState:
     def _register_modifiers(self, card: CardInstance):
         """Parse a card's abilities into Modifier objects and register them."""
         for ability in card.definition.abilities:
-            if ability.trigger not in ("permanent", "on_enter"):
+            if ability.trigger not in ("permanent", "on_enter", "start_of_turn", "end_of_turn", "on_kill"):
                 continue
             modifiers = self._parse_ability_to_modifiers(ability, card)
             for mod in modifiers:
@@ -615,6 +618,146 @@ class GameState:
                 effect_type="cannot_move",
                 layer="self",
             ))
+
+        # ─── start_of_turn effects ───
+        if ability.trigger == "start_of_turn":
+            # Draw: "Roba 1 carta"
+            if ("roba" in desc or "robo" in desc) and "control" not in desc and "vínculo" not in desc:
+                count = 1
+                m = _re2.search(r'roba\s+(\d+)', desc)
+                if m:
+                    count = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="start_of_turn",
+                    effect_type="draw", layer="self",
+                    params={"count": count, "ability_type": ability.ability_type.name,
+                            "color_required": ability.color_required.value if ability.color_required else None,
+                            "formation_required": ability.formation_required},
+                ))
+            # Scry: "Mira las 3 primeras cartas"
+            elif "mira" in desc:
+                count = 2
+                m = _re2.search(r'mira\s+(\d+)', desc)
+                if m:
+                    count = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="start_of_turn",
+                    effect_type="scry", layer="self",
+                    params={"count": count, "ability_type": ability.ability_type.name,
+                            "color_required": ability.color_required.value if ability.color_required else None,
+                            "formation_required": ability.formation_required},
+                ))
+            # Auto-ascend: "asciende ~ a L2"
+            elif "asciende" in desc or "ascender" in desc:
+                mods.append(Modifier(
+                    source_card_id=cid, hook="start_of_turn",
+                    effect_type="auto_ascend", layer="self",
+                    params={"free": True, "ability_type": ability.ability_type.name,
+                            "color_required": ability.color_required.value if ability.color_required else None,
+                            "formation_required": ability.formation_required},
+                ))
+            # Bonus actions: "+1 acción"
+            elif "acción" in desc or "accion" in desc:
+                bonus = 1
+                m = _re2.search(r'\+(\d+)\s*acci', desc)
+                if m:
+                    bonus = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="start_of_turn",
+                    effect_type="bonus_actions", layer="self",
+                    params={"count": bonus, "ability_type": ability.ability_type.name,
+                            "color_required": ability.color_required.value if ability.color_required else None,
+                            "formation_required": ability.formation_required},
+                ))
+            # Free link: "vínculo gratis"
+            elif "vínculo" in desc and "gratis" in desc:
+                mods.append(Modifier(
+                    source_card_id=cid, hook="start_of_turn",
+                    effect_type="free_link", layer="self",
+                    params={"ability_type": ability.ability_type.name,
+                            "color_required": ability.color_required.value if ability.color_required else None,
+                            "formation_required": ability.formation_required},
+                ))
+
+        # ─── end_of_turn effects ───
+        if ability.trigger == "end_of_turn":
+            # Recover HP: "recupera N HP"
+            if "recupera" in desc and "hp" in desc:
+                heal = 1
+                m = _re2.search(r'recupera\s+(\d+)\s*hp', desc)
+                if m:
+                    heal = int(m.group(1))
+                scope = "squad" if "todas" in desc else "self"
+                mods.append(Modifier(
+                    source_card_id=cid, hook="end_of_turn",
+                    effect_type="recover_hp", layer="self",
+                    params={"amount": heal, "scope": scope, "ability_type": ability.ability_type.name,
+                            "color_required": ability.color_required.value if ability.color_required else None,
+                            "formation_required": ability.formation_required},
+                ))
+            # Recover from graveyard
+            elif "descarte" in desc or "cementerio" in desc:
+                mods.append(Modifier(
+                    source_card_id=cid, hook="end_of_turn",
+                    effect_type="recover_graveyard", layer="self",
+                    params={"ability_type": ability.ability_type.name,
+                            "color_required": ability.color_required.value if ability.color_required else None,
+                            "formation_required": ability.formation_required},
+                ))
+            # Break enemy link
+            elif "vínculo" in desc:
+                mods.append(Modifier(
+                    source_card_id=cid, hook="end_of_turn",
+                    effect_type="break_enemy_link", layer="self",
+                    params={"count": 1, "ability_type": ability.ability_type.name,
+                            "color_required": ability.color_required.value if ability.color_required else None,
+                            "formation_required": ability.formation_required},
+                ))
+            # Bonus seals
+            elif "sello" in desc:
+                bonus = 5
+                m = _re2.search(r'\+(\d+)\s*sello', desc)
+                if m:
+                    bonus = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="end_of_turn",
+                    effect_type="bonus_seals", layer="self",
+                    params={"amount": bonus, "ability_type": ability.ability_type.name,
+                            "color_required": ability.color_required.value if ability.color_required else None,
+                            "formation_required": ability.formation_required},
+                ))
+
+        # ─── on_kill effects ───
+        if ability.trigger == "on_kill":
+            # Gain HP on kill: "gana +N HP"
+            if "gana" in desc and "hp" in desc:
+                hp_bonus = 1
+                m = _re2.search(r'\+(\d+)\s*hp', desc)
+                if m:
+                    hp_bonus = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_kill",
+                    effect_type="gain_hp_on_kill", layer="self",
+                    params={"amount": hp_bonus},
+                ))
+            # Enemy loses seals on kill: "pierde N sellos"
+            elif "pierde" in desc and "sello" in desc:
+                seal_loss = 2
+                m = _re2.search(r'pierde\s+(\d+)\s+sello', desc)
+                if m:
+                    seal_loss = int(m.group(1))
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_kill",
+                    effect_type="enemy_seal_loss_on_kill", layer="self",
+                    params={"amount": seal_loss},
+                ))
+            # Draw on kill: "roba"
+            elif "roba" in desc:
+                mods.append(Modifier(
+                    source_card_id=cid, hook="on_kill",
+                    effect_type="draw_on_kill", layer="self",
+                    params={"count": 1},
+                ))
 
         return mods
 
@@ -1661,15 +1804,31 @@ class GameState:
         player = self.active_player
         squads = self.network.find_squads(self.all_cards)
 
-        # Trigger start-of-turn abilities
-        for squad in squads:
-            for cid in squad.members:
-                card = self.all_cards.get(cid)
-                if not card or card.owner != player:
+        # ─── Dispatch start_of_turn modifiers ───
+        for mod in self._modifiers.get("start_of_turn", []):
+            card = self.all_cards.get(mod.source_card_id)
+            if not card or card.owner != player or not card.position or card.position[0] == -1:
+                continue
+            # Find which squad this card belongs to
+            card_squad = None
+            for sq in squads:
+                if card.card_id in sq.members:
+                    card_squad = sq
+                    break
+            if not card_squad:
+                continue
+            # Check COLOR/FORMATION requirements
+            params = mod.params
+            if params.get("ability_type") == "COLOR":
+                req_color = params.get("color_required")
+                if req_color and card_squad.get_dominant_color(self._get_color_overrides()).value != req_color:
                     continue
-                for ability in card.definition.abilities:
-                    if ability.trigger == "start_of_turn":
-                        self._resolve_ability(ability, card, squad, squads)
+            if params.get("ability_type") == "FORMATION":
+                req_form = params.get("formation_required")
+                if req_form and card_squad.squad_type.replace("_ampliado", "") != req_form:
+                    continue
+            # Execute effect
+            self._apply_trigger_modifier(mod, card, card_squad, squads)
 
         # Military faction: free ascension
         for squad in squads:
@@ -1741,15 +1900,31 @@ class GameState:
         self.phase = Phase.EXIT
         squads = self.network.find_squads(self.all_cards)
 
-        # End of turn triggers
-        for squad in squads:
-            for cid in squad.members:
-                card = self.all_cards.get(cid)
-                if not card or card.owner != player:
+        # ─── Dispatch end_of_turn modifiers ───
+        for mod in self._modifiers.get("end_of_turn", []):
+            card = self.all_cards.get(mod.source_card_id)
+            if not card or card.owner != player or not card.position or card.position[0] == -1:
+                continue
+            # Find which squad this card belongs to
+            card_squad = None
+            for sq in squads:
+                if card.card_id in sq.members:
+                    card_squad = sq
+                    break
+            if not card_squad:
+                continue
+            # Check COLOR/FORMATION requirements
+            params = mod.params
+            if params.get("ability_type") == "COLOR":
+                req_color = params.get("color_required")
+                if req_color and card_squad.get_dominant_color(self._get_color_overrides()).value != req_color:
                     continue
-                for ability in card.definition.abilities:
-                    if ability.trigger == "end_of_turn":
-                        self._resolve_ability(ability, card, squad, squads)
+            if params.get("ability_type") == "FORMATION":
+                req_form = params.get("formation_required")
+                if req_form and card_squad.squad_type.replace("_ampliado", "") != req_form:
+                    continue
+            # Execute effect
+            self._apply_trigger_modifier(mod, card, card_squad, squads)
 
         # Faction effects at end of turn
         for squad in squads:
@@ -2040,159 +2215,90 @@ class GameState:
         return random.choice(opponent_hand)
 
     # ═══════════════════════════════════════════════════════════════
-    # Helpers
+    # Trigger Modifier Dispatch
     # ═══════════════════════════════════════════════════════════════
 
-    def _resolve_ability(self, ability: Ability, card: CardInstance,
-                         squad: Squad, all_squads: list[Squad]):
-        """Try to resolve a card ability (passive triggers only)."""
-        # Check conditions
-        if ability.ability_type == AbilityType.COLOR:
-            if squad.get_dominant_color(self._get_color_overrides()) != ability.color_required:
-                return
-        if ability.ability_type == AbilityType.FORMATION:
-            if squad.squad_type.replace("_ampliado", "") != ability.formation_required:
-                return
-
-        desc = ability.description.lower()
+    def _apply_trigger_modifier(self, mod: Modifier, card: CardInstance,
+                                 squad: Squad, all_squads: list[Squad]):
+        """Execute a start_of_turn or end_of_turn modifier effect."""
+        effect_type = mod.effect_type
+        params = mod.params
         player = card.owner
 
-        # Execute based on trigger
-        if ability.trigger == "start_of_turn":
-            # ─── Draw ───
-            if "roba" in desc or "robo" in desc:
-                count = 1
-                import re
-                m = re.search(r'roba\s+(\d+)', desc)
-                if m:
-                    count = int(m.group(1))
-                for _ in range(count):
-                    extra = self._draw_card(player)
-                    if extra:
-                        self._log(f"  {card.definition.name}: +1 robo")
-                # Also handle "+1 robo extra" pattern
-                if "extra" in desc and count == 1:
-                    pass  # already drawn above
+        if effect_type == "draw":
+            count = params.get("count", 1)
+            total = 0
+            for _ in range(count):
+                drawn = self._draw_card(player)
+                if drawn:
+                    total += 1
+            self._log(f"  {card.definition.name}: +{total} robo(s)")
 
-            # ─── Scry / peek ───
-            elif "mira" in desc:
-                import re
-                count = 2
-                m = re.search(r'mira\s+(\d+)', desc)
-                if m:
-                    count = int(m.group(1))
-                top_cards = self.decks[player][-count:] if len(self.decks[player]) >= count else self.decks[player][:]
-                names = [c.definition.name for c in reversed(top_cards)]
-                self._log(f"  {card.definition.name}: mira top {len(names)}: {', '.join(names)}")
+        elif effect_type == "scry":
+            count = params.get("count", 2)
+            top_cards = self.decks[player][-count:] if len(self.decks[player]) >= count else self.decks[player][:]
+            names = [c.definition.name for c in reversed(top_cards)]
+            self._log(f"  {card.definition.name}: mira top {len(names)}: {', '.join(names)}")
 
-            # ─── Auto-ascend ───
-            elif "asciende" in desc or "ascender" in desc:
-                # Find a card to ascend in the same squad (or self)
-                target = card
+        elif effect_type == "auto_ascend":
+            target = card
+            for cid in squad.members:
+                c = self.all_cards.get(cid)
+                if c and c.position and c.position[1] < 3 and c.position[0] != -1:
+                    target = c
+                    break
+            err = self.ascend(player, target, free=True)
+            if not err:
+                self._log(f"  {card.definition.name}: asciende {target.definition.name} sin costo")
+
+        elif effect_type == "bonus_actions":
+            bonus = params.get("count", 1)
+            self.actions_remaining += bonus
+            self._log(f"  {card.definition.name}: +{bonus} acción(es) ({self.actions_remaining})")
+
+        elif effect_type == "free_link":
+            members = [self.all_cards.get(cid) for cid in squad.members
+                      if self.all_cards.get(cid) and self.all_cards[cid].owner == player]
+            linked = False
+            for i, ca in enumerate(members):
+                for cb in members[i+1:]:
+                    if ca and cb and not self.network.has_link(ca, cb) and self.network.can_link(ca) and self.network.can_link(cb):
+                        self.network.add_link(ca, cb)
+                        self._log(f"  {card.definition.name}: vínculo gratis {ca.definition.name} <-> {cb.definition.name}")
+                        linked = True
+                        break
+                if linked:
+                    break
+
+        elif effect_type == "recover_hp":
+            amount = params.get("amount", 1)
+            if params.get("scope") == "squad":
                 for cid in squad.members:
                     c = self.all_cards.get(cid)
-                    if c and c.position and c.position[1] < 3 and c.position[0] != -1:
-                        target = c
-                        break
-                err = self.ascend(player, target, free=True)
-                if not err:
-                    self._log(f"  {card.definition.name}: asciende {target.definition.name} sin costo")
+                    if c and c.owner == player:
+                        c.current_hp = min(c.current_hp + amount, c.definition.hp)
+                self._log(f"  {card.definition.name}: +{amount} HP a todo el escuadrón")
+            else:
+                card.current_hp = min(card.current_hp + amount, card.definition.hp)
+                self._log(f"  {card.definition.name}: recupera {amount} HP ({card.current_hp}/{card.definition.hp})")
 
-            # ─── +1 acción ───
-            elif "acción" in desc or "accion" in desc:
-                bonus = 1
-                import re
-                m = re.search(r'\+(\d+)\s*acci', desc)
-                if m:
-                    bonus = int(m.group(1))
-                self.actions_remaining += bonus
-                self._log(f"  {card.definition.name}: +{bonus} acción(es) ({self.actions_remaining})")
+        elif effect_type == "recover_graveyard":
+            if self.discard_piles[player]:
+                recovered = self.discard_piles[player].pop()
+                self.hands[player].append(recovered)
+                self._log(f"  {card.definition.name}: recupera {recovered.definition.name} del cementerio")
 
-            # ─── Free link ───
-            elif "vínculo" in desc and "gratis" in desc:
-                # Auto-link two cards in squad
-                members = [self.all_cards.get(cid) for cid in squad.members
-                          if self.all_cards.get(cid) and self.all_cards[cid].owner == player]
-                linked = False
-                for i, ca in enumerate(members):
-                    for cb in members[i+1:]:
-                        if ca and cb and not self.network.has_link(ca, cb) and self.network.can_link(ca) and self.network.can_link(cb):
-                            self.network.add_link(ca, cb)
-                            self._log(f"  {card.definition.name}: vínculo gratis {ca.definition.name} <-> {cb.definition.name}")
-                            linked = True
-                            break
-                    if linked:
-                        break
+        elif effect_type == "break_enemy_link":
+            self._log(f"  {card.definition.name}: +{params.get('count', 1)} vínculo enemigo destruible")
 
-        elif ability.trigger == "end_of_turn":
-            # ─── Heal self / ally ───
-            if "recupera" in desc and "hp" in desc:
-                import re
-                heal = 1
-                m = re.search(r'recupera\s+(\d+)\s*hp', desc)
-                if m:
-                    heal = int(m.group(1))
-                # "a todas las cartas de tu red" or "a todas las cartas de tu escuadrón"
-                if "todas" in desc:
-                    for cid in squad.members:
-                        c = self.all_cards.get(cid)
-                        if c and c.owner == player:
-                            c.current_hp = min(c.current_hp + heal, c.definition.hp)
-                    self._log(f"  {card.definition.name}: +{heal} HP a todo el escuadrón")
-                else:
-                    card.current_hp = min(card.current_hp + heal, card.definition.hp)
-                    self._log(f"  {card.definition.name}: recupera {heal} HP ({card.current_hp}/{card.definition.hp})")
+        elif effect_type == "bonus_seals":
+            amount = params.get("amount", 5)
+            self.seals[player] += amount
+            self._log(f"  {card.definition.name}: +{amount} sellos ({self.seals[player]})")
 
-            # ─── Recover from graveyard ───
-            elif "descarte" in desc or "cementerio" in desc:
-                if self.discard_piles[player]:
-                    recovered = self.discard_piles[player].pop()
-                    self.hands[player].append(recovered)
-                    self._log(f"  {card.definition.name}: recupera {recovered.definition.name} del cementerio")
-
-            # ─── Vínculo enemigo destruible ───
-            elif "vínculo" in desc:
-                self._log(f"  {card.definition.name}: +1 vínculo enemigo destruible")
-
-            # ─── Sellos adicionales (individual cards) ───
-            elif "sello" in desc:
-                import re
-                bonus = 5
-                m = re.search(r'\+(\d+)\s*sello', desc)
-                if m:
-                    bonus = int(m.group(1))
-                self.seals[player] += bonus
-                self._log(f"  {card.definition.name}: +{bonus} sellos ({self.seals[player]})")
-
-        elif ability.trigger == "on_kill":
-            # ─── Gain HP on kill ───
-            if "gana" in desc and "hp" in desc:
-                import re
-                hp_bonus = 1
-                m = re.search(r'\+(\d+)\s*hp', desc)
-                if m:
-                    hp_bonus = int(m.group(1))
-                card.current_hp += hp_bonus
-                self._log(f"  {card.definition.name}: +{hp_bonus} HP por destrucción ({card.current_hp})")
-
-            # ─── Enemy loses seals on kill ───
-            elif "pierde" in desc and "sello" in desc:
-                import re
-                seal_loss = 2
-                m = re.search(r'pierde\s+(\d+)\s+sello', desc)
-                if m:
-                    seal_loss = int(m.group(1))
-                enemy = 1 - player
-                self.seals[enemy] = max(0, self.seals[enemy] - seal_loss)
-                self._log(f"  {card.definition.name}: enemigo pierde {seal_loss} sellos ({self.seals[enemy]})")
-                if self.seals[enemy] <= 0:
-                    self._end_game(player)
-
-            # ─── Draw on kill ───
-            elif "roba" in desc:
-                extra = self._draw_card(player)
-                if extra:
-                    self._log(f"  {card.definition.name}: +1 robo por destrucción")
+    # ═══════════════════════════════════════════════════════════════
+    # Helpers
+    # ═══════════════════════════════════════════════════════════════
 
     def _destroy_card(self, card: CardInstance, killer: Optional[CardInstance] = None):
         # ─── before_destroy hook ───
@@ -2223,19 +2329,38 @@ class GameState:
         if card.card_id in self._attached:
             del self._attached[card.card_id]
 
-        # Trigger on_kill abilities for the killer
+        # ─── Dispatch on_kill modifiers for the killer ───
         if killer:
             squads = self.network.find_squads(self.all_cards)
-            for squad in squads:
-                if killer.card_id in squad.members:
-                    for cid in squad.members:
-                        c = self.all_cards.get(cid)
-                        if not c or c.owner != killer.owner:
-                            continue
-                        for ability in c.definition.abilities:
-                            if ability.trigger == "on_kill":
-                                self._resolve_ability(ability, c, squad, squads)
-                    break
+            for mod in self._modifiers.get("on_kill", []):
+                c = self.all_cards.get(mod.source_card_id)
+                if not c or c.owner != killer.owner or not c.position or c.position[0] == -1:
+                    continue
+                # Find the killer's squad
+                killer_squad = None
+                for sq in squads:
+                    if killer.card_id in sq.members and c.card_id in sq.members:
+                        killer_squad = sq
+                        break
+                if not killer_squad:
+                    continue
+                # Execute the on_kill effect
+                effect_type = mod.effect_type
+                player = killer.owner
+                if effect_type == "gain_hp_on_kill":
+                    c.current_hp += mod.params.get("amount", 1)
+                    self._log(f"  {c.definition.name}: +{mod.params.get('amount', 1)} HP por destrucción ({c.current_hp})")
+                elif effect_type == "enemy_seal_loss_on_kill":
+                    enemy = 1 - player
+                    amount = mod.params.get("amount", 2)
+                    self.seals[enemy] = max(0, self.seals[enemy] - amount)
+                    self._log(f"  {c.definition.name}: enemigo pierde {amount} sellos ({self.seals[enemy]})")
+                    if self.seals[enemy] <= 0:
+                        self._end_game(player)
+                elif effect_type == "draw_on_kill":
+                    extra = self._draw_card(player)
+                    if extra:
+                        self._log(f"  {c.definition.name}: +1 robo por destrucción")
 
         # ─── after_destroy hook ───
         # Transfer links from destroyed card to another
