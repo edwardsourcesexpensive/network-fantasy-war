@@ -333,6 +333,60 @@ class GameState:
         for hook_list in self._modifiers.values():
             hook_list[:] = [m for m in hook_list if not m.is_temporary]
 
+    def _evaluate_condition(self, condition: dict, source: CardInstance) -> bool:
+        """Evaluate a modifier condition against current game state.
+
+        Supported conditions:
+          - positional: {"type": "layer", "value": 1..3}
+          - positional: {"type": "frontier"}
+          - formation: {"type": "formation", "shape": "triangle"|"square"|"pentagon"}
+          - network: {"type": "links", "min": N}
+          - state: {"type": "damaged_this_turn"}
+          - turn: {"type": "once_per_game", "used_set": set()}
+        Returns True if condition is met or if no condition is set.
+        """
+        if not condition:
+            return True
+
+        ctype = condition.get("type")
+
+        # ─── Positional: layer ───
+        if ctype == "layer":
+            if not source.position or source.position[0] == -1:
+                return False
+            return source.position[1] == condition.get("value", 1)
+
+        # ─── Positional: frontier ───
+        if ctype == "frontier":
+            return source.position and source.position[0] == -1
+
+        # ─── Formation ───
+        if ctype == "formation":
+            shape = condition.get("shape", "triangle")
+            squads = self.get_player_squads(source.owner)
+            for sq in squads:
+                if source.card_id in sq.members and sq.squad_type.replace("_ampliado", "") == shape:
+                    return True
+            return False
+
+        # ─── Network: link count ───
+        if ctype == "links":
+            count = self.network.link_count(source)
+            min_links = condition.get("min", 1)
+            return count >= min_links
+
+        # ─── State ───
+        if ctype == "damaged_this_turn":
+            return getattr(source, '_damaged_this_turn', False)
+
+        # ─── Turn ───
+        if ctype == "once_per_game":
+            used = condition.get("used_set", set())
+            return source.card_id not in used
+
+        # Unknown condition type — assume met
+        return True
+
     # ═══════════════════════════════════════════════════════════════
     # Modifier Engine
     # ═══════════════════════════════════════════════════════════════
@@ -367,6 +421,27 @@ class GameState:
         cid = card.card_id
         mods = []
 
+        # ─── Extract conditions from description ───
+        condition = {}
+        # Formation: "En triángulo/cuadrado/pentágono"
+        import re as _re2
+        for shape in ["triángulo", "triangulo", "cuadrado", "cuadrilátero", "cuadrilatero", "pentágono", "pentagono"]:
+            if f"en {shape}" in desc:
+                shape_clean = shape.replace("á", "a").replace("í", "i")
+                condition = {"type": "formation", "shape": shape_clean}
+                break
+        # Layer: "Si está en L1/L2/L3" or "Mientras esté en L1/L2/L3"
+        layer_match = _re2.search(r'(?:si está|mientras esté|está)\s+en\s+[Ll](\d)', desc)
+        if layer_match:
+            condition = {"type": "layer", "value": int(layer_match.group(1))}
+        # Frontier: "En frontera"
+        if "en frontera" in desc:
+            condition = {"type": "frontier"}
+        # Links: "mientras tenga 1+ vínculos"
+        link_match = _re2.search(r'(\d+)\+?\s*vínculo', desc)
+        if link_match:
+            condition = {"type": "links", "min": int(link_match.group(1))}
+
         # ─── modify_squad effects ───
         # "Incoloro: no cuenta para la mayoría de color de ningún escuadrón"
         if "no cuenta para la mayoría de color" in desc:
@@ -375,6 +450,7 @@ class GameState:
                 hook="modify_squad",
                 effect_type="ignore_color",
                 layer="self",
+                params={"condition": condition} if condition else {},
             ))
 
         # "En cuadrado Guerrero: los Guerreros ignoran restricciones de formación"
@@ -450,7 +526,7 @@ class GameState:
                     hook="modify_damage",
                     effect_type="damage_bonus",
                     layer="self",
-                    params={"delta": delta},
+                    params={"delta": delta, "condition": condition} if condition else {"delta": delta},
                 ))
 
         # ─── grimoire_defense effects ───
@@ -463,7 +539,7 @@ class GameState:
                 hook="grimoire_defense",
                 effect_type="max_seal_loss",
                 layer="self",
-                params={"max": cap},
+                params={"max": cap, "condition": condition} if condition else {"max": cap},
             ))
 
         # "grimorio tiene +N de defensa contra ataques directos"
@@ -475,7 +551,7 @@ class GameState:
                 hook="grimoire_defense",
                 effect_type="grimoire_armor",
                 layer="self",
-                params={"armor": armor},
+                params={"armor": armor, "condition": condition} if condition else {"armor": armor},
             ))
 
         # ─── before_link effects ───
@@ -1838,7 +1914,10 @@ class GameState:
             if not source_card or source_card.owner != attacker:
                 continue
             if mod.effect_type == "damage_bonus":
-                # Check condition: is source in attacking squad?
+                # Check condition + squad membership
+                condition = mod.params.get("condition", {})
+                if not self._evaluate_condition(condition, source_card):
+                    continue
                 if mod.source_card_id in attacking_squad.members:
                     total_damage += mod.params.get("delta", 0)
 
