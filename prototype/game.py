@@ -928,8 +928,17 @@ class GameState:
                 if match:
                     seal_count = int(match.group(1))
                 self.seals[player] += seal_count
+                # Also check for "pierde N sello" in the same ability
+                lose_match = re.search(r'pierde\s+(\d+)\s+sello', desc_lower)
+                if lose_match:
+                    lose = int(lose_match.group(1))
+                    enemy = 1 - player
+                    self.seals[enemy] = max(0, self.seals[enemy] - lose)
                 self.actions_remaining -= cost
-                self._log(f"  {card.definition.name}: usa habilidad → +{seal_count} sellos ({self.seals[player]})")
+                if lose_match:
+                    self._log(f"  {card.definition.name}: usa habilidad → +{seal_count} sellos, enemigo -{lose} sellos ({self.seals[player]} / {self.seals[enemy]})")
+                else:
+                    self._log(f"  {card.definition.name}: usa habilidad → +{seal_count} sellos ({self.seals[player]})")
                 return None
 
             # ─── Repair seals ───
