@@ -56,6 +56,8 @@ def _deck_muro() -> list[CardDef]:
         *_get("Coloso Anclado", 2),
         *_get("Ingeniero de Retaguardia", 2),
         *_get("Mercenario Leal", 2),
+        *_get("Mercenario sin Bandera", 1),   # Fase E1: ignore_color test
+        *_get("Conducto Primario", 1),        # Fase E1: logistron_multiplier test
         # Logistrones
         *_get("Núcleo de Enlace", 3),
         *_get("Nodo Ancla", 2),

@@ -309,6 +309,30 @@ class GameState:
     def _log(self, msg: str):
         self.log.append(msg)
 
+    def _get_color_overrides(self) -> dict[int, Color]:
+        """Merge _temp_colors with modifier-based color overrides.
+
+        Modifiers with effect_type='color_override' on hook='modify_squad'
+        provide permanent color changes; _temp_colors handles temporary
+        color swaps from active abilities.
+        """
+        overrides = dict(self._temp_colors)
+        for mod in self._modifiers.get("modify_squad", []):
+            if mod.effect_type == "color_override":
+                overrides[mod.source_card_id] = mod.params["color"]
+        return overrides
+
+    def _register_temp_modifier(self, mod: Modifier):
+        """Register a temporary modifier (cleaned in exit_phase)."""
+        mod.is_temporary = True
+        if mod.hook in self._modifiers:
+            self._modifiers[mod.hook].append(mod)
+
+    def _unregister_temp_modifiers(self):
+        """Remove all temporary modifiers (called in exit_phase)."""
+        for hook_list in self._modifiers.values():
+            hook_list[:] = [m for m in hook_list if not m.is_temporary]
+
     # ═══════════════════════════════════════════════════════════════
     # Modifier Engine
     # ═══════════════════════════════════════════════════════════════
@@ -884,10 +908,18 @@ class GameState:
                 target_card = get_target_card("target_id")
                 if not target_card:
                     return "Selecciona una segunda carta para intercambiar colores."
-                color_a = self._temp_colors.get(card.card_id, card.definition.color)
-                color_b = self._temp_colors.get(target_card.card_id, target_card.definition.color)
+                color_a = self._get_color_overrides().get(card.card_id, card.definition.color)
+                color_b = self._get_color_overrides().get(target_card.card_id, target_card.definition.color)
                 self._temp_colors[card.card_id] = color_b
                 self._temp_colors[target_card.card_id] = color_a
+                # Also register as temp modifiers
+                from .card import Color as C
+                self._register_temp_modifier(Modifier(
+                    source_card_id=card.card_id, hook="modify_squad",
+                    effect_type="color_override", params={"color": color_b}, layer="self"))
+                self._register_temp_modifier(Modifier(
+                    source_card_id=target_card.card_id, hook="modify_squad",
+                    effect_type="color_override", params={"color": color_a}, layer="self"))
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: intercambia colores con {target_card.definition.name}")
                 return None
@@ -1012,6 +1044,10 @@ class GameState:
                     # Generic "cambia el color" — default to player's choice (just pick Incoloro)
                     new_color_str = CardColor.INCOLORO
                 self._temp_colors[target_card.card_id] = new_color_str
+                # Also register as temp modifier
+                self._register_temp_modifier(Modifier(
+                    source_card_id=target_card.card_id, hook="modify_squad",
+                    effect_type="color_override", params={"color": new_color_str}, layer="self"))
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: cambia color de {target_card.definition.name} a {new_color_str.value}")
                 return None
@@ -1032,6 +1068,10 @@ class GameState:
                         break
                 for cid in squads[squad_idx].members:
                     self._temp_colors[cid] = new_color
+                    # Also register as temp modifier
+                    self._register_temp_modifier(Modifier(
+                        source_card_id=cid, hook="modify_squad",
+                        effect_type="color_override", params={"color": new_color}, layer="self"))
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: escuadrón se considera {new_color.value}")
                 return None
@@ -1359,7 +1399,7 @@ class GameState:
 
         # Military faction: free ascension
         for squad in squads:
-            if squad.get_dominant_color(self._temp_colors) == Color.MILITAR:
+            if squad.get_dominant_color(self._get_color_overrides()) == Color.MILITAR:
                 # Find a card to ascend
                 for cid in squad.members:
                     card = self.all_cards.get(cid)
@@ -1375,7 +1415,7 @@ class GameState:
         # Sabios: extra draw per sage squad
         extra_draws = 0
         for squad in squads:
-            if squad.get_dominant_color(self._temp_colors) == Color.SABIO:
+            if squad.get_dominant_color(self._get_color_overrides()) == Color.SABIO:
                 extra_draws += 1
                 # Archivera bonus
                 for cid in squad.members:
@@ -1415,7 +1455,7 @@ class GameState:
                     del self._attached[parasite_id]
         # Politicos: swap positions
         for squad in squads:
-            if squad.get_dominant_color(self._temp_colors) == Color.POLITICO:
+            if squad.get_dominant_color(self._get_color_overrides()) == Color.POLITICO:
                 self._log(f"  [Político] Puedes intercambiar posiciones de 2 cartas por escuadrón.")
 
     def start_attack_phase(self):
@@ -1439,7 +1479,7 @@ class GameState:
 
         # Faction effects at end of turn
         for squad in squads:
-            dom = squad.get_dominant_color(self._temp_colors)
+            dom = squad.get_dominant_color(self._get_color_overrides())
             if dom == Color.SELLADOR:
                 bonus = 10
                 # Abadesa bonus
@@ -1496,6 +1536,9 @@ class GameState:
 
         # Clear temporary colors
         self._temp_colors = {}
+
+        # Clear temporary modifiers
+        self._unregister_temp_modifiers()
 
         # Dissolve temporary links
         for a, b in list(self._temp_links):
@@ -1580,16 +1623,16 @@ class GameState:
                 # Temp buff D bonus
                 extra += self.get_temp_buff_bonus(card.card_id)
                 # Guerrero faction: +1 per node in L2/L3
-                if attacking_squad.get_dominant_color(self._temp_colors) == Color.GUERRERO:
+                if attacking_squad.get_dominant_color(self._get_color_overrides()) == Color.GUERRERO:
                     if card.position and card.position[1] >= 2:
                         extra += 1
                 # Naturaleza faction: units give +1 damage and +1 pot
-                if attacking_squad.get_dominant_color(self._temp_colors) == Color.NATURALEZA:
+                if attacking_squad.get_dominant_color(self._get_color_overrides()) == Color.NATURALEZA:
                     extra += 1
                     pot += 1
 
         # Check for Guardián del Bosque (Naturaleza triangle)
-        if attacking_squad.squad_type == "triangle" and attacking_squad.get_dominant_color(self._temp_colors) == Color.NATURALEZA:
+        if attacking_squad.squad_type == "triangle" and attacking_squad.get_dominant_color(self._get_color_overrides()) == Color.NATURALEZA:
             for cid in attacking_squad.members:
                 card = self.all_cards.get(cid)
                 if card and "Guardián" in card.definition.name:
@@ -1609,7 +1652,7 @@ class GameState:
             def_pot = calculate_potenciamiento(defending_squad, all_squads, self.network, self.all_cards) // 2
             # Festivo: +2 armor to links
             armor = 0
-            if defending_squad.get_dominant_color(self._temp_colors) == Color.FESTIVO:
+            if defending_squad.get_dominant_color(self._get_color_overrides()) == Color.FESTIVO:
                 armor = 2
             # Danzante makes links unbreakable (armor boost)
             for cid in defending_squad.members:
@@ -1693,7 +1736,7 @@ class GameState:
         """Try to resolve a card ability (passive triggers only)."""
         # Check conditions
         if ability.ability_type == AbilityType.COLOR:
-            if squad.get_dominant_color(self._temp_colors) != ability.color_required:
+            if squad.get_dominant_color(self._get_color_overrides()) != ability.color_required:
                 return
         if ability.ability_type == AbilityType.FORMATION:
             if squad.squad_type.replace("_ampliado", "") != ability.formation_required:
@@ -1949,7 +1992,7 @@ class GameState:
             return
         for i, s in enumerate(squads):
             names = [self.all_cards[cid].definition.name for cid in s.members if self.all_cards.get(cid)]
-            dom = s.get_dominant_color(self._temp_colors)
+            dom = s.get_dominant_color(self._get_color_overrides())
             color_str = dom.value if dom else "incoloro"
             print(f"  [{i}] {s.squad_type} | color: {color_str} | daño base: {s.base_damage} | potenciamiento: {s.empowerment}")
             print(f"      Miembros: {', '.join(names)}")
