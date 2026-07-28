@@ -320,7 +320,7 @@ def api_action():
                     break
                 err = game.attack(squad, 'grimoire')
                 if err is None:
-                    result["log"].append(f"AI ataca grimorio con escuadron {sq_idx} ({squad.type})")
+                    result["log"].append(f"AI ataca grimorio con escuadron {sq_idx} ({squad.squad_type})")
                     if game.game_over:
                         break
         
