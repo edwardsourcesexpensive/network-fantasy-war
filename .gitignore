@@ -3,3 +3,9 @@ __pycache__/
 _*.pdf
 *.zip
 .DS_Store
+# Untracked project assets
+Network Fantasy War.docx
+Reglas-NFW-v2.pdf
+cards-*.md
+nfw-railway-fail.png
+precon-decks.md
