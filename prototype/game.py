@@ -110,6 +110,12 @@ def ability_implementation_status(ability: Ability) -> str:
             ("busca", "reserva" in desc and "mano" in desc),
             ("cambia", "territorio" in desc),
             ("meridiano temporal", True),
+            # Phase I additions
+            ("crea una copia", True),
+            ("copia una habilidad", True),
+            ("niega un efecto", True),
+            ("ataque a otro", "enemig" in desc),
+            ("toma control", "escuadrón" in desc),
         ]
         for kw, cond in implemented_kw:
             if kw in desc and cond:
@@ -341,6 +347,11 @@ class GameState:
         # Phase G flags
         self._block_enemy_formation: bool = False
         self._grave_play: dict[int, bool] = {0: False, 1: False}
+
+        # Phase I infrastructure
+        self.effect_stack: list[dict] = []  # [{source, target, effect_type, params}]
+        self._mind_controlled: dict[int, int] = {}  # card_id -> original_owner
+        self._negate_next: bool = False  # Árbitro del Juego
 
         # Attacked squads this turn
         self._attacked_squads: set[int] = set()  # squad hashes
@@ -1321,6 +1332,12 @@ class GameState:
         if err:
             return err
 
+        # Árbitro del Juego: negate enemy effect
+        if player != self.active_player and self._negate_next:
+            self._negate_next = False
+            self._log(f"  {card.definition.name}: efecto negado por Árbitro del Juego")
+            return None
+
         active_abilities = [a for a in card.definition.abilities
                            if a.ability_type.name == 'ACTIVE']
         ability = active_abilities[ability_index]
@@ -2227,6 +2244,108 @@ class GameState:
                 self._temp_meridians = getattr(self, '_temp_meridians', 0) + 1
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: +1 meridiano temporal (total: {self._temp_meridians})")
+                return None
+
+            # ─── I1: Magnum Opus — clone card ───
+            if "crea una copia" in desc_lower or ("copia" in desc_lower and "carta" in desc_lower):
+                target_card = get_target_card("target_id")
+                if target_card:
+                    new_id = max(self.all_cards.keys()) + 1 if self.all_cards else 10000
+                    clone = target_card.clone(new_id, player)
+                    self.all_cards[new_id] = clone
+                    # Place in first free cell
+                    placed = False
+                    for li in range(3):
+                        for m in range(15):
+                            if self.board.cells[player][li][m] is None:
+                                self.board.cells[player][li][m] = new_id
+                                clone.position = (player, li+1, m)
+                                placed = True
+                                break
+                        if placed:
+                            break
+                    if placed:
+                        self._log(f"  {card.definition.name}: crea copia de {target_card.definition.name} en L{clone.position[1]}")
+                    else:
+                        self._log(f"  {card.definition.name}: no hay espacio para la copia")
+                self.actions_remaining -= cost
+                return None
+
+            # ─── I2: Falsificador de Órdenes — force enemy attack ───
+            if "ataque a otro" in desc_lower and "enemig" in desc_lower:
+                enemy = 1 - player
+                target_card = get_target_card("target_id")
+                if target_card:
+                    attacker_squad = self.network.find_squads(self.all_cards).get(target_card.card_id)
+                    if attacker_squad:
+                        # Pick another enemy squad as target
+                        for cid2, squad2 in self.network.find_squads(self.all_cards).items():
+                            card2 = self.all_cards.get(cid2)
+                            if card2 and card2.owner == enemy and squad2 is not attacker_squad:
+                                # Force attack: attacker squad damages defender squad
+                                atk_dmg = sum(self.all_cards[cid].definition.damage for cid in attacker_squad.members if self.all_cards.get(cid))
+                                for cid in squad2.members:
+                                    mem = self.all_cards.get(cid)
+                                    if mem:
+                                        mem.current_hp -= max(1, atk_dmg)
+                                        self._log(f"  {mem.definition.name}: -{max(1,atk_dmg)} HP (ataque forzado)")
+                                self._log(f"  {card.definition.name}: escuadrón enemigo ataca a otro escuadrón enemigo")
+                                break
+                self.actions_remaining -= cost
+                return None
+
+            # ─── I3: Árbitro del Juego — negate next effect ───
+            if "niega un efecto" in desc_lower and "active" in desc_lower:
+                self._negate_next = True
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: próximo efecto enemigo será negado")
+                return None
+
+            # ─── I4: Polinizadora — copy ally ability ───
+            if "copia una habilidad" in desc_lower:
+                target_card = get_target_card("target_id")
+                if target_card and target_card.owner == player:
+                    if target_card.definition.abilities:
+                        # Copy first non-on_enter ability
+                        for ab in target_card.definition.abilities:
+                            if ab.trigger != "on_enter":
+                                # Register as temp modifier that re-applies the effect
+                                self._register_temp_modifier(Modifier(
+                                    source_card_id=card.card_id, hook="start_of_turn",
+                                    effect_type="copied_ability", layer="self",
+                                    params={"desc": ab.description, "source": target_card.definition.name}))
+                                self._log(f"  {card.definition.name}: copia habilidad de {target_card.definition.name}: {ab.description[:40]}")
+                                break
+                self.actions_remaining -= cost
+                return None
+
+            # ─── I5: Titiritero — mind control enemy squad ───
+            if "toma control" in desc_lower and "escuadrón" in desc_lower:
+                target_card = get_target_card("target_id")
+                if target_card and target_card.owner != player:
+                    squad = self.network.find_squads(self.all_cards).get(target_card.card_id)
+                    if squad:
+                        for cid in list(squad.members):
+                            mem = self.all_cards.get(cid)
+                            if mem:
+                                old_owner = mem.owner
+                                self._mind_controlled[cid] = old_owner
+                                mem.owner = player
+                                # Break enemy links
+                                if cid in self.network.nodes:
+                                    for neighbor in list(self.network.nodes[cid].connected):
+                                        self.network.remove_link(cid, neighbor)
+                                # Move to player cells
+                                if mem.position:
+                                    p, li_old, m = mem.position
+                                    self.board.cells[old_owner][li_old-1][m] = None
+                                    for li_new in range(3):
+                                        if self.board.cells[player][li_new][m] is None:
+                                            self.board.cells[player][li_new][m] = cid
+                                            mem.position = (player, li_new+1, m)
+                                            break
+                        self._log(f"  {card.definition.name}: toma control del escuadrón de {target_card.definition.name}")
+                self.actions_remaining -= cost
                 return None
 
             # ─── Fallback: ability not yet implemented ───

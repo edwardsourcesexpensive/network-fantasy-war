@@ -76,6 +76,13 @@ class CardInstance:
     def is_alive(self):
         return self.current_hp > 0
 
+    def clone(self, new_card_id: int, new_owner: int) -> "CardInstance":
+        """Deep clone for Magnum Opus."""
+        import copy
+        cloned = CardInstance(new_card_id, copy.deepcopy(self.definition), new_owner)
+        cloned.current_hp = self.current_hp
+        return cloned
+
 
 # ═══════════════════════════════════════════════════════════════
 # Complete 40-Card Set
