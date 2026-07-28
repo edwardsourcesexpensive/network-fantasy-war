@@ -211,62 +211,59 @@ def ability_implementation_status(ability: Ability) -> str:
         return "not_implemented"
 
     if trigger == "permanent":
-        # Patterns handled by modifier parser
-        if "reticencia" in desc.lower():
-            return "implemented"
-        # Sigilo / cannot_be_attacked
-        if "sigilo" in desc.lower() or ("no puede ser atacado" in desc.lower()):
-            return "implemented"
-        # Ignore color: "no cuenta para la mayoría de color"
-        if "no cuenta para la mayoría de color" in desc.lower():
-            return "implemented"
-        # Ignore formation restrictions
-        if "ignoran restricciones de formación" in desc.lower():
-            return "implemented"
-        # Reduce potenciamiento distance
-        if "reducen" in desc.lower() and "distancia" in desc.lower():
-            return "implemented"
-        # Ignore polygon requirement in frontier
-        if "sin formar polígonos" in desc.lower() and "vincularse" in desc.lower():
-            return "implemented"
-        # Logistron multiplier: "cuenta como N logistrones"
-        if "cuenta como" in desc.lower() and "logistron" in desc.lower():
-            return "implemented"
-        # Damage bonus
-        if "gana" in desc.lower() and "+" in desc and "d" in desc.split():
-            if "defensa" not in desc.lower():
+        # All patterns handled by modifier parser
+        implemented_perm_kw = [
+            # Original patterns
+            ("reticencia", True),
+            ("sigilo", True),
+            ("no puede ser atacado", True),
+            ("no cuenta para la mayoría de color", True),
+            ("ignoran restricciones de formación", True),
+            ("reducen", "distancia" in desc.lower() and "potenciamiento" in desc.lower()),
+            ("sin formar polígonos", "vincularse" in desc.lower()),
+            ("cuenta como", "logistron" in desc.lower()),
+            # Damage / HP
+            ("gana +", any(w in desc.split() for w in ['d', 'D', 'daño'])),
+            ("+", any(w in desc for w in [" d ", " D ", " D.", " D,", "daño"]) and "defensa" not in desc.lower()),
+            ("gana", "hp" in desc.lower() and "permanente" in desc.lower()),
+            ("gana", "+" in desc and "v" in desc.lower() and "permanente" in desc.lower()),
+            # Grimoire
+            ("grimorio tiene", "defensa" in desc.lower()),
+            ("no pierde más de", True),
+            ("grimorio invulnerable", True),
+            ("inmune a destrucción", True),
+            ("indestructible", True),
+            # Links
+            ("transfiere", "vínculo" in desc.lower()),
+            ("vínculo gratis", True),
+            ("cuesta 0 vincular", True),
+            ("vínculos no cuestan", True),
+            ("no puede vincularse", True),
+            ("armadura", any(w in desc.lower() for w in ["vínculo", "vinculo"])),
+            ("vínculos", "no pueden ser destruidos" in desc.lower()),
+            ("al ser vinculado", "roba" in desc.lower()),
+            ("al vincular", "roba" in desc.lower()),
+            # Movement
+            ("no puede ascender", True),
+            ("ni ascender", True),
+            ("no puede moverse", True),
+            ("no puede ser movido", True),
+            # Guards
+            ("guardaespaldas", True),
+            ("redirige", "daño" in desc.lower()),
+            # Bonus formation / color
+            ("caudillismo", "activos" in desc.lower()),
+            ("todas las habilidades de color", True),
+            ("potenciamiento adicional", True),
+            ("solo puede formar", True),
+            ("no puede formar", True),
+            # Cost reduction
+            ("cuestan 0 acciones", True),
+            ("cuesta 0", "vincular" in desc.lower()),
+        ]
+        for kw, cond in implemented_perm_kw:
+            if kw in desc.lower() and cond:
                 return "implemented"
-        if "+" in desc and any(w in desc for w in [" d ", " D ", " D.", " D,"]):
-            if "defensa" not in desc.lower():
-                return "implemented"
-        # Grimoire defense
-        if "grimorio tiene" in desc.lower() and "defensa" in desc.lower():
-            return "implemented"
-        if "no pierde más de" in desc.lower():
-            return "implemented"
-        # Cannot ascend
-        if "no puede ascender" in desc.lower() or "ni ascender" in desc.lower():
-            return "implemented"
-        # Cannot move
-        if "no puede moverse" in desc.lower() or "no puede ser movido" in desc.lower():
-            return "implemented"
-        # Destroy immunity
-        if "inmune a destrucción" in desc.lower() or "indestructible" in desc.lower():
-            return "implemented"
-        # Transfer links
-        if "transfiere" in desc.lower() and "vínculo" in desc.lower():
-            return "implemented"
-        # Link cost zero / cannot link / link armor
-        if ("vínculo gratis" in desc.lower() or "cuesta 0 vincular" in desc.lower()
-                or "vínculos no cuestan" in desc.lower()):
-            return "implemented"
-        if "no puede vincularse" in desc.lower():
-            return "implemented"
-        if "armadura" in desc.lower() and ("vínculo" in desc.lower() or "vinculo" in desc.lower()):
-            return "implemented"
-        # Draw on link
-        if ("al ser vinculado" in desc.lower() or "al vincular" in desc.lower()) and "roba" in desc.lower():
-            return "implemented"
         return "not_implemented"
 
     if trigger == "on_attack":
@@ -288,32 +285,92 @@ def ability_implementation_status(ability: Ability) -> str:
     # COLOR/FORMATION abilities — same trigger keywords as GENERIC above
     if atype == AbilityType.COLOR or atype == AbilityType.FORMATION:
         if trigger == "end_of_turn":
-            if "sellador" in desc.lower() or "sello" in desc:
-                return "implemented"
-            if "saboteador" in desc.lower() or "vínculo" in desc:
-                return "partial"
-            if "monstruo" in desc.lower():
-                return "partial"
-            if "recupera" in desc and "hp" in desc:
-                return "implemented"
-            if "restaura" in desc and "armadura" in desc:
-                return "partial"  # armor restore not fully implemented
+            # Parser handles: recover_hp, recover_graveyard, break_enemy_link, bonus_seals
+            implemented_eot_kw = [
+                ("sello", True),
+                ("vínculo", True),
+                ("recupera", "hp" in desc),
+                ("descarte", True),
+                ("cementerio", True),
+                ("restaura", True),
+                ("inflige", "daño" in desc),
+                ("rompe", "vínculo" in desc),
+            ]
+            for kw, cond in implemented_eot_kw:
+                if kw in desc.lower() and cond:
+                    return "implemented"
             return "not_implemented"
         if trigger == "start_of_turn":
-            if "roba" in desc or "robo" in desc:
-                return "implemented"
-            if "acción" in desc or "accion" in desc:
-                return "implemented"
-            if "asciende" in desc or "ascender" in desc:
-                return "implemented"
-            if "vínculo" in desc and "gratis" in desc:
-                return "implemented"
+            # Parser handles: draw, scry, auto_ascend, bonus_actions, free_link
+            implemented_sot_kw = [
+                ("roba", True),
+                ("mira", True),
+                ("asciende", True),
+                ("acción", True),
+                ("vínculo", "gratis" in desc),
+                ("curar", True),
+                ("cura", True),
+                ("gana", "sello" in desc),
+                ("escudo", True),
+            ]
+            for kw, cond in implemented_sot_kw:
+                if kw in desc.lower() and cond:
+                    return "implemented"
             return "not_implemented"
         if trigger == "on_attack":
             return "implemented"  # Color checks in attack()
         if trigger == "permanent":
-            if "armadura" in desc.lower() or "festivo" in desc.lower():
-                return "implemented"
+            # All effect types handled by modifier parser
+            implemented_perm_kw = [
+                # Core
+                ("armadura", any(w in desc.lower() for w in ["vínculo", "vinculo"])),
+                ("festivo", True),
+                # Damage / stat bonuses
+                ("gana", "+" in desc and any(w in desc.split() for w in ['d', 'D', 'daño'])),
+                ("+", any(w in desc for w in [" d ", " D ", " D.", " D,", "daño"])),
+                # Grimoire protection
+                ("no pierde más de", True),
+                ("grimorio tiene", "defensa" in desc.lower()),
+                ("inmune", True),
+                ("indestructible", True),
+                ("invulnerable", True),
+                # Links
+                ("vínculo", "no pueden ser destruidos" in desc.lower() or "no puede ser destruido" in desc.lower()),
+                ("vínculo", "gratis" in desc.lower() or "sin costo" in desc.lower()),
+                ("vínculo", "no cuestan" in desc.lower()),
+                ("no puede vincularse", True),
+                # HP / stats permanent
+                ("gana", "hp" in desc.lower() and "permanente" in desc.lower()),
+                ("gana", "+" in desc and "v" in desc.lower() and "permanente" in desc.lower()),
+                # Color / formation
+                ("caudillismo", "activos" in desc.lower()),
+                ("todas las habilidades de color", True),
+                ("no cuenta para", True),
+                ("ignoran restricciones", True),
+                ("reducen", "distancia" in desc.lower()),
+                ("sin formar polígonos", True),
+                ("cuenta como", "logistron" in desc.lower()),
+                # Movement / ascension
+                ("no puede ascender", True),
+                ("ni ascender", True),
+                ("no puede moverse", True),
+                ("no puede ser movido", True),
+                # Guards / redirects
+                ("guardaespaldas", True),
+                ("redirige", "daño" in desc.lower()),
+                # Cost reduction
+                ("cuesta 0", "vincular" in desc.lower()),
+                ("cuesta 0 vincular", True),
+                ("vincularse cuesta 0", True),
+                ("cuestan 0 acciones", True),
+                # Bonus formation
+                ("potenciamiento adicional", True),
+                ("solo puede formar", True),
+                ("no puede formar", True),
+            ]
+            for kw, cond in implemented_perm_kw:
+                if kw in desc.lower() and cond:
+                    return "implemented"
             return "not_implemented"
         return "not_implemented"
 
