@@ -187,6 +187,7 @@ socket.on('room_created', data => {
   document.getElementById('phase-create').classList.add('hidden');
   document.getElementById('phase-waiting').classList.remove('hidden');
   document.getElementById('room-code-display').textContent = data.code;
+  if (data.token) sessionStorage.setItem('nfw_token', data.token);
 });
 
 socket.on('opponent_joined', data => {
@@ -200,6 +201,7 @@ socket.on('opponent_joined', data => {
 socket.on('room_joined', data => {
   sessionStorage.setItem('nfw_room_code', data.code);
   sessionStorage.setItem('nfw_player_id', '1');
+  if (data.token) sessionStorage.setItem('nfw_token', data.token);
   window.location.href = '/mp-game';
 });
 

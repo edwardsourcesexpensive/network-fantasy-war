@@ -145,7 +145,7 @@ if (urlParams.get('pid')) sessionStorage.setItem('nfw_player_id', urlParams.get(
 socket.on('connect', () => {
   if (ROOM_CODE) {
     setTimeout(() => {
-      socket.emit('rejoin_game', {code: ROOM_CODE, player_id: MY_ID});
+      socket.emit('rejoin_game', {code: ROOM_CODE, player_id: MY_ID, token: sessionStorage.getItem('nfw_token') || ''});
     }, 200);
   }
 });

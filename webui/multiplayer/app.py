@@ -2,7 +2,7 @@
 Network Fantasy War — Multiplayer Server
 Flask-SocketIO real-time online play for 2 players.
 """
-import os, random, string
+import os, random, string, secrets
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
@@ -239,13 +239,18 @@ def on_create(data):
     while code in rooms:
         code = gen_code()
     deck_key = data.get('deck', 'filo')
+    if deck_key not in DECKS:
+        emit('error', {"message": f"Mazo desconocido: {deck_key}"})
+        return
+    p0_token = secrets.token_hex(16)
     rooms[code] = {
         "players": {request.sid: {"player_id": 0, "deck": deck_key}},
         "game": None,
         "host_sid": request.sid,
+        "player_tokens": {"0": p0_token},
     }
     join_room(code)
-    emit('room_created', {"code": code, "player_id": 0})
+    emit('room_created', {"code": code, "player_id": 0, "token": p0_token})
     print(f"[Room {code}] Created by {request.sid} (host, P0)")
 
 
@@ -262,12 +267,18 @@ def on_create_solo(data):
     import random
     ai_deck_key = random.choice(ai_keys)
     
+    # Validate the human's deck key before touching game state.
+    if deck_key not in DECKS:
+        emit('error', {"message": f"Mazo desconocido: {deck_key}"})
+        return
+
     rooms[code] = {
         "players": {request.sid: {"player_id": 0, "deck": deck_key}},
         "game": None,
         "host_sid": request.sid,
         "solo": True,
         "bot_deck": ai_deck_key,
+        "player_tokens": {"0": secrets.token_hex(16)},
     }
     join_room(code)
     
@@ -385,10 +396,15 @@ def on_join(data):
         return
 
     deck_key = data.get('deck', 'jardin')
+    if deck_key not in DECKS:
+        emit('error', {"message": f"Mazo desconocido: {deck_key}"}, to=request.sid)
+        return
+    p1_token = secrets.token_hex(16)
+    room.setdefault("player_tokens", {})["1"] = p1_token
     room["players"][request.sid] = {"player_id": 1, "deck": deck_key}
     join_room(code)
 
-    emit('room_joined', {"code": code, "player_id": 1}, to=request.sid)
+    emit('room_joined', {"code": code, "player_id": 1, "token": p1_token}, to=request.sid)
     emit('opponent_joined', {"message": "Oponente conectado."}, to=room["host_sid"])
 
     # Start game: both players ready
@@ -416,30 +432,39 @@ def on_rejoin(data):
     """Rejoin a room after page navigation (new socket connection)."""
     code = data.get('code', '').upper()
     player_id = data.get('player_id')
-    
+    token = data.get('token', '')
+
     if code not in rooms:
         emit('error', {"message": "Sala no encontrada."})
         return
-    
+
     room = rooms[code]
     if not room["game"]:
         emit('error', {"message": "Juego no iniciado."})
         return
-    
+
+    # Authenticate: the reconnecting client must prove it owns this seat.
+    # player_tokens[code][player_id] was minted server-side when the seat
+    # was created and is only ever sent to that seat's socket.
+    expected = room.get("player_tokens", {}).get(str(player_id))
+    if not expected or token != expected:
+        emit('error', {"message": "No autorizado para reconectar a ese asiento."})
+        print(f"[Room {code}] REJECTED rejoin for player {player_id} (bad token) from {request.sid}")
+        return
+
     # Update the player's socket to the new connection
-    # Find the player by player_id and update their SID
     old_sid = None
     for sid, pinfo in room["players"].items():
         if pinfo["player_id"] == player_id:
             old_sid = sid
             break
-    
+
     if old_sid:
         del room["players"][old_sid]
-    
+
     room["players"][request.sid] = {"player_id": player_id, "deck": None}
     join_room(code)
-    
+
     # Send current state to the reconnected player
     s = filtered_state(room["game"], player_id)
     s["room_code"] = code
@@ -492,10 +517,20 @@ def on_action(data):
         if not ca or not cb:
             err = "Selecciona dos cartas para vincular."
         else:
-            pa = tuple(int(x) for x in ca.split(','))
-            pb = tuple(int(x) for x in cb.split(','))
-            cid_a = game.board.cells[pa[0]][pa[1]][pa[2]] if len(pa) == 3 else None
-            cid_b = game.board.cells[pb[0]][pb[1]][pb[2]] if len(pb) == 3 else None
+            def _parse_cell(s):
+                try:
+                    p = tuple(int(x) for x in str(s).split(','))
+                    if len(p) != 3:
+                        return None
+                    if not (0 <= p[0] < 2 and 0 <= p[1] < 3 and 0 <= p[2] < 15):
+                        return None
+                    return p
+                except (ValueError, TypeError):
+                    return None
+            pa = _parse_cell(ca)
+            pb = _parse_cell(cb)
+            cid_a = game.board.cells[pa[0]][pa[1]][pa[2]] if pa else None
+            cid_b = game.board.cells[pb[0]][pb[1]][pb[2]] if pb else None
             card_a = game.all_cards.get(cid_a) if cid_a else None
             card_b = game.all_cards.get(cid_b) if cid_b else None
             if card_a and card_b:
@@ -505,10 +540,15 @@ def on_action(data):
 
     elif action == 'ascend':
         cid = args.get('card_id', '')
-        parts = cid.split(',')
-        li, m = int(parts[1]), int(parts[2])
-        cell_cid = game.board.cells[player_id][li][m]
-        card = game.all_cards.get(cell_cid) if cell_cid else None
+        card = None
+        try:
+            parts = str(cid).split(',')
+            li, m = int(parts[1]), int(parts[2])
+            if 0 <= li < 3 and 0 <= m < 15:
+                cell_cid = game.board.cells[player_id][li][m]
+                card = game.all_cards.get(cell_cid) if cell_cid else None
+        except (ValueError, TypeError, IndexError):
+            card = None
         if card:
             err = game.ascend(player_id, card)
         else:
@@ -516,10 +556,15 @@ def on_action(data):
 
     elif action == 'move':
         cid = args.get('card_id', '')
-        parts = cid.split(',')
-        li, m = int(parts[1]), int(parts[2])
-        cell_cid = game.board.cells[player_id][li][m]
-        card = game.all_cards.get(cell_cid) if cell_cid else None
+        card = None
+        try:
+            parts = str(cid).split(',')
+            li, m = int(parts[1]), int(parts[2])
+            if 0 <= li < 3 and 0 <= m < 15:
+                cell_cid = game.board.cells[player_id][li][m]
+                card = game.all_cards.get(cell_cid) if cell_cid else None
+        except (ValueError, TypeError, IndexError):
+            card = None
         direction = args.get('direction', 0)
         if card:
             err = game.move_card(player_id, card, direction)
@@ -544,7 +589,7 @@ def on_action(data):
         elif 0 <= si < len(squads):
             squad = squads[si]
             if room.get("solo"):
-                # Solo mode: resolve immediately
+                # Solo mode: resolve immediately (defense vs bot not used here)
                 if game.phase != Phase.ATTACK:
                     game.start_attack_phase()
                 target = args.get('target', 'grimoire')
@@ -553,11 +598,15 @@ def on_action(data):
                 err = game.attack(squad, target, None, target_id)
                 print(f"[Room {code}] Attack result: err={err}, seals={game.seals}")
             else:
-                # PvP mode: store pending attack for opponent's defense
+                # PvP mode: store pending attack for opponent's defense.
+                # Ensure we are in ATTACK phase so defend can resolve it.
+                if game.phase != Phase.ATTACK:
+                    game.start_attack_phase()
                 print(f"[Room {code}] Attack pending: player={player_id}, squad={si}/{len(squads)}")
                 room['pending_attack'] = {
                     'attacker': player_id,
                     'squad_idx': si,
+                    'members_ids': list(squad.members),  # stable identity across recomputation
                     'target': args.get('target', 'grimoire'),
                     'target_id': args.get('target_id'),
                     'squad_type': squad.squad_type,
@@ -570,20 +619,34 @@ def on_action(data):
 
     elif action == 'defend':
         di = args.get('defender_squad_index', -1)
-        pa = room.pop('pending_attack', None)
+        pa = room.get('pending_attack')
         if not pa:
             err = "No hay ataque pendiente."
+        elif player_id == pa['attacker']:
+            # The attacker may NOT resolve their own attack (defense bypass).
+            err = "Solo el defensor puede resolver este ataque."
         else:
+            room.pop('pending_attack', None)  # only consume once the defender acts
             game.active_player = pa['attacker']  # restore attacker
+            # Re-locate the attacking squad by its stable member ids, not a stale index
             attacker_squads = game.get_player_squads(pa['attacker'])
+            member_ids = set(pa.get('members_ids') or [])
+            attacking_squad = None
+            for sq in attacker_squads:
+                if set(sq.members) == member_ids:
+                    attacking_squad = sq
+                    break
+            # Fallback: index (legacy) if member ids not stored
+            if attacking_squad is None and pa['squad_idx'] < len(attacker_squads):
+                attacking_squad = attacker_squads[pa['squad_idx']]
             # Get defending squad (may be None = no defense)
             defending_squad = None
             if di is not None and di >= 0:
                 def_squads = game.get_player_squads(1 - pa['attacker'])
                 if di < len(def_squads):
                     defending_squad = def_squads[di]
-            if pa['squad_idx'] < len(attacker_squads):
-                err = game.attack(attacker_squads[pa['squad_idx']], pa['target'], defending_squad, pa.get('target_id'))
+            if attacking_squad is not None:
+                err = game.attack(attacking_squad, pa['target'], defending_squad, pa.get('target_id'))
             else:
                 err = "Escuadrón atacante ya no existe."
 
@@ -616,6 +679,17 @@ def on_action(data):
 
     if err:
         emit('error', {"message": str(err)})
+        # SOLO safety net: if a bot attack failed to resolve but more bot
+        # attacks remain queued, keep the queue moving so the game never
+        # freezes with the human unable to act.
+        if room.get("solo") and action == 'defend' and room.get("bot_attacks"):
+            room.pop('pending_attack', None)
+            next_attack = room['bot_attacks'].pop(0)
+            room['pending_attack'] = next_attack
+            print(f"[Room {code}] Bot attack error recovered, advancing queue: {err}")
+            for sid, pinfo in room["players"].items():
+                s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
+                emit('state_update', s, to=sid)
         return
 
     # Broadcast updated state to both players
@@ -1026,7 +1100,8 @@ def on_action(data):
                 
                     bot_attacks.append({
                         'attacker': 1,
-                        'squad_idx': 0,  # will be populated by defend handler
+                        'squad_idx': 0,  # legacy fallback only
+                        'members_ids': list(squad.members),  # stable identity for defend re-resolution
                         'target': target,
                         'target_id': target_id,
                         'squad_type': squad.squad_type,
@@ -1053,10 +1128,15 @@ def on_action(data):
         
             # Step 5: End turn (only reached if bot has no squads)
             print(f"[Room {code}] Bot: NO squads, ending turn silently")
-            game.active_player = 0
-            game.phase = Phase.ACTIONS
-            game.start_turn()
-            game.entry_phase()
+            # Run exit_phase on the bot's own turn so purge, temp-link
+            # dissolution, end-of-turn modifiers and turn_number all advance
+            # exactly like a human end_turn (previously skipped → desync).
+            game.active_player = 1
+            game.phase = Phase.ATTACK
+            game.exit_phase()      # bot's end-of-turn effects + purge
+            if not game.game_over:
+                game.start_turn()    # now switches to the human
+                game.entry_phase()
             all_logs = []
             emit_bot_state(all_logs)
         
