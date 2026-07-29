@@ -23,7 +23,7 @@ El objetivo es destruir el **grimorio** del rival, protegido por 30 sellos. Gana
 | Playmat | 1 por jugador | Territorio con 3 layers × 15 meridianos |
 | Varillas de vínculo | ~40 por jugador | 3 tamaños: cortas, medianas, largas |
 | Contadores de colores | ~20 por jugador | Para marcar estados, sellos, modificadores |
-| Dado de 6 caras | 1 compartido | Uso acotado (ver §9) |
+| Dado de 6 caras | 1 compartido | Uso acotado (ver §14) |
 
 ---
 
@@ -94,12 +94,16 @@ La distancia entre dos cartas determina el costo en acciones para vincularlas:
 |---|---|---|
 | **Próxima (corta)** | 0 filas × 2 columnas, o 1 fila × 0-1 columna | 1 acción |
 | **Media** | 0 filas × 3 columnas, o 1 fila × 2 columnas | 1 acción (mismo color) / 2 acciones (distinto color) |
-| **Distante (larga)** | 2 filas × 1 columna, o 1 fila × 3 columnas | 3 acciones |
+| **Distante (larga)** | 2 filas × 0-1 columna, o 1 fila × 3 columnas | 3 acciones |
 | **Inválida** | Cualquier distancia mayor | No se puede vincular |
 
 **Excepciones**:
-- Vínculos que involucran **logistrones**: siempre 1 acción, independientemente de la distancia.
-- Vínculos entre la **frontera** y cualquier carta en **L3**: 4 acciones.
+- Vínculos que involucran **logistrones**: siempre 1 acción, independientemente de la distancia. **Esta excepción prevalece sobre cualquier otra**: si un vínculo involucra un logistrón y además conecta frontera con L3, cuesta 1 acción (no 4).
+- Vínculos entre la **frontera** y cualquier carta en **L3**: 4 acciones (salvo que intervenga un logistrón).
+
+> **Aclaración sobre color en vínculos `[NUEVO]`**: La distinción "mismo color" / "distinto color" en la fila de distancia Media se refiere al **indicador de color impreso** de cada carta (el círculo/icono de color en la anatomía, §13), no a sus habilidades de color (que pueden diferir del color propio, §8.4).
+
+> **Vínculos entre territorios `[NUEVO]`**: Todo vínculo que cruce entre territorios de jugadores distintos debe obligatoriamente involucrar al menos un nodo situado en la **frontera** (espía o carta especial con capacidad de frontera). No existen vínculos directos entre L3 propio y L3 enemigo que salteen la frontera.
 
 ### 4.4 Escuadrones
 
@@ -114,7 +118,13 @@ Varios nodos conectados entre sí forman un **escuadrón**. Los escuadrones se c
 | **Pentágono básico** | 5 | 5 vínculos (ciclo cerrado) |
 | **Pentágono ampliado** `[NUEVO]` | 5 perimetrales + N internos | 5 perimetrales + vínculos internos que triangulan el interior |
 
+> **Nota sobre la Línea `[NUEVO]`**: La Línea (2 nodos, 1 vínculo) es un caso especial de escuadrón que no constituye un polígono cerrado. Por esta razón, **toda carta puede formar parte de una Línea** salvo indicación contraria en su texto. El campo "Restricciones de polígono" en la anatomía de carta (§13) solo lista Triángulo, Cuadrilátero y Pentágono porque la Línea no tiene restricción.
+
+> **Polígono máximo `[NUEVO]`**: El **Pentágono es el polígono máximo reconocido** por las reglas. Cualquier ciclo cerrado de 6 o más nodos debe dividirse en dos o más escuadrones conectados por un logistrón. Si no es posible dividirlo, el conjunto permanece como un conjunto no clasificado: no forma un escuadrón válido y no puede atacar como unidad.
+
 > **Definición `[NUEVO]`**: Un escuadrón es "ampliado" cuando, además del polígono perimetral cerrado, contiene al menos un nodo en su interior conectado a tres o más nodos del perímetro. El interior triangulado otorga poder adicional (+X en cuadriláteros, +Y en pentágonos). Estos modificadores se definen en la **Tabla de Potenciamiento** (§7).
+
+**Regla de pertenencia exclusiva `[NUEVO]`**: Cada nodo pertenece a **un único escuadrón por turno**, elegido por su controlador al inicio de la Fase de Ataque. Dicha asignación debe respetar la conectividad real de vínculos: no pueden reutilizarse los mismos vínculos para justificar dos escuadrones distintos simultáneos.
 
 **Regla**: Las cartas no atacan solas. Solo los escuadrones pueden declarar ataques.
 
@@ -140,7 +150,7 @@ Cada turno se divide en cuatro fases:
 
 El jugador dispone de **4 acciones** por turno, que puede gastar en cualquier combinación de:
 
-- **Jugar cartas** (1 acción por carta): Colocar una carta de la mano en el territorio.
+- **Jugar cartas** (1 acción por carta): Colocar una carta de la mano en el territorio. **Por defecto, toda carta entra en L1** (ver §3.3, Regla de entrada), salvo que posea Vanguardia (entra en L2), Línea de fuego (entra en L3), o sea un Espía (entra en la frontera).
 - **Ascender nodos** (ver §5.3).
 - **Establecer vínculos** (ver §4.3).
 - **Activar habilidades** con coste `[N]`: cuentan como N acciones.
@@ -164,12 +174,16 @@ Ver §6 (Sistema de combate).
 ### 5.5 Fase de Salida
 
 1. **Purgar nodos aislados** `[NUEVO]`: Cada jugador debe remover de su territorio cualquier nodo enemigo que no tenga al menos un vínculo directo con otro nodo (aliado o enemigo). Los nodos removidos van a la pila de descartes de su dueño.
-2. **Habilidades de cierre**: Activar todas las habilidades de *"Al final del turno…"*. El dueño del turno resuelve primero las suyas, luego el rival.
+
+> **Asimetría intencional `[NUEVO]`**: La purga es unilateral por diseño: solo afecta nodos enemigos aislados, no a los propios. Esto penaliza la infiltración fallida (espías enemigos que pierden sus vínculos), pero no castiga la desconexión accidental de cartas propias. Las cartas propias aisladas solo se ven afectadas si tienen la keyword **Autofobia** (ver §9.2).
+2. **Habilidades de cierre**: Activar todas las habilidades de *"Al final del turno…"*. El dueño del turno resuelve primero las suyas, luego el rival. Esto incluye **Autofobia**: si una carta con Autofobia no tiene ningún vínculo directo en este momento (tras la purga), va a la pila de descartes.
+
+> **Orden de resolución `[NUEVO]`**: Los pasos de la Fase de Salida se resuelven en el orden estricto listado. Cada paso usa el estado de la red **ya actualizado** tras el paso anterior. Esto implica que la Purga (paso 1) puede alterar la conectividad antes de que se evalúe Autofobia (paso 2).
 3. **Descartar**: El jugador activo descarta cartas de su mano hasta quedarse con exactamente 5 cartas. `[NUEVO]` Por cada carta descartada de esta manera, el dueño del turno **pierde 1 sello** de su propio grimorio. Esto representa el costo de desprenderse de recursos mágicos no utilizados.
 4. **Efectos de escuadrones al final del turno** `[NUEVO]`: Se resuelven en orden:
    - Escuadrones de Sellado: +10 sellos al grimorio por cada uno.
    - Escuadrones de Sabotaje: deshacer hasta 2 vínculos cortos en la red enemiga por escuadrón.
-   - Escuadrones de Monstruos: remover 1 nodo enemigo (grado < ataque del escuadrón) por escuadrón.
+   - Escuadrones de Monstruos: remover 1 nodo enemigo cuyo Grado (G) sea menor que el ataque del escuadrón, por escuadrón.
 
 ---
 
@@ -212,7 +226,7 @@ Donde `DEFENSA_ESCUADRÓN` se calcula como:
 DEFENSA = POTENCIAMIENTO_DEFENSIVO + ARMADURA + BONUS_DEFENSA
 ```
 
-- **Potenciamiento defensivo**: análogo al potenciamiento ofensivo, pero usando las bonificaciones defensivas de los escuadrones conectados. Por defecto, cada escuadrón conectado aporta +1 a la defensa.
+- **Potenciamiento defensivo**: análogo al potenciamiento ofensivo, pero usando las bonificaciones defensivas de los escuadrones conectados. Cada escuadrón conectado aporta +1 a la defensa.
 - **Armadura**: bonus por habilidades de color/facción (ej: escuadrones festivos tienen +2 de armadura en sus vínculos).
 - **Bonus de defensa**: por habilidades de carta (ej: Guardaespaldas).
 
@@ -231,26 +245,28 @@ Si `DAÑO_NETO > 0`, ese valor se aplica al objetivo. Si `DAÑO_NETO <= 0`, el a
 
 | Escuadrón | Fuerza de ataque | Potenciamiento a vecinos | Alcance del potenciamiento |
 |---|---|---|---|
-| **Línea** | 1 | +1 | Distancia de red 1 |
-| **Triángulo** | 2 | +3 | Distancia de red 1 |
+| **Línea** | 1 | +1 | Distancia de red 2 |
+| **Triángulo** | 2 | +3 | Distancia de red 2 |
 | **Cuadrilátero básico** | 3 | +5 | Distancia de red 2 |
 | **Cuadrilátero ampliado** | 3 + X | 5 + X | Distancia de red 2 |
 | **Pentágono básico** | 4 | +7 | Ilimitado |
-| **Pentágono ampliado** | 4 + Y | 7 + Y | Ilimitado |
+| **Pentágono ampliado** | 4 + 2Y | 7 + 2Y | Ilimitado |
 
 Donde `[NUEVO]`:
 - **X** = número de nodos internos en el cuadrilátero ampliado.
-- **Y** = número de nodos internos en el pentágono ampliado × 2.
+- **Y** = número de nodos internos en el pentágono ampliado.
 
 ### 7.1 Cómo funciona el potenciamiento
 
 Cuando el escuadrón A ataca, recibe el potenciamiento de todo escuadrón B tal que:
-- B está conectado a A a través de la red (por logistrones o por vínculos indirectos).
+- B está conectado a A a través de la red. **Toda conexión entre escuadrones distintos requiere al menos un logistrón como puente.** Los vínculos indirectos entre escuadrones siempre atraviesan un logistrón.
 - La **distancia de red** entre A y B (número mínimo de vínculos que los separan) es menor o igual al alcance de potenciamiento de B.
 
-El potenciamiento **no es simétrico**: un pentágono potencia con +7 a cualquier escuadrón conectado (alcance ilimitado), pero un triángulo solo potencia con +3 a escuadrones a distancia de red 1.
+El potenciamiento **no es simétrico**: un pentágono potencia con +7 a cualquier escuadrón conectado (alcance ilimitado), pero un triángulo solo potencia con +3 a escuadrones a distancia de red 2.
 
-**Múltiples fuentes**: El potenciamiento se acumula. Si un escuadrón está conectado a tres triángulos (distancia 1 cada uno), recibe +9 de potenciamiento total.
+**Múltiples fuentes**: El potenciamiento se acumula. Si un escuadrón está conectado a tres triángulos a distancia de red 2 cada uno, recibe +9 de potenciamiento total.
+
+> **Nota sobre distancia de red 1**: La distancia de red 1 solo existe dentro de un mismo escuadrón (nodos directamente vinculados entre sí). Dado que toda conexión entre escuadrones distintos requiere al menos un logistrón como puente —lo que introduce distancia mínima 2—, ningún efecto de potenciamiento con alcance 1 puede alcanzar a otro escuadrón.
 
 ---
 
@@ -321,12 +337,12 @@ Una habilidad de formación puede estar **anidada** dentro de una habilidad de c
 |---|---|---|
 | Selladores | +10 sellos al grimorio por escuadrón | Fin del turno |
 | Guerreros | Daño base +1 por cada nodo del escuadrón en L2 o L3 | Al atacar |
-| Políticos | Intercambiar posiciones de 2 cartas por escuadrón | Inicio del turno |
+| Políticos | Intercambiar las posiciones de 2 cartas propias ubicadas en cualquier parte del propio territorio (no necesariamente del escuadrón político), respetando las reglas de adyacencia (§3.3) en las posiciones resultantes | Inicio del turno |
 | Saboteadores | Deshacer hasta 2 vínculos cortos en red enemiga por escuadrón | Fin del turno |
-| Alquimistas | Todas las habilidades de color del escuadrón están activas | Permanente |
-| Militares | Ascender 1 unidad sin costo por escuadrón; ascensos en escuadrones militares no cuestan acciones | Inicio del turno / Permanente |
+| Alquimistas | En un escuadrón que contenga al menos un Alquimista, se activan las habilidades de color de **cada carta según su propio color impreso**, incluso si el escuadrón en conjunto es incoloro o de color mayoritario distinto | Permanente |
+| Militares | Ascender 1 unidad sin costo por escuadrón | Inicio del turno |
 | Festivos | +2 de armadura a los vínculos del escuadrón | Permanente |
-| Monstruos | Remover 1 nodo enemigo (grado < ataque del escuadrón) por escuadrón | Fin del turno |
+| Monstruos | Remover 1 nodo enemigo cuyo Grado (G) sea menor que el ataque del escuadrón, por escuadrón | Fin del turno |
 | Sabios | +1 carta extra en el paso de robar por escuadrón | Al robar |
 | Naturaleza | Las unidades del escuadrón aportan +1 al daño de ataque y +1 al potenciamiento del escuadrón | Permanente |
 
@@ -338,9 +354,9 @@ Los espías son unidades de infiltración con reglas únicas:
 
 1. **Despliegue**: Los espías se juegan directamente en la **frontera** (no en el territorio propio). Jugar un espía cuenta como 1 acción.
 2. **Movimiento**: Desde la frontera, un espía puede infiltrarse en territorio enemigo. Esto cuenta como un ascenso (1 acción). Una vez en territorio enemigo, **no puede regresar** a territorio propio ni a la frontera.
-3. **Vínculos**: Los espías pueden vincularse con unidades enemigas y con otros espías. También pueden mantener vínculos con unidades propias desde la frontera.
+3. **Vínculos**: Los espías pueden vincularse con unidades enemigas y con otros espías. También pueden mantener vínculos con unidades propias **únicamente mientras permanezcan en la frontera**. Estos vínculos con unidades propias se disuelven automáticamente cuando el espía se infiltra en territorio enemigo (incluso a L1 enemigo).
 4. **Polígonos**: Los espías **siempre forman parte de los polígonos del jugador en cuyo territorio se encuentran**, nunca de los del dueño del espía. Sin embargo, el dueño del espía **parasita** ese escuadrón y obtiene las siguientes ventajas:
-   - **Sabotaje**: Una vez por turno, durante tu Fase de Acciones, puedes gastar 1 acción por cada espía tuyo infiltrado para deshacer un vínculo del escuadrón enemigo que lo contiene.
+   - **Sabotaje encubierto**: Una vez por turno, durante tu Fase de Acciones, puedes gastar 1 acción por cada espía tuyo infiltrado para deshacer un vínculo del escuadrón enemigo que lo contiene.
    - **Inteligencia**: Cuando el escuadrón que contiene a tu espía declara un ataque, miras 1 carta al azar de la mano del jugador atacante.
    - **Contraespionaje**: Si un espía enemigo está en tu territorio, puedes declarar un ataque de cualquier escuadrón propio contra ese espía directamente (ignorando Sigilo si lo tuviera), como si estuvieras purgando a un infiltrado.
 
@@ -383,6 +399,7 @@ Cada carta contiene:
 | **HP (Puntos de Vida)** | Resistencia del nodo. Al llegar a 0, es destruido |
 | **D (Daño adicional)** | Daño extra que esta carta aporta al escuadrón cuando ataca |
 | **V (Capacidad de vínculos)** | Número máximo de vínculos directos que este nodo puede sostener. Típicamente 2-3; cartas raras 4-5. Logistrones suelen tener V=5+ |
+| **G (Grado)** `[NUEVO]` | Nivel jerárquico de la carta. Se usa en mecánicas que comparan poder relativo entre cartas (ej: efecto de Monstruos). Típicamente 1-3 |
 | **Restricciones de layer** | Capas en las que puede ubicarse (L1, L2, L3) |
 | **Restricciones de polígono** | Tipos de escuadrón que puede integrar (Triángulo, Cuadrilátero, Pentágono) |
 | **Habilidades de color** | Efectos condicionados al color del escuadrón |
@@ -419,9 +436,9 @@ Situaciones que requieren dado:
 |---|---|
 | **Nodo** | Una carta en el territorio de guerra |
 | **Vínculo directo** | Conexión física (varilla) entre dos nodos |
-| **Vínculo indirecto** | Dos nodos conectados a través de un tercero |
+| **Vínculo indirecto** | Caso particular de distancia de red = 2: dos nodos que no están vinculados directamente entre sí pero comparten al menos un nodo vecino en común. Para distancias mayores, se usa el concepto general de distancia de red |
 | **Distancia de red** | Número mínimo de vínculos entre dos nodos |
-| **Escuadrón** | Conjunto de nodos conectados con forma poligonal definida |
+| **Escuadrón** | Conjunto de 2 o más nodos conectados que conforman una unidad táctica capaz de atacar, ya sea en forma de línea abierta (2 nodos, 1 vínculo) o de polígono cerrado (Triángulo, Cuadrilátero, Pentágono) |
 | **Logistrón** | Unidad especial que conecta escuadrones entre sí |
 | **Potenciamiento** | Bonificación que un escuadrón otorga a otros escuadrones conectados |
 | **Grimorio** | Fuente de poder de la civilización, protegida por 30 sellos |
