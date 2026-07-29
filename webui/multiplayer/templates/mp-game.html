@@ -191,7 +191,7 @@ function territoryHtml(player, seals, s) {
         const used = cell.v_used || 0;
         const max = cell.v || 0;
         const abils = cell.abilities ? cell.abilities.map(a => a.length > 40 ? a.substring(0,37)+'...' : a).join(' | ') : '';
-        const tt = cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + (cell.d || 0) + ' | V:' + used + '/' + max + (abils ? ' | ' + abils : '');
+        const tt = cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + (cell.d || 0) + ' | V:' + used + '/' + max + ' | G:' + (cell.grado || '?') + (abils ? ' | ' + abils : '');
         h += '<div class="cell occupied' + sel + '" data-cid="' + cid + '" title="' + tt + '" onclick="selectBoard(\'' + cid + '\');showCardDetail(window._lastCell||cell)" onmouseenter="window._lastCell=cell">' +
              cell.name.substring(0, 8) +
              '<span class="hp">' + cell.hp + '</span>' +
@@ -213,7 +213,7 @@ function renderHand(s) {
   div.innerHTML = s.hand.map(c => {
     const sel = selectedHand === c.index ? ' selected' : '';
     const abils = c.abilities ? c.abilities.map(a => a.length > 50 ? a.substring(0,47)+'...' : a).join(' | ') : '';
-    const tooltip = c.name + ' | ' + c.color + ' | HP:' + c.hp + ' D:' + (c.damage_bonus||0) + ' V:' + (c.link_capacity||0) + ' | L:' + (c.allowed_layers||[]).join(',') + (abils ? ' | ' + abils : '');
+    const tooltip = c.name + ' | ' + c.color + ' | HP:' + c.hp + ' D:' + (c.damage_bonus||0) + ' V:' + (c.link_capacity||0) + ' G:' + (c.grado||'?') + ' | L:' + (c.allowed_layers||[]).join(',') + (abils ? ' | ' + abils : '');
     return '<div class="hand-card' + sel + '" onclick="selectHand(' + c.index + ')" title="' + tooltip + '">' +
            '<div class="hn">' + c.name + '</div>' +
            '<div class="hs">' + c.color + ' | HP:' + c.hp + ' D:' + c.damage_bonus + ' V:' + c.link_capacity + ' | L:' + c.allowed_layers.join(',') + '</div>' +
@@ -399,6 +399,7 @@ function showHandDetail(c) {
     '<span class="stat">HP:' + c.hp + '</span> ' +
     '<span class="stat">D:' + (c.damage_bonus || 0) + '</span> ' +
     '<span class="stat">V:' + (c.link_capacity || 0) + '</span> ' +
+    '<span class="stat">G:' + (c.grado || '?') + '</span> ' +
     '<span class="stat">L:' + (c.allowed_layers || []).join(',') + '</span>';
   let ah = '';
   if (c.abilities) {

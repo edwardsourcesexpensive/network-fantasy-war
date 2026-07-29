@@ -399,7 +399,7 @@ Cada carta contiene:
 | **HP (Puntos de Vida)** | Resistencia del nodo. Al llegar a 0, es destruido |
 | **D (Daño adicional)** | Daño extra que esta carta aporta al escuadrón cuando ataca |
 | **V (Capacidad de vínculos)** | Número máximo de vínculos directos que este nodo puede sostener. Típicamente 2-3; cartas raras 4-5. Logistrones suelen tener V=5+ |
-| **G (Grado)** `[NUEVO]` | Nivel jerárquico de la carta. Se usa en mecánicas que comparan poder relativo entre cartas (ej: efecto de Monstruos). Típicamente 1-3 |
+| **G (Grado)** `[NUEVO]` | Nivel jerárquico de la carta. Por defecto, **G = capa máxima alcanzable** según `allowed_layers` (L1→G1, L2→G2, L3→G3). Logistrones y espías tienen G=3. Una carta puede indicar explícitamente un Grado distinto si su texto lo especifica. Se usa en mecánicas que comparan poder relativo entre cartas (ej: efecto de Monstruos) |
 | **Restricciones de layer** | Capas en las que puede ubicarse (L1, L2, L3) |
 | **Restricciones de polígono** | Tipos de escuadrón que puede integrar (Triángulo, Cuadrilátero, Pentágono) |
 | **Habilidades de color** | Efectos condicionados al color del escuadrón |

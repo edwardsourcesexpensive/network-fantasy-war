@@ -420,6 +420,7 @@ def game_state(game):
                         "d": card.definition.damage_bonus,
                         "v": card.definition.link_capacity,
                         "v_used": game.network.link_count(card),
+                        "grado": card.definition.grado,
                         "color": card.definition.color.value,
                         "layer_restrict": card.definition.allowed_layers,
                         "is_spy": card.definition.is_spy,
@@ -440,6 +441,7 @@ def game_state(game):
             "id": cid,
             "name": card.definition.name,
             "owner": card.owner,
+            "grado": card.definition.grado,
         })
     
     # Hands
@@ -455,6 +457,7 @@ def game_state(game):
                 "hp": card.definition.hp,
                 "d": card.definition.damage_bonus,
                 "v": card.definition.link_capacity,
+                "grado": card.definition.grado,
                 "layers": card.definition.allowed_layers,
                 "forms": card.definition.allowed_formations,
                 "is_spy": card.definition.is_spy,

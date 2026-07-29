@@ -345,7 +345,7 @@ function cellHtml(player, layer, m, s) {
   const cls = cell.foreign ? 'cell occupied foreign' : 'cell occupied';
   const sel = selectedBoard === cell.id ? ' selected' : '';
   const hpPct = cell.max_hp > 0 ? Math.round(cell.hp/cell.max_hp*100) : 100;
-  return '<div class="' + cls + sel + '" data-cid="' + cell.id + '" onclick="showCardDetail(' + cell.id + ')" title="' + cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + cell.d + ' | V:' + cell.v_used + '/' + cell.v + '">' + cell.short + '<span class="vused">' + cell.v_used + '/' + cell.v + '</span><span class="hp" style="color:' + (hpPct<50?'#e94560':'#888') + '">' + cell.hp + '</span></div>';
+  return '<div class="' + cls + sel + '" data-cid="' + cell.id + '" onclick="showCardDetail(' + cell.id + ')" title="' + cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + cell.d + ' | V:' + cell.v_used + '/' + cell.v + ' | G:' + (cell.grado||'?') + '">' + cell.short + '<span class="vused">' + cell.v_used + '/' + cell.v + '</span><span class="hp" style="color:' + (hpPct<50?'#e94560':'#888') + '">' + cell.hp + '</span></div>';
 }
 
 // ═══ SVG LINKS ═══
@@ -412,7 +412,8 @@ function showCardDetail(cid) {
   document.getElementById('detail-name').textContent = card.name;
   document.getElementById('detail-stats').innerHTML = 
     '<span class="stat">' + card.color + '</span> | HP:' + card.hp + '/' + card.max_hp + 
-    ' | D:' + card.d + ' | V:' + card.v_used + '/' + card.v;
+    ' | D:' + card.d + ' | V:' + card.v_used + '/' + card.v +
+    ' | G:' + (card.grado || '?');
   
   // Parasite indicator
   const attached = state.attached || {};

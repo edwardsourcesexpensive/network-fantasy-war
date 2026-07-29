@@ -53,6 +53,16 @@ class CardDef:
     abilities: list[Ability] = field(default_factory=list)
     is_logistron: bool = False
     is_spy: bool = False
+    grado: int = 0  # 0 = auto: max(allowed_layers). Logistrones y espías → 3
+
+    def __post_init__(self):
+        if self.grado == 0:
+            if self.is_logistron or self.is_spy:
+                self.grado = 3
+            elif self.allowed_layers:
+                self.grado = max(self.allowed_layers)
+            else:
+                self.grado = 1
 
 
 @dataclass
@@ -91,14 +101,15 @@ class CardInstance:
 ALL_CARDS: list[CardDef] = []
 
 def _c(name, color, copies, hp, dmg, v, layers, formations, abilities=None,
-       logistron=False, spy=False):
+       logistron=False, spy=False, grado=0):
     """Shorthand card constructor."""
     ALL_CARDS.append(CardDef(
         name=name, color=color, max_copies=copies,
         hp=hp, damage_bonus=dmg, link_capacity=v,
         allowed_layers=layers, allowed_formations=formations,
         abilities=abilities or [],
-        is_logistron=logistron, is_spy=spy
+        is_logistron=logistron, is_spy=spy,
+        grado=grado
     ))
 
 # ─── Mini-Set (1-15) ───
