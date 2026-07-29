@@ -429,7 +429,7 @@ class GameState:
         self._negate_next: bool = False  # Árbitro del Juego
 
         # Attacked squads this turn
-        self._attacked_squads: set[int] = set()  # squad hashes
+        self._attacked_squads: set = set()  # frozensets of squad member-id sets
 
         # Spy sabotage tracking (once per spy per turn)
         self._spy_sabotage_used: set[int] = set()
@@ -1527,16 +1527,23 @@ class GameState:
         # Caudillismo trigger
         if new_layer == 3:
             if any(a.trigger == "on_ascend" for a in card.definition.abilities):
-                # Auto-link to a node in L2
+                # Auto-link to a VALID node in L2: both ends need capacity, and
+                # distance must be corta/media (not "larga" — every other link
+                # path enforces distance, the free caudillismo link does too).
                 for m2 in range(15):
                     neighbor_cid = self.board.cells[player][1][m2]  # L2 index = 1
-                    if neighbor_cid and self.network.can_link(card):
-                        neighbor = self.all_cards[neighbor_cid]
-                        dist = self.board.spatial_distance(card.position, neighbor.position)
-                        if dist:
-                            self.network.add_link(card, neighbor)
-                            self._log(f"  Caudillismo: vínculo gratis con {neighbor.definition.name}")
-                            break
+                    if not neighbor_cid:
+                        continue
+                    neighbor = self.all_cards.get(neighbor_cid)
+                    if neighbor is None:
+                        continue
+                    if not (self.network.can_link(card) and self.network.can_link(neighbor)):
+                        continue  # over-capacity — try the next candidate
+                    dist = self.board.spatial_distance(card.position, neighbor.position)
+                    if dist in ("corta", "media"):
+                        self.network.add_link(card, neighbor)
+                        self._log(f"  Caudillismo: vínculo gratis con {neighbor.definition.name} ({dist})")
+                        break
 
         self._log(f"J{player+1} asciende {card.definition.name} a L{new_layer}.")
         return None
@@ -2992,6 +2999,11 @@ class GameState:
 
         # ─── 2. Dispatch end_of_turn modifiers (incl. Autofobia) ───
         for mod in self._modifiers.get("end_of_turn", []):
+            # Skip TEMPORARY cleanup modifiers (revert_hp_buff, dissolve_temp_link) —
+            # they're handled by the explicit revert/dissolve pass below, not by the
+            # real end-of-turn trigger dispatch (which would no-op or double-fire).
+            if mod.is_temporary:
+                continue
             card = self.all_cards.get(mod.source_card_id)
             if not card or card.owner != player or not card.position or card.position[0] == -1:
                 continue
@@ -3129,10 +3141,14 @@ class GameState:
             if c is not None and getattr(c, "_cannot_attack", False):
                 return f"{c.definition.name} no puede atacar este turno."
 
-        # Check if squad already attacked
-        squad_hash = hash(frozenset(attacking_squad.members))
-        if squad_hash in self._attacked_squads:
-            return "Este escuadrón ya atacó este turno."
+        # Check if squad already attacked. A squad counts as "the same one that
+        # already attacked" if it shares ≥2 members with any squad that attacked
+        # this turn — so toggling ONE link (add/drop a member) can't reset the
+        # one-attack-per-squad rule by changing the frozenset hash.
+        member_set = set(attacking_squad.members)
+        for prev_members in self._attacked_squads:
+            if len(member_set & prev_members) >= 2:
+                return "Este escuadrón ya atacó este turno."
 
         attacker = self.active_player
         defender = 1 - attacker
@@ -3312,7 +3328,7 @@ class GameState:
                             break
                     self._destroy_card(target_card, killer=killer_card)
 
-        self._attacked_squads.add(squad_hash)
+        self._attacked_squads.add(frozenset(member_set))
         return None
 
     # ═══════════════════════════════════════════════════════════════
