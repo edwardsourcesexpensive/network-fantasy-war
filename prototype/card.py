@@ -131,8 +131,6 @@ _c("Agente del Silencio", Color.SABOTEADOR, 3, 2, 0, 2, [1,2,3], ["triangle"], [
 ])
 
 _c("Transmutadora del Espectro", Color.ALQUIMISTA, 2, 2, 1, 2, [1,2], ["triangle","square","pentagon"], [
-    Ability("Cambia color de una carta enemiga defensora hasta final del turno", AbilityType.COLOR, "on_attack", color_required=Color.GUERRERO),
-    Ability("Los vínculos de ~ tienen +1 de armadura", AbilityType.COLOR, "permanent", color_required=Color.FESTIVO),
 ])
 
 _c("Sargento de la Escala de Hierro", Color.MILITAR, 3, 3, 0, 2, [1,2,3], ["triangle","square","pentagon"], [
@@ -216,9 +214,6 @@ _c("Mutacromática", Color.ALQUIMISTA, 3, 1, 0, 3, [1,2], ["triangle","square","
 ])
 
 _c("Sintetista de Esencias", Color.ALQUIMISTA, 2, 2, 1, 2, [1,2,3], ["triangle","square","pentagon"], [
-    Ability("En escuadrón Negro: deshacer 1 vínculo enemigo al final del turno", AbilityType.COLOR, "end_of_turn", color_required=Color.SABOTEADOR),
-    Ability("En escuadrón Azul: ascender 1 unidad sin costo al inicio del turno", AbilityType.COLOR, "start_of_turn", color_required=Color.MILITAR),
-    Ability("En escuadrón Verde: vínculos de ~ tienen +1 de armadura", AbilityType.COLOR, "permanent", color_required=Color.FESTIVO),
 ])
 
 _c("Recluta de la Escala", Color.MILITAR, 5, 1, 0, 1, [1], ["triangle","square","pentagon"], [
@@ -343,8 +338,6 @@ _c("Destiladora de Pigmentos", Color.ALQUIMISTA, 3, 2, 0, 2, [1,2], ["triangle",
 ])
 
 _c("Alquimista de Guerra", Color.ALQUIMISTA, 3, 2, 2, 2, [1,2,3], ["triangle","square"], [
-    Ability("En escuadrón Rojo: ignora armadura enemiga al atacar", AbilityType.COLOR, "on_attack", color_required=Color.GUERRERO),
-    Ability("En escuadrón Gris: al destruir un nodo, roba 1 carta", AbilityType.COLOR, "on_kill", color_required=Color.MONSTRUO)
 ])
 
 _c("Filósofa de la Piedra", Color.ALQUIMISTA, 1, 3, 0, 3, [1,2,3], ["triangle","square","pentagon"], [
@@ -507,8 +500,9 @@ _c("Saboteadora de Formaciones", Color.SABOTEADOR, 2, 2, 1, 2, [1,2,3], ["triang
     Ability("En triángulo: cada vínculo enemigo roto inflige 1 daño al grimorio enemigo", AbilityType.FORMATION, "permanent", formation_required="triangle")
 ])
 
-_c("Alquimista de la Forma", Color.ALQUIMISTA, 2, 2, 0, 2, [1,2], ["triangle","square","pentagon"], [
-    Ability("[1]: Elige un escuadrón aliado. Gana +1 daño base hasta final del turno.", AbilityType.ACTIVE, "active", action_cost=1)
+_c("Alquimista de la Forma", Color.ALQUIMISTA, 2, 2, 0, 4, [1,2], ["triangle","square","pentagon"], [
+    Ability("[1]: Elige un escuadrón aliado. Gana +1 daño base hasta final del turno.", AbilityType.ACTIVE, "active", action_cost=1),
+    Ability("En pentágono: tus cartas en L1 forman pentágonos sin restricción.", AbilityType.FORMATION, "permanent", formation_required="pentagon")
 ])
 
 _c("Catalizadora de Reacción", Color.ALQUIMISTA, 2, 2, 0, 2, [1,2], ["triangle","square","pentagon"], [
@@ -642,7 +636,8 @@ _c("Destructor de Escuadrones", Color.GUERRERO, 2, 3, 1, 2, [1,2,3], ["triangle"
 ])
 
 _c("Señor de la Guerra", Color.GUERRERO, 1, 5, 2, 3, [1,2,3], ["triangle","square","pentagon"], [
-    Ability("En pentágono: el daño de ~ no puede ser reducido por defensa ni armadura", AbilityType.FORMATION, "on_attack", formation_required="pentagon")
+    Ability("En pentágono: el daño de ~ no puede ser reducido por defensa ni armadura", AbilityType.FORMATION, "on_attack", formation_required="pentagon"),
+    Ability("Todos tus escuadrones ganan +1 daño base", AbilityType.GENERAL, "permanent")
 ])
 
 _c("Secretario de Actas", Color.POLITICO, 5, 1, 0, 2, [1], ["triangle","square","pentagon"], [
@@ -918,7 +913,8 @@ _c("Saboteador Profundo", Color.ESPIA, 2, 2, 0, 2, [], [], spy=True, abilities=[
 ])
 
 _c("Agente del Caos", Color.ESPIA, 1, 3, 1, 3, [], [], spy=True, abilities=[
-    Ability("Al infiltrarse: baraja la mano enemiga en su reserva y roba esa misma cantidad", AbilityType.GENERAL, "on_enter")
+    Ability("Al infiltrarse: baraja la mano enemiga en su reserva y roba esa misma cantidad", AbilityType.GENERAL, "on_enter"),
+    Ability("Al infiltrarse: el enemigo descarta igual número de cartas", AbilityType.GENERAL, "on_enter")
 ])
 
 _c("Ciudadano", Color.INCOLORO, 5, 2, 0, 1, [1,2,3], ["triangle","square","pentagon"], [])
@@ -1018,9 +1014,6 @@ _c("Saboteador de Campo", Color.SABOTEADOR, 5, 1, 0, 1, [1,2,3], ["triangle"], [
 _c("Desestabilizador", Color.SABOTEADOR, 3, 2, 0, 2, [1,2], ["triangle","square"], [
     Ability("[1]: todos los vínculos del escuadrón enemigo pierden 1 armadura", AbilityType.ACTIVE, "active", action_cost=1)
 ])
-_c("Agente del Caos", Color.SABOTEADOR, 3, 2, 1, 2, [1,2,3], ["triangle"], [
-    Ability("Al entrar: baraja mano enemiga, roba esa cantidad, descarta igual número", AbilityType.GENERAL, "on_enter")
-])
 _c("Disruptor de Red", Color.SABOTEADOR, 2, 3, 0, 2, [1,2,3], ["square","pentagon"], [
     Ability("En cuadrado: todos los logistrones enemigos pierden 2 HP", AbilityType.FORMATION, "active", formation_required="square")
 ])
@@ -1044,7 +1037,6 @@ _c("Transmutador de Campo", Color.ALQUIMISTA, 3, 2, 0, 2, [1,2], ["triangle","sq
     Ability("[1]: intercambia el HP de 2 cartas hasta final del turno", AbilityType.ACTIVE, "active", action_cost=1)
 ])
 _c("Alquimista de Batalla", Color.ALQUIMISTA, 3, 2, 1, 2, [1,2,3], ["triangle","square"], [
-    Ability("En escuadrón Rojo: +2 daño. En escuadrón Azul: +1 acción.", AbilityType.COLOR, "on_attack", color_required=Color.GUERRERO)
 ])
 _c("Elixirista", Color.ALQUIMISTA, 2, 2, 0, 2, [1,2], ["triangle","square","pentagon"], [
     Ability("[1]: una carta gana +2 HP y +1 D hasta final del turno", AbilityType.ACTIVE, "active", action_cost=1)
@@ -1233,9 +1225,6 @@ _c("Gladiador", Color.INCOLORO, 2, 4, 1, 1, [1,2], ["triangle"], [
 _c("Místico", Color.INCOLORO, 2, 2, 0, 2, [1,2,3], ["triangle","square","pentagon"], [
     Ability("[1]: scry 3. Roba 1.", AbilityType.ACTIVE, "active", action_cost=1)
 ])
-_c("Señor de la Guerra", Color.INCOLORO, 1, 5, 2, 3, [1,2,3], ["triangle","square","pentagon"], [
-    Ability("Todos tus escuadrones ganan +1 daño base", AbilityType.GENERAL, "permanent")
-])
 _c("Vagabundo", Color.INCOLORO, 3, 2, 0, 3, [1,2,3], ["triangle","square","pentagon"], [
     Ability("Puede moverse libremente entre capas sin costo de ascenso", AbilityType.GENERAL, "permanent")
 ])
@@ -1296,7 +1285,6 @@ _c("Elixirista de Combate", Color.ALQUIMISTA, 3, 3, 1, 2, [1,2], ["triangle","sq
     Ability("En triángulo: al inicio del turno, +1 HP a todas las cartas del escuadrón", AbilityType.FORMATION, "start_of_turn", formation_required="triangle")
 ])
 _c("Alquimista de Asedio", Color.ALQUIMISTA, 2, 3, 2, 2, [1,2,3], ["square"], [
-    Ability("En Rojo: ignora Guardaespaldas. En Gris: +2 D al atacar nodos.", AbilityType.COLOR, "on_attack", color_required=Color.GUERRERO)
 ])
 _c("Transmutador de Masas", Color.ALQUIMISTA, 2, 3, 0, 3, [1,2], ["triangle","square","pentagon"], [
     Ability("En cuadrado: intercambia HP de tu escuadrón con el del defensor", AbilityType.FORMATION, "active", formation_required="square")
@@ -1417,7 +1405,7 @@ _c("Envenenador de Suministros", Color.SABOTEADOR, 2, 2, 0, 2, [1], ["square"], 
     Ability("En cuadrado: cartas enemigas en L1 pierden 1 HP al final del turno.", AbilityType.FORMATION, "end_of_turn", formation_required="square")
 ])
 _c("Saboteadora de Retaguardia", Color.SABOTEADOR, 3, 2, 1, 2, [1,2], ["triangle","square"], [
-    Ability("Cuando destruye un vínculo: roba 1 carta.", AbilityType.GENERAL, "on_trigger")
+    Ability("Cuando destruye un vínculo: roba 1 carta.", AbilityType.GENERAL, "on_kill")
 ])
 _c("Cazador de Nodos", Color.SABOTEADOR, 2, 3, 2, 1, [1,2], ["triangle"], [
     Ability("Al atacar nodo en L1/L2: ignora vínculos defensivos del objetivo.", AbilityType.GENERAL, "on_attack")
@@ -1440,7 +1428,7 @@ _c("Espía de Trinchera", Color.SABOTEADOR, 2, 2, 0, 2, [1,2], ["triangle"], [
     Ability("Espía. Se infiltra a L1 o L2 enemigo. No asciende una vez infiltrado.", AbilityType.GENERAL, "permanent")
 ], spy=True)
 _c("Agente Latente", Color.SABOTEADOR, 1, 3, 1, 3, [1,2], ["triangle","square"], [
-    Ability("Espía. Al infiltrar: mira carta enemiga en L1/L2. Si es Logistrón, destrúyela.", AbilityType.GENERAL, "on_trigger")
+    Ability("Espía. Al infiltrar: mira carta enemiga en L1/L2. Si es Logistrón, destrúyela.", AbilityType.GENERAL, "on_enter")
 ], spy=True)
 
 _c("Ingeniero de Retaguardia", Color.INCOLORO, 3, 3, 0, 3, [1,2], ["square","pentagon"], [
@@ -1471,9 +1459,6 @@ _c("Prior del Santuario", Color.SELLADOR, 2, 4, 0, 4, [1,2], ["square"], [
 
 _c("Destiladora de Defensas", Color.ALQUIMISTA, 3, 3, 0, 2, [1,2], ["triangle","square"], [
     Ability("[1]: carta en L1/L2 gana +2 HP y +1 D este turno.", AbilityType.ACTIVE, "active", action_cost=1)
-])
-_c("Alquimista de la Forma", Color.ALQUIMISTA, 2, 2, 0, 4, [1], ["triangle","square","pentagon"], [
-    Ability("En pentágono: tus cartas en L1 forman pentágonos sin restricción.", AbilityType.FORMATION, "permanent", formation_required="pentagon")
 ])
 
 # Legacy alias
