@@ -1376,9 +1376,14 @@ class GameState:
             has_vanguardia = any("Vanguardia" in a.description for a in card.definition.abilities)
             has_linea_de_fuego = any("Línea de fuego" in a.description for a in card.definition.abilities)
             
-            if layer == 2 and not has_vanguardia and not has_linea_de_fuego:
+            if layer == 2 and not (has_vanguardia or has_linea_de_fuego):
                 return f"{card.definition.name} no puede entrar directamente en L2 (requiere Vanguardia)."
-            if layer == 3 and not has_linea_de_fuego:
+            # Línea de fuego grants L3; some Vanguardia cards also grant L3 per
+            # their card text (e.g. "Vanguardia: entra en L3").
+            vanguard_grants_l3 = any(
+                "Vanguardia" in a.description and "l3" in a.description.lower()
+                for a in card.definition.abilities)
+            if layer == 3 and not (has_linea_de_fuego or vanguard_grants_l3):
                 return f"{card.definition.name} no puede entrar directamente en L3 (requiere Línea de fuego)."
             
             if layer not in card.definition.allowed_layers:
@@ -1401,6 +1406,11 @@ class GameState:
         # ─── Dispatch on_enter modifiers ───
         for mod in self._modifiers.get("on_enter", []):
             if mod.source_card_id == card.card_id:
+                if mod.effect_type == "vanguard_entry":
+                    # Positional entry is already enforced/validated by the
+                    # layer checks in play_card(); the modifier is declarative
+                    # only, so don't no-op-dispatch it through _apply_on_enter.
+                    continue
                 self._apply_on_enter(mod, card, player)
 
         # ─── after_play hook ───
@@ -1564,11 +1574,16 @@ class GameState:
     # ═══════════════════════════════════════════════════════════════
 
     def can_use_ability(self, player: int, card: CardInstance,
-                        ability_index: int = 0) -> Optional[str]:
-        """Check if a card can use an active ability."""
-        if player != self.active_player:
+                        ability_index: int = 0, reactive: bool = False) -> Optional[str]:
+        """Check if a card can use an active ability.
+
+        reactive=True (Árbitro del Juego-style "instant" negate) bypasses the
+        active-player / ACTIONS-phase restrictions so it can fire on the
+        opponent's turn in response to an enemy effect.
+        """
+        if player != self.active_player and not reactive:
             return "No es tu turno."
-        if self.phase != Phase.ACTIONS:
+        if self.phase != Phase.ACTIONS and not reactive:
             return "No estás en la fase de acciones."
         if not card.position or card.position[0] == -1:
             return "La carta no está en el tablero."
@@ -1602,15 +1617,18 @@ class GameState:
         - "descarta": discard effects
         """
         targets = targets or {}
-        err = self.can_use_ability(player, card, ability_index)
+        active_abilities_pre = [a for a in card.definition.abilities
+                                if a.ability_type.name == 'ACTIVE']
+        ability_pre = (active_abilities_pre[ability_index]
+                       if 0 <= ability_index < len(active_abilities_pre) else None)
+        desc_lower_pre = ability_pre.description.lower() if ability_pre else ""
+        # Reactive "instant" abilities (e.g. Árbitro del Juego) may fire during
+        # the OPPONENT's turn to negate an effect as it resolves.
+        is_reactive = "niega un efecto" in desc_lower_pre
+
+        err = self.can_use_ability(player, card, ability_index, reactive=is_reactive)
         if err:
             return err
-
-        # Árbitro del Juego: negate enemy effect
-        if player != self.active_player and self._negate_next:
-            self._negate_next = False
-            self._log(f"  {card.definition.name}: efecto negado por Árbitro del Juego")
-            return None
 
         active_abilities = [a for a in card.definition.abilities
                            if a.ability_type.name == 'ACTIVE']
@@ -1627,6 +1645,23 @@ class GameState:
             return None
 
         try:
+            # ─── Discard then draw (checked BEFORE generic draw so the ───
+            # ─── discard half isn't swallowed by an early return) ───
+            if "descarta" in desc_lower and "roba" in desc_lower:
+                import re
+                dc_match = re.search(r'descarta\s+(\d+)', desc_lower)
+                discard_count = int(dc_match.group(1)) if dc_match else 1
+                dr_match = re.search(r'roba\s+(\d+)', desc_lower)
+                draw_count = int(dr_match.group(1)) if dr_match else 1
+                for _ in range(min(discard_count, len(self.hands[player]))):
+                    if self.hands[player]:
+                        self.discard_piles[player].append(self.hands[player].pop())
+                for _ in range(draw_count):
+                    self._draw_card(player)
+                self.actions_remaining -= cost
+                self._log(f"  {card.definition.name}: descarta {discard_count}, roba {draw_count}")
+                return None
+
             # ─── Draw effects ───
             if "roba" in desc_lower and "control" not in desc_lower and "vínculo" not in desc_lower:
                 # Count draws mentioned in description
@@ -1971,8 +2006,9 @@ class GameState:
                 self._log(f"  {card.definition.name}: rompe vínculos de escuadrón enemigo ({squad.squad_type})")
                 return None
 
-            # ─── Destroy specific link ───
-            if ("destruye" in desc_lower or "rompe" in desc_lower) and "vínculo" in desc_lower and "escuadrón" not in desc_lower:
+            # ─── Destroy specific link (skip mass-break "todos los vínculos") ───
+            if (("destruye" in desc_lower or "rompe" in desc_lower) and "vínculo" in desc_lower
+                    and "escuadrón" not in desc_lower and "todos los vínculos" not in desc_lower):
                 target_card = get_target_card("target_id")
                 if not target_card:
                     return "Selecciona las dos cartas del vínculo a destruir."
@@ -2253,20 +2289,7 @@ class GameState:
                                                 break
                 return None
 
-            # ─── Discard then draw ───
-            if "descarta" in desc_lower and "roba" in desc_lower:
-                dc_match = re.search(r'descarta\s+(\d+)', desc_lower)
-                discard_count = int(dc_match.group(1)) if dc_match else 1
-                dr_match = re.search(r'roba\s+(\d+)', desc_lower)
-                draw_count = int(dr_match.group(1)) if dr_match else 1
-                for _ in range(min(discard_count, len(self.hands[player]))):
-                    if self.hands[player]:
-                        self.discard_piles[player].append(self.hands[player].pop())
-                for _ in range(draw_count):
-                    self._draw_card(player)
-                self.actions_remaining -= cost
-                self._log(f"  {card.definition.name}: descarta {discard_count}, roba {draw_count}")
-                return None
+            # ─── (Discard-then-draw moved up, before generic draw) ───
 
             # ─── Temp D buff squad-wide ───
             if ("ganan" in desc_lower or "gana" in desc_lower) and "+" in desc and "d" in desc_lower:
@@ -2380,15 +2403,21 @@ class GameState:
             # ─── G4: Break all enemy links ───
             if "rompe todos los vínculos enemigos" in desc_lower:
                 enemy = 1 - player
-                broken = []
-                for cid, node in list(self.network.nodes.items()):
+                broken = 0
+                # Links live in Network.links (dict[int, set[int]]) keyed by card_id
+                # and remove_link takes CardInstance objects — iterate enemy cards
+                # that actually have links.
+                for cid in list(self.network.links.keys()):
                     card_obj = self.all_cards.get(cid)
-                    if card_obj and card_obj.owner == enemy:
-                        for neighbor in list(node.connected):
-                            self.network.remove_link(cid, neighbor)
-                            broken.append(cid)
+                    if not card_obj or card_obj.owner != enemy:
+                        continue
+                    for neighbor_id in list(self.network.links.get(cid, set())):
+                        neighbor = self.all_cards.get(neighbor_id)
+                        if neighbor is not None:
+                            self.network.remove_link(card_obj, neighbor)
+                            broken += 1
                 self.actions_remaining -= cost
-                self._log(f"  {card.definition.name}: rompe {len(broken)} vínculos enemigos")
+                self._log(f"  {card.definition.name}: rompe {broken} vínculos enemigos")
                 return None
 
             # ─── G5: Destroy all enemy Logistrones ───
@@ -2749,6 +2778,12 @@ class GameState:
                     if mod.source_card_id in (card_a.card_id, card_b.card_id):
                         cost = 0
                         self._log(f"  {source_card.definition.name}: vínculo sin costo")
+
+        # Guard: never let the action ledger go negative (bypass/free-link
+        # paths previously skipped the affordability check and could push it
+        # below zero). If cost was waived to 0 this is a no-op.
+        if cost > 0 and self.actions_remaining < cost:
+            return f"Necesitas {cost} acciones (tienes {self.actions_remaining})."
 
         self.network.add_link(card_a, card_b)
 
