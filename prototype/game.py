@@ -2317,7 +2317,7 @@ class GameState:
                 d_match = re.search(r'\+(\d+)\s*(d|daño)', desc_lower)
                 delta = int(d_match.group(1)) if d_match else 1
                 if "este turno" in desc_lower:
-                    squad = self.network.find_squads(self.all_cards).get(card.card_id)
+                    squad = self._squad_of(card.card_id)
                     if squad:
                         for cid in squad.members:
                             mem = self.all_cards.get(cid)
@@ -2364,7 +2364,7 @@ class GameState:
                 dmg = int(hp_match.group(1)) if hp_match else 1
                 target_card = get_target_card("target_id")
                 if target_card:
-                    squad = self.network.find_squads(self.all_cards).get(target_card.card_id)
+                    squad = self._squad_of(target_card.card_id)
                     if squad:
                         for cid in list(squad.members):
                             mem = self.all_cards.get(cid)
@@ -2456,16 +2456,13 @@ class GameState:
             # ─── G6: Mass free link ───
             if "conecta" in desc_lower and "no vinculadas" in desc_lower and "vínculos gratis" in desc_lower:
                 linked = 0
-                for cid, node in self.network.nodes.items():
-                    card_obj = self.all_cards.get(cid)
-                    if card_obj and card_obj.owner == player:
-                        for cid2, node2 in self.network.nodes.items():
-                            card2 = self.all_cards.get(cid2)
-                            if card2 and card2.owner == player and cid != cid2:
-                                if self.network.can_link(card_obj) and self.network.can_link(card2):
-                                    if cid2 not in node.connected:
-                                        self.network.add_link(card_obj, card2)
-                                        linked += 1
+                mine = [c for c in self.all_cards.values() if c.owner == player]
+                for i, card_obj in enumerate(mine):
+                    for card2 in mine[i+1:]:
+                        if (self.network.can_link(card_obj) and self.network.can_link(card2)
+                                and not self.network.has_link(card_obj, card2)):
+                            self.network.add_link(card_obj, card2)
+                            linked += 1
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: conecta {linked} cartas con vínculos gratis")
                 return None
@@ -2498,8 +2495,8 @@ class GameState:
             if "intercambia hp" in desc_lower and "escuadrón" in desc_lower:
                 target_card = get_target_card("target_id")
                 if target_card:
-                    my_squad = self.network.find_squads(self.all_cards).get(card.card_id)
-                    enemy_squad = self.network.find_squads(self.all_cards).get(target_card.card_id)
+                    my_squad = self._squad_of(card.card_id)
+                    enemy_squad = self._squad_of(target_card.card_id)
                     if my_squad and enemy_squad:
                         my_hps = {}
                         for cid in my_squad.members:
@@ -2599,14 +2596,17 @@ class GameState:
                 enemy = 1 - player
                 target_card = get_target_card("target_id")
                 if target_card:
-                    attacker_squad = self.network.find_squads(self.all_cards).get(target_card.card_id)
+                    attacker_squad = self._squad_of(target_card.card_id)
                     if attacker_squad:
-                        # Pick another enemy squad as target
-                        for cid2, squad2 in self.network.find_squads(self.all_cards).items():
-                            card2 = self.all_cards.get(cid2)
-                            if card2 and card2.owner == enemy and squad2 is not attacker_squad:
+                        # Pick another enemy squad as target (find_squads → list)
+                        for squad2 in self.network.find_squads(self.all_cards):
+                            if squad2 is attacker_squad:
+                                continue
+                            # enemy squad (majority owner == enemy)
+                            owners = [self.all_cards[m].owner for m in squad2.members if self.all_cards.get(m)]
+                            if owners and owners.count(enemy) > len(owners) // 2:
                                 # Force attack: attacker squad damages defender squad
-                                atk_dmg = sum(self.all_cards[cid].definition.damage for cid in attacker_squad.members if self.all_cards.get(cid))
+                                atk_dmg = sum(self.all_cards[cid].definition.damage_bonus for cid in attacker_squad.members if self.all_cards.get(cid))
                                 for cid in squad2.members:
                                     mem = self.all_cards.get(cid)
                                     if mem:
@@ -2646,27 +2646,42 @@ class GameState:
             if "toma control" in desc_lower and "escuadrón" in desc_lower:
                 target_card = get_target_card("target_id")
                 if target_card and target_card.owner != player:
-                    squad = self.network.find_squads(self.all_cards).get(target_card.card_id)
+                    # find_squads returns a list — locate the squad containing the target
+                    squad = None
+                    for sq in self.network.find_squads(self.all_cards):
+                        if target_card.card_id in sq.members:
+                            squad = sq
+                            break
                     if squad:
                         for cid in list(squad.members):
                             mem = self.all_cards.get(cid)
                             if mem:
                                 old_owner = mem.owner
+                                # Move to player cells; if no free cell at this meridian,
+                                # DON'T steal the card (it would vanish from the board).
+                                placed = False
+                                if mem.position:
+                                    p, li_old, m = mem.position
+                                    for li_new in range(3):
+                                        if self.board.cells[player][li_new][m] is None:
+                                            placed = True
+                                            break
+                                if not placed:
+                                    self._log(f"  {mem.definition.name}: sin celda libre en meridiano {m}, no puede ser robada")
+                                    continue
                                 self._mind_controlled[cid] = old_owner
                                 mem.owner = player
-                                # Break enemy links
-                                if cid in self.network.nodes:
-                                    for neighbor in list(self.network.nodes[cid].connected):
-                                        self.network.remove_link(cid, neighbor)
+                                # Break enemy links (Network.links, CardInstance objects)
+                                for nb_id in list(self.network.links.get(cid, set())):
+                                    nb = self.all_cards.get(nb_id)
+                                    if nb is not None:
+                                        self.network.remove_link(mem, nb)
                                 # Move to player cells
                                 if mem.position:
                                     p, li_old, m = mem.position
                                     self.board.cells[old_owner][li_old-1][m] = None
-                                    for li_new in range(3):
-                                        if self.board.cells[player][li_new][m] is None:
-                                            self.board.cells[player][li_new][m] = cid
-                                            mem.position = (player, li_new+1, m)
-                                            break
+                                    self.board.cells[player][li_new][m] = cid
+                                    mem.position = (player, li_new+1, m)
                         self._log(f"  {card.definition.name}: toma control del escuadrón de {target_card.definition.name}")
                 self.actions_remaining -= cost
                 return None
@@ -2678,6 +2693,17 @@ class GameState:
             # Safety net: log error, refund actions, don't crash
             self._log(f"  ⚠ Error en habilidad de {card.definition.name}: {str(e)}")
             return f"Error al ejecutar habilidad: {str(e)}"
+
+    def _squad_of(self, card_id: int) -> Optional["Squad"]:
+        """Return the squad (from find_squads) containing card_id, or None.
+
+        find_squads() returns a list of fresh Squad objects, so callers can't use
+        .get(card_id) — this is the canonical lookup.
+        """
+        for sq in self.network.find_squads(self.all_cards):
+            if card_id in sq.members:
+                return sq
+        return None
 
     def can_link(self, player: int, card_a: CardInstance, card_b: CardInstance,
                  bypass_distance: bool = False) -> Optional[str]:
