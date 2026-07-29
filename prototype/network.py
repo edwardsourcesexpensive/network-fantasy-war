@@ -110,7 +110,15 @@ class Network:
             if not c.definition.is_logistron and not c.definition.is_spy
         }
 
-        # Find all connected components in the normal subgraph
+        # Squads are single-owner: split each connected component by owner so a
+        # card linked to an ENEMY card (spy infiltration, frontier↔L3, etc.)
+        # never merges both players into one squad. We compute components over
+        # same-owner links only.
+        def _owner(cid):
+            c = cards.get(cid)
+            return c.owner if c is not None else None
+
+        # Find all connected components in the normal subgraph (same owner)
         visited_components = set()
         for cid in normal_ids:
             if cid in visited_components or cid not in self.links:
@@ -119,18 +127,20 @@ class Network:
                     processed.add(cid)
                 continue
 
-            # BFS to find the component
+            # BFS to find the component (only traverse same-owner links)
             component = set()
             queue = deque([cid])
+            seed_owner = _owner(cid)
             while queue:
                 node = queue.popleft()
                 if node in visited_components:
                     continue
                 visited_components.add(node)
-                if node in normal_ids:
+                if node in normal_ids and _owner(node) == seed_owner:
                     component.add(node)
                     for neighbor in self.links.get(node, set()):
-                        if neighbor in normal_ids and neighbor not in visited_components:
+                        if (neighbor in normal_ids and neighbor not in visited_components
+                                and _owner(neighbor) == seed_owner):
                             queue.append(neighbor)
 
             if len(component) < 2:
@@ -149,21 +159,26 @@ class Network:
         remaining_ids = {cid for cid in normal_ids if cid not in processed and cid in self.links}
         if remaining_ids:
             # BFS to find connected components, then form lines from each
+            # (same-owner only, so cross-owner links don't fuse lines)
             visited = set()
             for cid in remaining_ids:
                 if cid in visited:
                     continue
-                # BFS to get this component
+                # BFS to get this component (same owner as the seed)
                 component = set()
                 queue = [cid]
+                seed_owner = _owner(cid)
                 while queue:
                     node = queue.pop(0)
                     if node in visited:
                         continue
                     visited.add(node)
+                    if _owner(node) != seed_owner:
+                        continue
                     component.add(node)
                     for neighbor in self.links.get(node, set()):
-                        if neighbor in remaining_ids and neighbor not in visited:
+                        if (neighbor in remaining_ids and neighbor not in visited
+                                and _owner(neighbor) == seed_owner):
                             queue.append(neighbor)
                 
                 # Form lines greedily: each node in at most one line
@@ -440,9 +455,36 @@ class Squad:
 def calculate_potenciamiento(attacking_squad: Squad, all_squads: list[Squad],
                               network: Network, cards: dict[int, CardInstance]) -> int:
     """Calculate total potenciamiento an attacking squad receives from friendly squads."""
+    def _owner_of(cid):
+        c = cards.get(cid)
+        return c.owner if c is not None else None
+
+    def _is_alive(cid):
+        c = cards.get(cid)
+        return c is not None and c.current_hp > 0
+
+    attacking_owner = next(
+        (_owner_of(m) for m in attacking_squad.members if _owner_of(m) is not None),
+        None,
+    )
+
     total = 0
+    atk_ids = set(attacking_squad.members)
     for squad in all_squads:
-        if squad is attacking_squad:
+        # Skip self by IDENTITY — find_squads() recomputes fresh Squad objects on
+        # every call, so `squad is attacking_squad` is never True when the caller
+        # passes a squad from a different find_squads() invocation.
+        if set(squad.members) == atk_ids:
+            continue
+        # Only FRIENDLY squads contribute potenciamiento (same owner), and only
+        # if they still have a living member — a wiped squad donates nothing.
+        squad_owner = next(
+            (_owner_of(m) for m in squad.members if _owner_of(m) is not None),
+            None,
+        )
+        if attacking_owner is not None and squad_owner != attacking_owner:
+            continue
+        if not any(_is_alive(m) for m in squad.members):
             continue
         connected = False
         min_distance = float('inf')
