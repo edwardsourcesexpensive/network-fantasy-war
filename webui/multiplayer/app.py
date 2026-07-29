@@ -4,7 +4,7 @@ Flask-SocketIO real-time online play for 2 players.
 """
 import os, random, string, secrets
 from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import SocketIO, emit, join_room
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -735,7 +735,6 @@ def on_action(data):
     # Solo mode: auto-play bot turn
     if room.get("solo") and game.active_player == 1:
         print(f"[Room {code}] Bot turn triggered, active_player={game.active_player}")
-        import time  # keep time module available
         try:
             def emit_bot_state(logs):
                 for sid, pinfo in room["players"].items():

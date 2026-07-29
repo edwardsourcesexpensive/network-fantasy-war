@@ -5,7 +5,7 @@ Game state: complete turn management, combat, spy mechanics, ability triggers.
 import random
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Callable
+from typing import Optional
 from .card import CardInstance, CardDef, Color, Ability, AbilityType
 from .board import Board
 from .network import Network, Squad, calculate_potenciamiento

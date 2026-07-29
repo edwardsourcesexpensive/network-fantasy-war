@@ -2,21 +2,26 @@
 Network Fantasy War — Web UI
 Flask server for browser-based gameplay.
 """
-import sys, os, random, json
+import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify, session
-from prototype.card import ALL_CARDS, Color
 from prototype.game import GameState, Phase
 from prototype.decks import DECKS, DECK_NAMES
 
 app = Flask(__name__)
-app.secret_key = 'nfw-secret-key-2024'
+app.secret_key = os.environ.get('NFW_SECRET_KEY') or os.urandom(32)
 
 # Store game state per session
 games = {}
 pending_attacks = {}  # sid -> {attacker, squad_idx, target}
 ai_states = {}  # sid -> {attack_queue: [squad_indices], done_setup: bool}
+
+def _cleanup_sid(sid):
+    """Drop all server-side state for a session id (prevents unbounded leaks)."""
+    games.pop(sid, None)
+    pending_attacks.pop(sid, None)
+    ai_states.pop(sid, None)
 
 def get_game():
     """Get or create game for current session."""
@@ -102,15 +107,22 @@ def api_new_game():
     data = request.get_json()
     deck1 = data.get('deck1', 'filo')
     deck2 = data.get('deck2', 'jardin')
-    
+    if deck1 not in DECKS or deck2 not in DECKS:
+        return jsonify({"error": f"Mazo desconocido: {deck1}/{deck2}"}), 400
+
+    # Free the previous session's state before minting a new sid (leak fix)
+    old_sid = session.get('game_id')
+    if old_sid:
+        _cleanup_sid(old_sid)
+
     sid = os.urandom(8).hex()
     session['game_id'] = sid
-    
+
     game = GameState(DECKS[deck1][:], DECKS[deck2][:])
     game.start_turn()
     game.entry_phase()
     games[sid] = game
-    
+
     return jsonify({"game_id": sid, "state": game_state(game)})
 
 @app.route('/api/state')
@@ -127,12 +139,13 @@ def api_action():
     game = get_game()
     if not game:
         return jsonify({"error": "No active game"}), 404
-    
+
+    sid = session.get('game_id', '')
     data = request.get_json()
     action = data.get('action')
     args = data.get('args', {})
     player = game.active_player
-    
+
     result = {"ok": False, "error": None}
     
     if action == 'play':
@@ -234,18 +247,23 @@ def api_action():
             if not game.game_over:
                 game.start_turn()
                 game.entry_phase()
+            else:
+                _cleanup_sid(sid)
             result["ok"] = True
-    
+
     elif action == 'end_turn':
         game.phase = Phase.ATTACK
         game.exit_phase()
         if not game.game_over:
             game.start_turn()
             game.entry_phase()
+        else:
+            _cleanup_sid(sid)
         result["ok"] = True
     
     elif action == 'surrender':
         game._end_game(1 - player)
+        _cleanup_sid(sid)  # free the surrendered game
         result["ok"] = True
     
     elif action == 'ai_turn':
@@ -372,6 +390,8 @@ def api_action():
         if not game.game_over:
             game.start_turn()
             game.entry_phase()
+        else:
+            _cleanup_sid(sid)  # free the finished game (leak fix)
         result["ok"] = True
         result["log"].append("AI termina turno")
     
