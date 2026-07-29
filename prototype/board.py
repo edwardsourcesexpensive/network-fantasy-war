@@ -40,7 +40,13 @@ class Board:
             ]
 
     def _player_layer_to_grid(self, player: int, layer: int) -> int:
-        """Convert player-relative layer (L1=0, L2=1, L3=2) to internal index."""
+        """Convert player-relative layer (L1=1, L2=2, L3=3) to internal 0-based index.
+
+        Raises ValueError on out-of-range input so a caller passing layer=0 or
+        layer=4 fails loudly instead of silently indexing the wrong row.
+        """
+        if not (1 <= layer <= NUM_LAYERS):
+            raise ValueError(f"layer fuera de rango (1-{NUM_LAYERS}): {layer}")
         return layer - 1  # L1->0, L2->1, L3->2
 
     def place_card(self, player: int, card: CardInstance, layer: int, meridian: int):
