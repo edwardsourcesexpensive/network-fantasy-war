@@ -281,6 +281,7 @@ def on_create_solo(data):
         "player_tokens": {"0": secrets.token_hex(16)},
     }
     join_room(code)
+    p0_token = rooms[code]["player_tokens"]["0"]
     
     # Start game immediately
     room = rooms[code]
@@ -294,6 +295,7 @@ def on_create_solo(data):
     s = filtered_state(game, 0)
     s["room_code"] = code
     s["solo"] = True
+    s["token"] = p0_token  # solo seat needs its token to rejoin after navigation
     emit('solo_started', s)
     print(f"[Room {code}] Solo game vs AI ({ai_deck_key}) started")
 
