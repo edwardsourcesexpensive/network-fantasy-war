@@ -1359,11 +1359,31 @@ class GameState:
             return err
 
         card = self.hands[player][hand_index]
+        from_graveyard = False
+        return self._place_card_from(player, card, layer, meridian, self.hands[player], hand_index, from_graveyard)
+
+    def play_from_graveyard(self, player: int, grave_index: int, layer: int, meridian: int) -> Optional[str]:
+        """G7: play a card directly from the discard pile while _grave_play is set."""
+        if not self._grave_play.get(player, False):
+            return "No puedes jugar cartas del cementerio ahora."
+        if player != self.active_player:
+            return "No es tu turno."
+        if self.phase != Phase.ACTIONS:
+            return "No estás en la fase de acciones."
+        if grave_index < 0 or grave_index >= len(self.discard_piles[player]):
+            return "Carta no encontrada en el cementerio."
+        if self.actions_remaining < 1:
+            return f"Necesitas 1 acciones (tienes {self.actions_remaining})."
+        card = self.discard_piles[player][grave_index]
+        return self._place_card_from(player, card, layer, meridian, self.discard_piles[player], grave_index, True)
+
+    def _place_card_from(self, player: int, card: CardInstance, layer: int, meridian: int,
+                         source: list, index: int, from_graveyard: bool) -> Optional[str]:
 
         # Spy: play on frontier
         if card.definition.is_spy:
             self.board.place_spy_frontier(card)
-            self.hands[player].pop(hand_index)
+            source.pop(index)
             self.actions_remaining -= 1
             self._log(f"J{player+1} juega {card.definition.name} en la FRONTERA.")
             return None
@@ -1398,7 +1418,7 @@ class GameState:
             return "Celda bloqueada (adyacente ocupada)."
 
         self.board.place_card(player, card, layer, meridian)
-        self.hands[player].pop(hand_index)
+        source.pop(index)
 
         # Register permanent/on_enter modifiers
         self._register_modifiers(card)
@@ -1430,7 +1450,8 @@ class GameState:
             # Vanguardia: enters directly in L2 — already handled by selection
             pass
 
-        self._log(f"J{player+1} juega {card.definition.name} en L{layer}:{meridian}.")
+        src = "cementerio" if from_graveyard else "mano"
+        self._log(f"J{player+1} juega {card.definition.name} en L{layer}:{meridian} (desde {src}).")
         return None
 
     def can_ascend(self, player: int, card: CardInstance, free: bool = False) -> Optional[str]:
@@ -2375,11 +2396,10 @@ class GameState:
             # ─── G1: Cannot attack this turn ───
             if "no pueden atacar" in desc_lower and "este turno" in desc_lower:
                 enemy = 1 - player
-                for cid_list in self.board.cells[enemy]:
-                    for cid in cid_list:
-                        if cid is not None and self.all_cards.get(cid):
-                            # Flag for attack() to check
-                            self.all_cards[cid]._cannot_attack = True
+                # Flag ALL enemy cards (board + elsewhere); attack() checks the flag
+                for ec in self.all_cards.values():
+                    if ec.owner == enemy:
+                        ec._cannot_attack = True
                 self.actions_remaining -= cost
                 self._log(f"  {card.definition.name}: cartas enemigas no pueden atacar este turno")
                 return None
@@ -2822,6 +2842,12 @@ class GameState:
         self.actions_remaining = 4
         self._attacked_squads = set()
         self._spy_sabotage_used = set()
+        # Reset "este turno" ability flags (G1/G2/G7) and per-card G1 marks
+        self._block_enemy_formation = False
+        self._grave_play = {0: False, 1: False}
+        for _c in self.all_cards.values():
+            if getattr(_c, "_cannot_attack", False):
+                _c._cannot_attack = False
         self.log = []
         self._log(f"═══ TURNO {self.turn_number} — Jugador {self.active_player + 1} ═══")
 
@@ -3071,6 +3097,12 @@ class GameState:
         if self.phase != Phase.ATTACK:
             return "No estás en la fase de ataque."
 
+        # G1: a squad containing a card flagged "cannot attack this turn" can't attack
+        for cid in attacking_squad.members:
+            c = self.all_cards.get(cid)
+            if c is not None and getattr(c, "_cannot_attack", False):
+                return f"{c.definition.name} no puede atacar este turno."
+
         # Check if squad already attacked
         squad_hash = hash(frozenset(attacking_squad.members))
         if squad_hash in self._attacked_squads:
@@ -3101,6 +3133,9 @@ class GameState:
         base = attacking_squad.base_damage
         all_squads = self.network.find_squads(self.all_cards)
         pot = calculate_potenciamiento(attacking_squad, all_squads, self.network, self.all_cards)
+        # G2: enemy blocked their formation bonus this turn → no potenciamiento
+        if self._block_enemy_formation:
+            pot = 0
 
         # D bonus from squad members
         extra = 0
