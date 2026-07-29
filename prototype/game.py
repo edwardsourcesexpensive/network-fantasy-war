@@ -431,6 +431,9 @@ class GameState:
         # Attacked squads this turn
         self._attacked_squads: set[int] = set()  # squad hashes
 
+        # Spy sabotage tracking (once per spy per turn)
+        self._spy_sabotage_used: set[int] = set()
+
         # Temporary color overrides (cleared in exit_phase)
         # {card_id: Color}
         self._temp_colors: dict[int, Color] = {}
@@ -521,6 +524,21 @@ class GameState:
             if mod.effect_type == "color_override":
                 overrides[mod.source_card_id] = mod.params["color"]
         return overrides
+
+    def _get_effective_squad_color(self, card: CardInstance, squad: "Squad") -> Optional[Color]:
+        """Get the effective squad color for COLOR ability checks.
+        
+        If the squad contains at least one Alquimista, each card uses its own
+        printed color instead of the squad's dominant color (§9.3 armonización v1.3).
+        Otherwise, uses the squad's actual dominant color.
+        """
+        has_alchemist = any(
+            self.all_cards[cid].definition.color == Color.ALQUIMISTA
+            for cid in squad.members if cid in self.all_cards
+        )
+        if has_alchemist:
+            return card.definition.color
+        return squad.get_dominant_color(self._get_color_overrides())
 
     def _register_temp_modifier(self, mod: Modifier):
         """Register a temporary modifier (cleaned in exit_phase)."""
@@ -1442,6 +1460,12 @@ class GameState:
             return err
 
         if card.definition.is_spy:
+            # Disuelve vínculos con unidades propias antes de infiltrarse
+            for neighbor_id in list(self.network.get_links(card)):
+                neighbor = self.all_cards.get(neighbor_id)
+                if neighbor and neighbor.owner == player and neighbor.position and neighbor.position[0] != -1:
+                    self.network.remove_link(card, neighbor)
+                    self._log(f"  Vínculo espía disuelto: {card.definition.name} ⟷ {neighbor.definition.name}")
             # Infiltrate spy into enemy territory
             self.spies_infiltrated[player].append(card.card_id)
             self.board.frontier_cards.remove(card.card_id)
@@ -2635,27 +2659,32 @@ class GameState:
                     if other.definition.color.value.lower() in ability.description.lower():
                         return f"{card.definition.name} es reticente a {other.definition.color.value}."
 
-        # Special: spy on frontier linking to enemy L3
-        a_is_frontier_spy = (card_a.definition.is_spy and card_a.position and card_a.position[0] == -1)
-        b_is_frontier_spy = (card_b.definition.is_spy and card_b.position and card_b.position[0] == -1)
-        if a_is_frontier_spy and not b_is_frontier_spy:
-            if card_b.owner != player:
-                pass
-        if b_is_frontier_spy and not a_is_frontier_spy:
-            if card_a.owner != player:
-                pass
-
-        # Normal distance check
-        if not bypass_distance and not a_is_frontier_spy and not b_is_frontier_spy:
-            dist = self.board.spatial_distance(card_a.position, card_b.position)
-            if dist is None:
-                return "Distancia espacial inválida para vínculo."
-
-            cost = {"corta": 1, "media": 1, "larga": 3}.get(dist, 999)
-            if dist == "media" and card_a.definition.color != card_b.definition.color:
-                cost = 2
+        # Frontier / distance check
+        a_on_frontier = card_a.position and card_a.position[0] == -1
+        b_on_frontier = card_b.position and card_b.position[0] == -1
+        
+        if not bypass_distance and not (a_on_frontier and b_on_frontier):
+            # Frontier ↔ enemy L3: special case, cost = 4
+            is_frontier_l3 = False
+            if a_on_frontier and not b_on_frontier and card_b.owner != player:
+                is_frontier_l3 = True
+            elif b_on_frontier and not a_on_frontier and card_a.owner != player:
+                is_frontier_l3 = True
+            
+            if is_frontier_l3:
+                cost = 4
+            else:
+                dist = self.board.spatial_distance(card_a.position, card_b.position)
+                if dist is None:
+                    return "Distancia espacial inválida para vínculo."
+                cost = {"corta": 1, "media": 1, "larga": 3}.get(dist, 999)
+                if dist == "media" and card_a.definition.color != card_b.definition.color:
+                    cost = 2
+            
+            # Logistron always costs 1 (prevails over frontier-L3 and all others)
             if card_a.definition.is_logistron or card_b.definition.is_logistron:
                 cost = 1
+            
             if self.actions_remaining < cost:
                 return f"Necesitas {cost} acciones (tienes {self.actions_remaining})."
 
@@ -2680,17 +2709,31 @@ class GameState:
         if err:
             return err
 
-        if bypass_distance or (card_a.definition.is_spy and card_a.position and card_a.position[0] == -1):
+        a_on_frontier = card_a.position and card_a.position[0] == -1
+        b_on_frontier = card_b.position and card_b.position[0] == -1
+        
+        if bypass_distance or (a_on_frontier and b_on_frontier):
             cost = 1
         else:
-            dist = self.board.spatial_distance(card_a.position, card_b.position)
-            if dist:
-                cost = {"corta": 1, "media": 1, "larga": 3}[dist]
-                if dist == "media" and card_a.definition.color != card_b.definition.color:
-                    cost = 2
+            # Frontier ↔ enemy L3: cost = 4
+            is_frontier_l3 = False
+            if a_on_frontier and not b_on_frontier and card_b.owner != player:
+                is_frontier_l3 = True
+            elif b_on_frontier and not a_on_frontier and card_a.owner != player:
+                is_frontier_l3 = True
+            
+            if is_frontier_l3:
+                cost = 4
             else:
-                cost = 1
+                dist = self.board.spatial_distance(card_a.position, card_b.position)
+                if dist:
+                    cost = {"corta": 1, "media": 1, "larga": 3}[dist]
+                    if dist == "media" and card_a.definition.color != card_b.definition.color:
+                        cost = 2
+                else:
+                    cost = 1
 
+        # Logistron always costs 1 (prevails over all)
         if card_a.definition.is_logistron or card_b.definition.is_logistron:
             cost = 1
         
@@ -2743,6 +2786,7 @@ class GameState:
         self.phase = Phase.ENTRY
         self.actions_remaining = 4
         self._attacked_squads = set()
+        self._spy_sabotage_used = set()
         self.log = []
         self._log(f"═══ TURNO {self.turn_number} — Jugador {self.active_player + 1} ═══")
 
@@ -2768,7 +2812,7 @@ class GameState:
             params = mod.params
             if params.get("ability_type") == "COLOR":
                 req_color = params.get("color_required")
-                if req_color and card_squad.get_dominant_color(self._get_color_overrides()).value != req_color:
+                if req_color and self._get_effective_squad_color(card, card_squad).value != req_color:
                     continue
             if params.get("ability_type") == "FORMATION":
                 req_form = params.get("formation_required")
@@ -2847,7 +2891,19 @@ class GameState:
         self.phase = Phase.EXIT
         squads = self.network.find_squads(self.all_cards)
 
-        # ─── Dispatch end_of_turn modifiers ───
+        # ─── 1. Purge isolated enemy nodes (before end_of_turn, per §5.5) ───
+        enemy = 1 - player
+        for cid in list(self.all_cards.keys()):
+            card = self.all_cards.get(cid)
+            if card and card.owner == enemy and card.position and card.position[0] != -1:
+                if self.network.link_count(card) == 0 and not card.definition.is_spy:
+                    self._destroy_card(card)
+                    self._log(f"  Purga: {card.definition.name} aislado, destruido.")
+
+        # Recalculate squads after purge (connectivity may have changed)
+        squads = self.network.find_squads(self.all_cards)
+
+        # ─── 2. Dispatch end_of_turn modifiers (incl. Autofobia) ───
         for mod in self._modifiers.get("end_of_turn", []):
             card = self.all_cards.get(mod.source_card_id)
             if not card or card.owner != player or not card.position or card.position[0] == -1:
@@ -2864,7 +2920,7 @@ class GameState:
             params = mod.params
             if params.get("ability_type") == "COLOR":
                 req_color = params.get("color_required")
-                if req_color and card_squad.get_dominant_color(self._get_color_overrides()).value != req_color:
+                if req_color and self._get_effective_squad_color(card, card_squad).value != req_color:
                     continue
             if params.get("ability_type") == "FORMATION":
                 req_form = params.get("formation_required")
@@ -2908,15 +2964,6 @@ class GameState:
             if self.seals[player] <= 0:
                 self._end_game(1 - player)
                 return
-
-        # Purge isolated enemy nodes
-        enemy = 1 - player
-        for cid in list(self.all_cards.keys()):
-            card = self.all_cards.get(cid)
-            if card and card.owner == enemy and card.position and card.position[0] != -1:
-                if self.network.link_count(card) == 0 and not card.definition.is_spy:
-                    self._destroy_card(card)
-                    self._log(f"  Purga: {card.definition.name} aislado, destruido.")
 
         self._log(f"  Fin del turno. Sellos J{player+1}: {self.seals[player]}")
 
@@ -3186,6 +3233,8 @@ class GameState:
             return "No te quedan acciones."
         if spy_card.card_id not in self.spies_infiltrated[player]:
             return "Ese espía no está infiltrado."
+        if spy_card.card_id in self._spy_sabotage_used:
+            return "Este espía ya usó sabotaje este turno."
 
         # For now, just break a random link of a card the spy is linked to
         links = self.network.get_links(spy_card)
@@ -3198,6 +3247,7 @@ class GameState:
             if neighbor and not neighbor.definition.is_spy:
                 self.network.remove_link(spy_card, neighbor)
                 self.actions_remaining -= 1
+                self._spy_sabotage_used.add(spy_card.card_id)
                 self._log(f"  Sabotaje: {spy_card.definition.name} rompe vínculo con {neighbor.definition.name}")
                 return None
 

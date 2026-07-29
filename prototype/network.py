@@ -166,11 +166,13 @@ class Network:
                         if neighbor in remaining_ids and neighbor not in visited:
                             queue.append(neighbor)
                 
-                # Form lines from all linked pairs in this component
-                paired = set()  # track which cards have been paired already
-                for a in component:
-                    for b in self.links.get(a, set()):
-                        if b in component and b > a:  # each pair once
+                # Form lines greedily: each node in at most one line
+                paired = set()
+                for a in sorted(component):
+                    if a in paired:
+                        continue
+                    for b in sorted(self.links.get(a, set())):
+                        if b in component and b not in paired and b > a:
                             squads.append(Squad(
                                 members={a, b},
                                 squad_type="line",
@@ -179,6 +181,7 @@ class Network:
                             ))
                             paired.add(a)
                             paired.add(b)
+                            break
                 
                 # Remaining unpaired cards in this component
                 for c in component - paired:
@@ -397,8 +400,8 @@ class Squad:
     @property
     def empowerment_range(self) -> int:
         table = {
-            "line": 1,
-            "triangle": 1,
+            "line": 2,
+            "triangle": 2,
             "square": 2,
             "square_ampliado": 2,
             "pentagon": 999,

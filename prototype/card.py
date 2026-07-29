@@ -162,7 +162,7 @@ _c("Retransmisor de Batalla", Color.LOGISTRON, 5, 1, 1, 4, [1,2,3], [], logistro
 ])
 
 _c("Sombra Infiltrada", Color.ESPIA, 3, 1, 0, 2, [], [], spy=True, abilities=[
-    Ability("Parasitismo: sabotaje (1 acción) e inteligencia (1 carta al azar al atacar)", AbilityType.GENERAL, "permanent")
+    Ability("Parasitismo: sabotaje encubierto (1 acción) e inteligencia (1 carta al azar al atacar)", AbilityType.GENERAL, "permanent")
 ])
 
 _c("Eco de la Frontera", Color.ESPIA, 3, 2, 0, 3, [], [], spy=True, abilities=[

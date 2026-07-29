@@ -140,7 +140,7 @@ class Board:
             return "media"
         if dv == 1 and dh == 2:
             return "media"
-        if dv == 2 and dh == 1:
+        if dv == 2 and dh <= 1:
             return "larga"
         if dv == 1 and dh == 3:
             return "larga"

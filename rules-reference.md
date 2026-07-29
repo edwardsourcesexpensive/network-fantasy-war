@@ -339,7 +339,7 @@ Una habilidad de formación puede estar **anidada** dentro de una habilidad de c
 | Guerreros | Daño base +1 por cada nodo del escuadrón en L2 o L3 | Al atacar |
 | Políticos | Intercambiar las posiciones de 2 cartas propias ubicadas en cualquier parte del propio territorio (no necesariamente del escuadrón político), respetando las reglas de adyacencia (§3.3) en las posiciones resultantes | Inicio del turno |
 | Saboteadores | Deshacer hasta 2 vínculos cortos en red enemiga por escuadrón | Fin del turno |
-| Alquimistas | En un escuadrón que contenga al menos un Alquimista, se activan las habilidades de color de **cada carta según su propio color impreso**, incluso si el escuadrón en conjunto es incoloro o de color mayoritario distinto | Permanente |
+| Alquimistas | En un escuadrón que contenga al menos un Alquimista, **cada carta del escuadrón activa sus habilidades de color como si el escuadrón fuera de su propio color impreso** | Permanente |
 | Militares | Ascender 1 unidad sin costo por escuadrón | Inicio del turno |
 | Festivos | +2 de armadura a los vínculos del escuadrón | Permanente |
 | Monstruos | Remover 1 nodo enemigo cuyo Grado (G) sea menor que el ataque del escuadrón, por escuadrón | Fin del turno |
