@@ -34,6 +34,10 @@ def get_game():
 def index():
     return render_template('game.html')
 
+@app.route('/reglas')
+def reglas():
+    return app.send_static_file('NFW-Reglas-Jugador.pdf')
+
 @app.route('/api/decks')
 def api_decks():
     """List available decks with stats."""
