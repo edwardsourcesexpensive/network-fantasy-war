@@ -228,7 +228,7 @@ def serve_rules():
     import os as _os
     from flask import send_file as _send_file
     rules_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))), 
-                                'rules-reference-comprehensive.pdf')
+                                'NFW-Reglas-Jugador.pdf')
     return _send_file(rules_path, mimetype='application/pdf')
 
 
