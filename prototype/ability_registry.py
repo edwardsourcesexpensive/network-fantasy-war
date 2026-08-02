@@ -953,6 +953,31 @@ class AbilityRegistry:
                     params={"count": 1})]
         self._add("on_kill: draw", _ok_draw)
 
+        # ─── Stubs: not-implemented on_kill (on-destroy effects) ───
+        def _ok_grimoire_damage(desc, ability, cid):
+            if ability.trigger != "on_kill": return None
+            if not ("destruido" in desc and "grimorio" in desc): return None
+            return [Modifier(source_card_id=cid, hook="on_kill",
+                    effect_type="grimoire_damage_on_death", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_kill: grimoire damage (STUB)", _ok_grimoire_damage, implemented=False)
+
+        def _ok_tutor_monster(desc, ability, cid):
+            if ability.trigger != "on_kill": return None
+            if not ("busca" in desc and "monstruo" in desc): return None
+            return [Modifier(source_card_id=cid, hook="on_kill",
+                    effect_type="tutor_monster_on_death", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_kill: tutor monster (STUB)", _ok_tutor_monster, implemented=False)
+
+        def _ok_create_tokens(desc, ability, cid):
+            if ability.trigger != "on_kill": return None
+            if not ("crea" in desc and "fichas" in desc): return None
+            return [Modifier(source_card_id=cid, hook="on_kill",
+                    effect_type="create_tokens_on_death", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_kill: create tokens (STUB)", _ok_create_tokens, implemented=False)
+
         # ═══════════════════════════════════════════════════════════════
         # ON_ENTER passive patterns
         # ═══════════════════════════════════════════════════════════════
@@ -1063,6 +1088,91 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_enter", effect_type="discard", layer="self",
                     params={"count": count})]
         self._add("on_enter: discard", _oe_discard)
+
+        # ─── Stubs: not-implemented on_enter (spy infiltrate effects) ───
+        def _oe_destroy_spy(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if not ("infiltr" in desc or "espía" in desc): return None
+            if "destruye" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="destroy_enemy_spy", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: destroy spy (STUB)", _oe_destroy_spy, implemented=False)
+
+        def _oe_destroy_node(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if not ("infiltr" in desc or "entrar" in desc): return None
+            if not ("destruye" in desc and "nodo" in desc): return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="destroy_enemy_node", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: destroy node (STUB)", _oe_destroy_node, implemented=False)
+
+        def _oe_take_control(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if "toma el control" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="take_control_logistron", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: take control (STUB)", _oe_take_control, implemented=False)
+
+        def _oe_reveal_hand(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if not ("infiltr" in desc or "entrar" in desc): return None
+            if not ("ves" in desc or "revela" in desc or "inteligencia" in desc): return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="reveal_enemy_hand", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: reveal hand (STUB)", _oe_reveal_hand, implemented=False)
+
+        def _oe_block_potenciamiento(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if "potenciamiento" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="block_potenciamiento", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: block potenciamiento (STUB)", _oe_block_potenciamiento, implemented=False)
+
+        def _oe_move_any_cell(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if not ("muévelo" in desc or ("mueve" in desc and "celda" in desc)): return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="move_any_cell", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: move any cell (STUB)", _oe_move_any_cell, implemented=False)
+
+        def _oe_destroy_logistron(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if not ("destruye" in desc and "logistrón" in desc): return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="destroy_enemy_logistron", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: destroy logistron (STUB)", _oe_destroy_logistron, implemented=False)
+
+        def _oe_swap_links(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if not ("intercambia" in desc and "vínculo" in desc): return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="swap_enemy_links", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: swap links (STUB)", _oe_swap_links, implemented=False)
+
+        def _oe_draw_multicolor(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if not ("roba" in desc and ("colores" in desc or "colores distintos" in desc)): return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="draw_multicolor", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: draw multicolor (STUB)", _oe_draw_multicolor, implemented=False)
+
+        def _oe_reveal_random(desc, ability, cid):
+            if ability.trigger != "on_enter": return None
+            if not ("azar" in desc or ("carta" in desc and "mano" in desc and "revela" not in desc)):
+                return None
+            return [Modifier(source_card_id=cid, hook="on_enter",
+                    effect_type="reveal_random_card", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_enter: reveal random (STUB)", _oe_reveal_random, implemented=False)
 
         # ═══════════════════════════════════════════════════════════════
         # ON_ATTACK passive patterns
@@ -1363,6 +1473,15 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_ascend", effect_type="free_ascend", layer="network",
                     params={"condition": cond} if cond else {})]
         self._add("on_ascend: free_ascend", _as_free_ascend)
+
+        # ─── Stub: not-implemented on_ascend ───
+        def _as_move_ally(desc, ability, cid):
+            if ability.trigger != "on_ascend": return None
+            if not ("mueve" in desc and "meridiano" in desc): return None
+            return [Modifier(source_card_id=cid, hook="on_ascend",
+                    effect_type="move_ally_on_ascend", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("on_ascend: move ally (STUB)", _as_move_ally, implemented=False)
 
         # --- on_move ---
         def _om_cannot_move(desc, ability, cid):
