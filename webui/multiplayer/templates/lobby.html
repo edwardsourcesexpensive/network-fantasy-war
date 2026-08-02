@@ -276,9 +276,26 @@ async function toggleDeckDetail(key, el) {
       const tags = [];
       if (c.is_spy) tags.push('🕵️ Espía');
       if (c.is_logistron) tags.push('🔌 Logistrón');
-      const ab = c.abilities.length ? '<div style="color:#888;font-size:8px;margin-top:1px">' + c.abilities.join('<br>') + '</div>' : '';
+      // Build abilities with implementation status dots
+      let ab = '';
+      if (c.abilities_detail && c.abilities_detail.length) {
+        ab = '<div style="color:#888;font-size:8px;margin-top:1px">';
+        c.abilities_detail.forEach(a => {
+          const dot = a.status === 'implemented' ? '<span style="color:#2ecc71">●</span>' :
+                     a.status === 'partial' ? '<span style="color:#f1c40f">◐</span>' :
+                     '<span style="color:#e94560">○</span>';
+          ab += dot + ' ' + a.desc + '<br>';
+        });
+        ab += '</div>';
+      } else if (c.abilities && c.abilities.length) {
+        ab = '<div style="color:#888;font-size:8px;margin-top:1px">' + c.abilities.join('<br>') + '</div>';
+      }
+      // Implementation badge
+      const implPct = c.total_abilities ? Math.round(c.impl_count / c.total_abilities * 100) : 100;
+      const badgeClr = implPct >= 100 ? '#2ecc71' : implPct >= 50 ? '#f1c40f' : '#e94560';
+      const badge = c.total_abilities ? ' <span style="color:' + badgeClr + ';font-size:9px">[' + c.impl_count + '/' + c.total_abilities + ']</span>' : '';
       html += '<div style="background:#0a1a2e;border:1px solid #222;border-radius:3px;padding:5px 8px;margin:3px 0;font-size:10px">' +
-        '<span style="color:' + clr + ';font-weight:bold">' + c.name + '</span>' +
+        '<span style="color:' + clr + ';font-weight:bold">' + c.name + '</span>' + badge +
         ' <span style="color:#888">HP:' + c.hp + ' D:' + c.d + ' V:' + c.v + ' L:' + c.layers.join(',') + '</span>' +
         (tags.length ? ' <span style="color:#4fc3f7;font-size:9px">' + tags.join(' ') + '</span>' : '') +
         ab + '</div>';
