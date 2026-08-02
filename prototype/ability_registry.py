@@ -760,6 +760,7 @@ class AbilityRegistry:
         def _eot_break_link(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
             if "vínculo" not in desc: return None
+            if "autofobia" in desc: return None  # false positive guard
             return [Modifier(source_card_id=cid, hook="end_of_turn", effect_type="break_enemy_link", layer="self",
                     params={"count": 1, **_ability_params(ability)})]
         self._add("eot: break_enemy_link", _eot_break_link)
@@ -794,7 +795,7 @@ class AbilityRegistry:
             if ability.ability_type.name not in ("COLOR", "FORMATION"): return None
             if "autofobia" in desc: return []
             return None
-        self._add("eot: autofobia (color/form)", _eot_color_autofobia, is_active=True)
+        self._add("eot: autofobia (color/form) — STUB", _eot_color_autofobia, is_active=True, implemented=False)
 
         def _eot_color_exact_link(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -830,6 +831,96 @@ class AbilityRegistry:
             if "inflige" in desc and "daño" in desc: return []
             return None
         self._add("eot: inflige daño (color/form)", _eot_inflict_damage, is_active=True)
+
+        # ─── Stubs: not-implemented end_of_turn abilities ───
+        def _eot_autofobia_cond(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if "autofobia" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="autofobia", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("eot: autofobia (STUB)", _eot_autofobia_cond, implemented=False)
+
+        def _eot_restore_armor(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if not ("armadura" in desc and ("restaura" in desc or "recupera" in desc or "+" in desc)):
+                return None
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="restore_armor", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("eot: restore armor (STUB)", _eot_restore_armor, implemented=False)
+
+        def _eot_auto_connect(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if not ("auto-conecta" in desc or ("conecta" in desc and "todas" in desc)):
+                return None
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="auto_connect_all", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("eot: auto-connect (STUB)", _eot_auto_connect, implemented=False)
+
+        def _eot_extra_turn(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if "turno adicional" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="extra_turn", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("eot: extra turn (STUB)", _eot_extra_turn, implemented=False)
+
+        def _eot_global_heal(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if not (("curan" in desc or "cura" in desc) and ("todas" in desc or "red" in desc)):
+                return None
+            full = "completamente" in desc
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="global_heal", layer="self",
+                    params={"full": full, **_ability_params(ability)})]
+        self._add("eot: global heal (STUB)", _eot_global_heal, implemented=False)
+
+        def _eot_double_effects(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if not ("resuelven" in desc and "dos veces" in desc or "duplican" in desc):
+                return None
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="double_eot_effects", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("eot: double effects (STUB)", _eot_double_effects, implemented=False)
+
+        def _eot_move_self(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if not ("muévete" in desc or "mueve" in desc and "meridiano" in desc):
+                return None
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="move_self", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("eot: move self (STUB)", _eot_move_self, implemented=False)
+
+        def _eot_draw_per_color(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if not ("roba" in desc and "por cada" in desc):
+                return None
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="draw_per_color", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("eot: draw per color (STUB)", _eot_draw_per_color, implemented=False)
+
+        def _eot_ascend_all(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if not ("asciende" in desc and "todas" in desc):
+                return None
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="ascend_all", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("eot: ascend all (STUB)", _eot_ascend_all, implemented=False)
+
+        def _eot_damage_enemy(desc, ability, cid):
+            if ability.trigger != "end_of_turn": return None
+            if not ("pierden" in desc and "hp" in desc):
+                return None
+            return [Modifier(source_card_id=cid, hook="end_of_turn",
+                    effect_type="damage_enemy_layer", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("eot: damage enemy (STUB)", _eot_damage_enemy, implemented=False)
 
         # ═══════════════════════════════════════════════════════════════
         # ON_KILL passive patterns
