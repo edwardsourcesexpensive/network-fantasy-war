@@ -13,7 +13,8 @@ from dataclasses import dataclass, field
 from typing import Optional, Callable
 
 from .card import CardInstance, CardDef
-from .game import GameState, Phase
+from .game import GameState
+from .enums import Phase
 
 
 @dataclass

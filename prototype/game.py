@@ -7,17 +7,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 from .card import CardInstance, CardDef, Color, Ability, AbilityType
+from .enums import Phase
 from .board import Board
 from .network import Network, Squad, calculate_potenciamiento
 from .modifier import Modifier
 from .ability_registry import get_registry
+from . import turn_manager
 
-
-class Phase(Enum):
-    ENTRY = "entry"
-    ACTIONS = "actions"
-    ATTACK = "attack"
-    EXIT = "exit"
 
 
 # Backward-compatible alias for code that imports from game.py
@@ -1801,229 +1797,17 @@ class GameState:
     # ═══════════════════════════════════════════════════════════════
 
     def start_turn(self):
-        self.phase = Phase.ENTRY
-        self.actions_remaining = 4
-        self._attacked_squads = set()
-        self._spy_sabotage_used = set()
-        # Reset "este turno" ability flags (G1/G2/G7) and per-card G1 marks
-        self._block_enemy_formation = False
-        self._grave_play = {0: False, 1: False}
-        for _c in self.all_cards.values():
-            if getattr(_c, "_cannot_attack", False):
-                _c._cannot_attack = False
-        self.log = []
-        self._log(f"═══ TURNO {self.turn_number} — Jugador {self.active_player + 1} ═══")
+        turn_manager.start_turn(self)
 
     def entry_phase(self):
         """Entry phase: trigger start-of-turn abilities + draw 2."""
-        player = self.active_player
-        squads = self.network.find_squads(self.all_cards)
-
-        # ─── Dispatch start_of_turn modifiers ───
-        for mod in self._modifiers.get("start_of_turn", []):
-            card = self.all_cards.get(mod.source_card_id)
-            if not card or card.owner != player or not card.position or card.position[0] == -1:
-                continue
-            # Find which squad this card belongs to
-            card_squad = None
-            for sq in squads:
-                if card.card_id in sq.members:
-                    card_squad = sq
-                    break
-            if not card_squad:
-                continue
-            # Check COLOR/FORMATION requirements
-            params = mod.params
-            if params.get("ability_type") == "COLOR":
-                req_color = params.get("color_required")
-                if req_color and self._get_effective_squad_color(card, card_squad).value != req_color:
-                    continue
-            if params.get("ability_type") == "FORMATION":
-                req_form = params.get("formation_required")
-                if req_form and card_squad.squad_type.replace("_ampliado", "") != req_form:
-                    continue
-            # Execute effect
-            self._apply_trigger_modifier(mod, card, card_squad, squads)
-
-        # Military faction: free ascension
-        for squad in squads:
-            if squad.get_dominant_color(self._get_color_overrides()) == Color.MILITAR:
-                # Find a card to ascend
-                for cid in squad.members:
-                    card = self.all_cards.get(cid)
-                    if card and card.owner == player and card.position:
-                        _, layer, _ = card.position
-                        if layer < 3 and card.position[0] != -1:
-                            err = self.ascend(player, card)
-                            if not err:
-                                self.actions_remaining += 1  # refund the action
-                                self._log(f"  Militar: ascenso gratis de {card.definition.name}")
-                                break
-
-        # Sabios: extra draw per sage squad
-        extra_draws = 0
-        for squad in squads:
-            if squad.get_dominant_color(self._get_color_overrides()) == Color.SABIO:
-                extra_draws += 1
-                # Archivera bonus
-                for cid in squad.members:
-                    card = self.all_cards.get(cid)
-                    if card and card.owner == player and "Archivera" in card.definition.name:
-                        extra_draws += 1
-                        break
-
-        # Draw 2 + extras
-        total_draws = 2 + extra_draws
-        drawn = 0
-        for _ in range(total_draws):
-            card = self._draw_card(player)
-            if card:
-                drawn += 1
-            else:
-                self.seals[player] -= 1
-                self._log(f"  ¡Fatiga! -1 sello ({self.seals[player]} restantes)")
-                if self.seals[player] <= 0:
-                    self._end_game(1 - player)
-                    return
-
-        self._log(f"  Roba {drawn} carta(s). Mano: {len(self.hands[player])} | Sellos: {self.seals[player]}")
-        self.phase = Phase.ACTIONS
-        # Parasite damage: deal 1 HP to all parasitized hosts
-        for parasite_id, host_id in list(self._attached.items()):
-            host = self.all_cards.get(host_id)
-            if host and host.position and host.position[0] != -1:
-                host.current_hp -= 1
-                parasite = self.all_cards.get(parasite_id)
-                pname = parasite.definition.name if parasite else "?"
-                self._log(f"  🦠 {pname} drena 1 HP a {host.definition.name} ({host.current_hp}/{host.definition.hp})")
-                if host.current_hp <= 0:
-                    self._log(f"  {host.definition.name} MUERE por parásito.")
-                    self._destroy_card(host)
-                    # Parasite is freed
-                    del self._attached[parasite_id]
-        # Politicos: swap positions
-        for squad in squads:
-            if squad.get_dominant_color(self._get_color_overrides()) == Color.POLITICO:
-                self._log(f"  [Político] Puedes intercambiar posiciones de 2 cartas por escuadrón.")
+        turn_manager.entry_phase(self)
 
     def start_attack_phase(self):
-        self.phase = Phase.ATTACK
-        self._log(f"  >>> Fase de Ataque <<<")
+        turn_manager.start_attack_phase(self)
 
     def exit_phase(self):
-        player = self.active_player
-        self.phase = Phase.EXIT
-        squads = self.network.find_squads(self.all_cards)
-
-        # ─── 1. Purge isolated enemy nodes (before end_of_turn, per §5.5) ───
-        enemy = 1 - player
-        for cid in list(self.all_cards.keys()):
-            card = self.all_cards.get(cid)
-            if card and card.owner == enemy and card.position and card.position[0] != -1:
-                if self.network.link_count(card) == 0 and not card.definition.is_spy:
-                    self._destroy_card(card)
-                    self._log(f"  Purga: {card.definition.name} aislado, destruido.")
-
-        # Recalculate squads after purge (connectivity may have changed)
-        squads = self.network.find_squads(self.all_cards)
-
-        # ─── 2. Dispatch end_of_turn modifiers (incl. Autofobia) ───
-        for mod in self._modifiers.get("end_of_turn", []):
-            # Skip TEMPORARY cleanup modifiers (revert_hp_buff, dissolve_temp_link) —
-            # they're handled by the explicit revert/dissolve pass below, not by the
-            # real end-of-turn trigger dispatch (which would no-op or double-fire).
-            if mod.is_temporary:
-                continue
-            card = self.all_cards.get(mod.source_card_id)
-            if not card or card.owner != player or not card.position or card.position[0] == -1:
-                continue
-            # Find which squad this card belongs to
-            card_squad = None
-            for sq in squads:
-                if card.card_id in sq.members:
-                    card_squad = sq
-                    break
-            if not card_squad:
-                continue
-            # Check COLOR/FORMATION requirements
-            params = mod.params
-            if params.get("ability_type") == "COLOR":
-                req_color = params.get("color_required")
-                if req_color and self._get_effective_squad_color(card, card_squad).value != req_color:
-                    continue
-            if params.get("ability_type") == "FORMATION":
-                req_form = params.get("formation_required")
-                if req_form and card_squad.squad_type.replace("_ampliado", "") != req_form:
-                    continue
-            # Execute effect
-            self._apply_trigger_modifier(mod, card, card_squad, squads)
-
-        # Faction effects at end of turn
-        for squad in squads:
-            dom = squad.get_dominant_color(self._get_color_overrides())
-            if dom == Color.SELLADOR:
-                bonus = 10
-                # Abadesa bonus
-                for cid in squad.members:
-                    card = self.all_cards.get(cid)
-                    if card and card.owner == player and "Abadesa" in card.definition.name:
-                        bonus += 5
-                        break
-                self.seals[player] += bonus
-                self._log(f"  Escuadrón Sellador: +{bonus} sellos ({self.seals[player]} total)")
-
-            elif dom == Color.SABOTEADOR:
-                break_count = 2
-                for cid in squad.members:
-                    card = self.all_cards.get(cid)
-                    if card and card.owner == player and "Agente del Silencio" in card.definition.name:
-                        break_count += 1
-                        break
-                self._log(f"  Escuadrón Saboteador: puedes romper {break_count} vínculos enemigos")
-
-            elif dom == Color.MONSTRUO:
-                self._log(f"  Escuadrón Monstruo: puedes remover 1 nodo enemigo (grado < {squad.base_damage})")
-
-        # Discard to 5
-        while len(self.hands[player]) > 5:
-            discarded = self.hands[player].pop()
-            self.discard_piles[player].append(discarded)
-            self.seals[player] -= 1
-            self._log(f"  Descarte: {discarded.definition.name}. -1 sello ({self.seals[player]})")
-            if self.seals[player] <= 0:
-                self._end_game(1 - player)
-                return
-
-        self._log(f"  Fin del turno. Sellos J{player+1}: {self.seals[player]}")
-
-        # Clear temporary HP buffs (revert before modifier cleanup)
-        for mod in self._modifiers.get("end_of_turn", []):
-            if mod.is_temporary and mod.effect_type == "revert_hp_buff":
-                card = self.all_cards.get(mod.source_card_id)
-                if card:
-                    delta = mod.params.get("delta", 0)
-                    card.current_hp = max(0, card.current_hp - delta)
-                    card.current_hp = min(card.current_hp, card.definition.hp)
-
-        # Dissolve temporary links (before modifier cleanup)
-        for mod in self._modifiers.get("end_of_turn", []):
-            if mod.is_temporary and mod.effect_type == "dissolve_temp_link":
-                pair = mod.params.get("pair")
-                if pair:
-                    card_a = self.all_cards.get(pair[0])
-                    card_b = self.all_cards.get(pair[1])
-                    if card_a and card_b:
-                        self.network.remove_link(card_a, card_b)
-
-        # Clear temporary colors
-        self._temp_colors = {}
-
-        # Clear temporary modifiers
-        self._unregister_temp_modifiers()
-
-        # Switch player
-        self.active_player = 1 - self.active_player
-        self.turn_number += 1
+        turn_manager.exit_phase(self)
 
     # ═══════════════════════════════════════════════════════════════
     # Combat
@@ -2572,9 +2356,7 @@ class GameState:
                 self._log(f"  {target.definition.name}: hereda vínculos de {card.definition.name}")
 
     def _end_game(self, winner: int):
-        self.game_over = True
-        self.winner = winner
-        self._log(f"═══ ¡JUGADOR {winner + 1} HA GANADO! El grimorio enemigo ha sido destruido. ═══")
+        turn_manager._end_game(self, winner)
 
     # ═══════════════════════════════════════════════════════════════
     # Display

@@ -6,7 +6,8 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, render_template, request, jsonify, session
-from prototype.game import GameState, Phase
+from prototype.game import GameState
+from prototype.enums import Phase
 from prototype.decks import DECKS, DECK_NAMES
 from prototype.ai import BotPlayer
 
