@@ -11,6 +11,7 @@ from .enums import Phase
 from .board import Board
 from .network import Network, Squad, calculate_potenciamiento
 from .modifier import Modifier
+from .modifier_engine import ModifierEngine
 from .ability_registry import get_registry
 from . import turn_manager
 from . import ability_executor
@@ -83,30 +84,7 @@ class GameState:
         # Permanent modifiers registered when cards enter the board,
         # unregistered when they leave. Temp modifiers from active abilities
         # are registered with is_temporary=True and cleaned in exit_phase.
-        self._modifiers: dict[str, list[Modifier]] = {
-            "modify_squad": [],
-            "modify_damage": [],
-            "before_attack": [],
-            "after_attack": [],
-            "grimoire_defense": [],
-            "before_link": [],
-            "after_link": [],
-            "before_play": [],
-            "after_play": [],
-            "before_destroy": [],
-            "after_destroy": [],
-            "on_ascend": [],
-            "on_move": [],
-            "modify_actions": [],
-            "conditional_draw": [],
-            "spy_infiltrate": [],
-            "color_faction": [],
-            "start_of_turn": [],
-            "end_of_turn": [],
-            "on_kill": [],
-            "on_enter": [],
-            "on_attack": [],
-        }
+        self.modifiers = ModifierEngine()
 
         # Event log for UI
         self.log: list[str] = []
@@ -144,125 +122,30 @@ class GameState:
         self.log.append(msg)
 
     def _get_color_overrides(self) -> dict[int, Color]:
-        """Merge _temp_colors with modifier-based color overrides.
-
-        Modifiers with effect_type='color_override' on hook='modify_squad'
-        provide permanent color changes; _temp_colors handles temporary
-        color swaps from active abilities.
-        """
-        overrides = dict(self._temp_colors)
-        for mod in self._modifiers.get("modify_squad", []):
-            if mod.effect_type == "color_override":
-                overrides[mod.source_card_id] = mod.params["color"]
-        return overrides
+        return self.modifiers.get_color_overrides(self)
 
     def _get_effective_squad_color(self, card: CardInstance, squad: "Squad") -> Optional[Color]:
-        """Get the effective squad color for COLOR ability checks.
-        
-        If the squad contains at least one Alquimista, each card uses its own
-        printed color instead of the squad's dominant color (§9.3 armonización v1.3).
-        Otherwise, uses the squad's actual dominant color.
-        """
-        has_alchemist = any(
-            self.all_cards[cid].definition.color == Color.ALQUIMISTA
-            for cid in squad.members if cid in self.all_cards
-        )
-        if has_alchemist:
-            return card.definition.color
-        return squad.get_dominant_color(self._get_color_overrides())
+        return self.modifiers.get_effective_squad_color(self, card, squad)
 
     def _register_temp_modifier(self, mod: Modifier):
-        """Register a temporary modifier (cleaned in exit_phase)."""
-        mod.is_temporary = True
-        if mod.hook in self._modifiers:
-            self._modifiers[mod.hook].append(mod)
+        self.modifiers.register_temp(mod)
 
     def _unregister_temp_modifiers(self):
-        """Remove all temporary modifiers (called in exit_phase)."""
-        for hook_list in self._modifiers.values():
-            hook_list[:] = [m for m in hook_list if not m.is_temporary]
+        self.modifiers.cleanup()
 
     def _evaluate_condition(self, condition: dict, source: CardInstance) -> bool:
-        """Evaluate a modifier condition against current game state.
-
-        Supported conditions:
-          - positional: {"type": "layer", "value": 1..3}
-          - positional: {"type": "frontier"}
-          - formation: {"type": "formation", "shape": "triangle"|"square"|"pentagon"}
-          - network: {"type": "links", "min": N}
-          - state: {"type": "damaged_this_turn"}
-          - turn: {"type": "once_per_game", "used_set": set()}
-        Returns True if condition is met or if no condition is set.
-        """
-        if not condition:
-            return True
-
-        ctype = condition.get("type")
-
-        # ─── Positional: layer ───
-        if ctype == "layer":
-            if not source.position or source.position[0] == -1:
-                return False
-            return source.position[1] == condition.get("value", 1)
-
-        # ─── Positional: frontier ───
-        if ctype == "frontier":
-            return source.position and source.position[0] == -1
-
-        # ─── Formation ───
-        if ctype == "formation":
-            shape = condition.get("shape", "triangle")
-            squads = self.get_player_squads(source.owner)
-            for sq in squads:
-                if source.card_id in sq.members and sq.squad_type.replace("_ampliado", "") == shape:
-                    return True
-            return False
-
-        # ─── Network: link count ───
-        if ctype == "links":
-            count = self.network.link_count(source)
-            min_links = condition.get("min", 1)
-            return count >= min_links
-
-        # ─── State ───
-        if ctype == "damaged_this_turn":
-            return getattr(source, '_damaged_this_turn', False)
-
-        # ─── Turn ───
-        if ctype == "once_per_game":
-            used = condition.get("used_set", set())
-            return source.card_id not in used
-
-        # Unknown condition type — assume met
-        return True
+        return self.modifiers.evaluate_condition(self, condition, source)
 
     # ═══════════════════════════════════════════════════════════════
     # Modifier Engine
     # ═══════════════════════════════════════════════════════════════
 
     def _register_modifiers(self, card: CardInstance):
-        """Parse a card's abilities into Modifier objects and register them."""
-        for ability in card.definition.abilities:
-            if ability.trigger not in ("permanent", "on_enter", "start_of_turn", "end_of_turn", "on_kill"):
-                continue
-            modifiers = get_registry().parse(ability, card)
-            for mod in modifiers:
-                if mod.hook in self._modifiers:
-                    self._modifiers[mod.hook].append(mod)
-                    self._log(f"  [mod] {card.definition.name}: +{mod.effect_type} on {mod.hook}")
+        self.modifiers.register(self, card)
 
     def _unregister_modifiers(self, card_id: int):
-        """Remove all modifiers belonging to a card (when it leaves the board)."""
-        for hook_name, hook_list in self._modifiers.items():
-            before = len(hook_list)
-            hook_list[:] = [m for m in hook_list if m.source_card_id != card_id]
-            removed = before - len(hook_list)
-            if removed:
-                self._log(f"  [mod] card#{card_id}: -{removed} modifiers from {hook_name}")
+        self.modifiers.unregister(self, card_id)
 
-    def _parse_ability_to_modifiers(self, ability, card):
-        """Backward-compatible wrapper. Delegates to AbilityRegistry."""
-        return get_registry().parse(ability, card)
 
 
     # ═══════════════════════════════════════════════════════════════
@@ -351,17 +234,17 @@ class GameState:
         self._register_modifiers(card)
 
         # ─── Dispatch on_enter modifiers ───
-        for mod in self._modifiers.get("on_enter", []):
+        for mod in self.modifiers.get("on_enter"):
             if mod.source_card_id == card.card_id:
                 if mod.effect_type == "vanguard_entry":
                     # Positional entry is already enforced/validated by the
                     # layer checks in play_card(); the modifier is declarative
                     # only, so don't no-op-dispatch it through _apply_on_enter.
                     continue
-                self._apply_on_enter(mod, card, player)
+                self.modifiers.dispatch_card_hook("on_enter", self, card, player=player)
 
         # ─── after_play hook ───
-        for mod in self._modifiers.get("after_play", []):
+        for mod in self.modifiers.get("after_play"):
             source_card = self.all_cards.get(mod.source_card_id)
             if not source_card or source_card.owner != player:
                 continue
@@ -389,7 +272,7 @@ class GameState:
                 return "No estás en la fase de acciones."
 
         # ─── on_ascend hook ───
-        for mod in self._modifiers.get("on_ascend", []):
+        for mod in self.modifiers.get("on_ascend"):
             if mod.source_card_id == card.card_id and mod.effect_type == "cannot_ascend":
                 return f"{card.definition.name} no puede ascender."
 
@@ -491,7 +374,7 @@ class GameState:
             return "Dirección inválida."
 
         # ─── on_move hook ───
-        for mod in self._modifiers.get("on_move", []):
+        for mod in self.modifiers.get("on_move"):
             if mod.source_card_id == card.card_id and mod.effect_type == "cannot_move":
                 return f"{card.definition.name} no puede ser movido."
 
@@ -599,7 +482,7 @@ class GameState:
 
         # ─── before_link hook ───
         # Modifiers can block or modify link validation
-        for mod in self._modifiers.get("before_link", []):
+        for mod in self.modifiers.get("before_link"):
             source_card = self.all_cards.get(mod.source_card_id)
             if not source_card:
                 continue
@@ -647,7 +530,7 @@ class GameState:
             cost = 1
         
         # Check before_link modifiers for cost_zero
-        for mod in self._modifiers.get("before_link", []):
+        for mod in self.modifiers.get("before_link"):
             if mod.effect_type == "link_cost_zero":
                 if mod.layer == "global":
                     cost = 0
@@ -669,7 +552,7 @@ class GameState:
 
         # ─── after_link hook ───
         # On-link triggers from permanent modifiers
-        for mod in self._modifiers.get("after_link", []):
+        for mod in self.modifiers.get("after_link"):
             source_card = self.all_cards.get(mod.source_card_id)
             if not source_card or source_card.owner != player:
                 continue
@@ -725,7 +608,7 @@ class GameState:
                 result.append(squad)
 
         # ─── Apply modify_squad modifiers ───
-        for mod in self._modifiers.get("modify_squad", []):
+        for mod in self.modifiers.get("modify_squad"):
             source_card = self.all_cards.get(mod.source_card_id)
             if not source_card or source_card.owner != player:
                 continue
@@ -771,7 +654,7 @@ class GameState:
         # ─── before_attack hook ───
         # Cards with sigilo block attacks on themselves; guardaespaldas redirect
         if target == "card" and target_card_id:
-            for mod in self._modifiers.get("before_attack", []):
+            for mod in self.modifiers.get("before_attack"):
                 source_card = self.all_cards.get(mod.source_card_id)
                 if not source_card or source_card.owner != defender:
                     continue
@@ -824,14 +707,14 @@ class GameState:
 
         # ─── modify_damage hook ───
         # Permanent +D modifiers (e.g., "+1 D mientras esté en L2")
-        for mod in self._modifiers.get("modify_damage", []):
+        for mod in self.modifiers.get("modify_damage"):
             source_card = self.all_cards.get(mod.source_card_id)
             if not source_card or source_card.owner != attacker:
                 continue
             if mod.effect_type == "damage_bonus":
                 # Check condition + squad membership
                 condition = mod.params.get("condition", {})
-                if not self._evaluate_condition(condition, source_card):
+                if not self.modifiers.evaluate_condition(self, condition, source_card):
                     continue
                 if mod.source_card_id in attacking_squad.members:
                     total_damage += mod.params.get("delta", 0)
@@ -840,14 +723,14 @@ class GameState:
         # Attack-triggered effects (ignore_armor, double_damage, conditional bonuses)
         ignore_armor_total = 0
         double_damage = False
-        for mod in self._modifiers.get("on_attack", []):
+        for mod in self.modifiers.get("on_attack"):
             source_card = self.all_cards.get(mod.source_card_id)
             if not source_card or source_card.owner != attacker:
                 continue
             if mod.source_card_id not in attacking_squad.members:
                 continue
             condition = mod.params.get("condition", {})
-            if condition and not self._evaluate_condition(condition, source_card):
+            if condition and not self.modifiers.evaluate_condition(self, condition, source_card):
                 continue
             if mod.effect_type == "ignore_armor":
                 ignore_armor_total = max(ignore_armor_total, mod.params.get("amount", 1))
@@ -890,7 +773,7 @@ class GameState:
                     armor += 1
                     break
             # Link armor from before_link modifiers
-            for mod in self._modifiers.get("before_link", []):
+            for mod in self.modifiers.get("before_link"):
                 if mod.effect_type == "link_armor_bonus":
                     source_card = self.all_cards.get(mod.source_card_id)
                     if source_card and source_card.card_id in defending_squad.members:
@@ -909,7 +792,7 @@ class GameState:
         if target == "grimoire":
             # ─── grimoire_defense hook ───
             # Cap max seal loss, apply grimoire armor
-            for mod in self._modifiers.get("grimoire_defense", []):
+            for mod in self.modifiers.get("grimoire_defense"):
                 source_card = self.all_cards.get(mod.source_card_id)
                 if not source_card or source_card.owner != defender:
                     continue
@@ -990,202 +873,10 @@ class GameState:
     # Trigger Modifier Dispatch
     # ═══════════════════════════════════════════════════════════════
 
-    def _apply_trigger_modifier(self, mod: Modifier, card: CardInstance,
-                                 squad: Squad, all_squads: list[Squad]):
-        """Execute a start_of_turn or end_of_turn modifier effect."""
-        effect_type = mod.effect_type
-        params = mod.params
-        player = card.owner
-
-        if effect_type == "draw":
-            count = params.get("count", 1)
-            total = 0
-            for _ in range(count):
-                drawn = self._draw_card(player)
-                if drawn:
-                    total += 1
-            self._log(f"  {card.definition.name}: +{total} robo(s)")
-
-        elif effect_type == "scry":
-            count = params.get("count", 2)
-            top_cards = self.decks[player][-count:] if len(self.decks[player]) >= count else self.decks[player][:]
-            names = [c.definition.name for c in reversed(top_cards)]
-            self._log(f"  {card.definition.name}: mira top {len(names)}: {', '.join(names)}")
-
-        elif effect_type == "auto_ascend":
-            target = card
-            for cid in squad.members:
-                c = self.all_cards.get(cid)
-                if c and c.position and c.position[1] < 3 and c.position[0] != -1:
-                    target = c
-                    break
-            err = self.ascend(player, target, free=True)
-            if not err:
-                self._log(f"  {card.definition.name}: asciende {target.definition.name} sin costo")
-
-        elif effect_type == "bonus_actions":
-            bonus = params.get("count", 1)
-            self.actions_remaining += bonus
-            self._log(f"  {card.definition.name}: +{bonus} acción(es) ({self.actions_remaining})")
-
-        elif effect_type == "free_link":
-            members = [self.all_cards.get(cid) for cid in squad.members
-                      if self.all_cards.get(cid) and self.all_cards[cid].owner == player]
-            linked = False
-            for i, ca in enumerate(members):
-                for cb in members[i+1:]:
-                    if ca and cb and not self.network.has_link(ca, cb) and self.network.can_link(ca) and self.network.can_link(cb):
-                        self.network.add_link(ca, cb)
-                        self._log(f"  {card.definition.name}: vínculo gratis {ca.definition.name} <-> {cb.definition.name}")
-                        linked = True
-                        break
-                if linked:
-                    break
-
-        elif effect_type == "recover_hp":
-            amount = params.get("amount", 1)
-            if params.get("scope") == "squad":
-                for cid in squad.members:
-                    c = self.all_cards.get(cid)
-                    if c and c.owner == player:
-                        c.current_hp = min(c.current_hp + amount, c.definition.hp)
-                self._log(f"  {card.definition.name}: +{amount} HP a todo el escuadrón")
-            else:
-                card.current_hp = min(card.current_hp + amount, card.definition.hp)
-                self._log(f"  {card.definition.name}: recupera {amount} HP ({card.current_hp}/{card.definition.hp})")
-
-        elif effect_type == "recover_graveyard":
-            if self.discard_piles[player]:
-                recovered = self.discard_piles[player].pop()
-                self.hands[player].append(recovered)
-                self._log(f"  {card.definition.name}: recupera {recovered.definition.name} del cementerio")
-
-        elif effect_type == "break_enemy_link":
-            self._log(f"  {card.definition.name}: +{params.get('count', 1)} vínculo enemigo destruible")
-
-        elif effect_type == "bonus_seals":
-            amount = params.get("amount", 5)
-            self.seals[player] += amount
-            self._log(f"  {card.definition.name}: +{amount} sellos ({self.seals[player]})")
-
-    def _apply_on_enter(self, mod: Modifier, card: CardInstance, player: int):
-        """Execute an on_enter modifier effect when a card is played."""
-        effect_type = mod.effect_type
-        params = mod.params
-
-        if effect_type == "draw":
-            count = params.get("count", 1)
-            total = 0
-            for _ in range(count):
-                drawn = self._draw_card(player)
-                if drawn:
-                    total += 1
-            self._log(f"  {card.definition.name} (on_enter): +{total} robo(s)")
-
-        elif effect_type == "scry":
-            count = params.get("count", 2)
-            top_cards = self.decks[player][-count:] if len(self.decks[player]) >= count else self.decks[player][:]
-            names = [c.definition.name for c in reversed(top_cards)]
-            self._log(f"  {card.definition.name} (on_enter): mira top {len(names)}: {', '.join(names)}")
-
-        elif effect_type == "heal_ally":
-            amount = params.get("amount", 1)
-            # Heal any allied card (or self by default)
-            card.current_hp = min(card.current_hp + amount, card.definition.hp)
-            self._log(f"  {card.definition.name} (on_enter): +{amount} HP ({card.current_hp}/{card.definition.hp})")
-
-        elif effect_type == "gain_seals":
-            amount = params.get("amount", 1)
-            self.seals[player] += amount
-            self._log(f"  {card.definition.name} (on_enter): +{amount} sellos ({self.seals[player]})")
-
-        elif effect_type == "move_self":
-            dist = params.get("distance", 1)
-            # Move card horizontally by dist meridians
-            if card.position:
-                p, layer, meridian = card.position
-                for direction in [1, -1]:  # try right first, then left
-                    new_m = meridian + direction * dist
-                    li = layer - 1
-                    if 0 <= new_m < 15 and self.board.cells[p][li][new_m] is None:
-                        self.board.cells[p][li][meridian] = None
-                        self.board.cells[p][li][new_m] = card.card_id
-                        card.position = (p, layer, new_m)
-                        self._log(f"  {card.definition.name} (on_enter): se mueve a L{layer}:{new_m}")
-                        break
-
-        elif effect_type == "move_ally":
-            self._log(f"  {card.definition.name} (on_enter): mueve carta aliada (pendiente selección UI)")
-
-        elif effect_type == "ascend_ally":
-            # Find another allied card to ascend for free
-            for cid in list(self.all_cards.keys()):
-                ally = self.all_cards.get(cid)
-                if (ally and ally.owner == player and ally.card_id != card.card_id
-                        and ally.position and ally.position[1] < 3 and ally.position[0] != -1):
-                    err = self.ascend(player, ally, free=True)
-                    if not err:
-                        self._log(f"  {card.definition.name} (on_enter): asciende {ally.definition.name} gratis")
-                        break
-
-        elif effect_type == "break_link":
-            # Break an enemy link at short distance
-            count = params.get("count", 1)
-            enemy = 1 - player
-            broken = 0
-            for cid in list(self.all_cards.keys()):
-                if broken >= count:
-                    break
-                enemy_card = self.all_cards.get(cid)
-                if not enemy_card or enemy_card.owner != enemy or not enemy_card.position:
-                    continue
-                for linked_id in list(self.network.links.get(cid, set())):
-                    if broken >= count:
-                        break
-                    linked = self.all_cards.get(linked_id)
-                    if linked:
-                        self.network.remove_link(enemy_card, linked)
-                        broken += 1
-                        self._log(f"  {card.definition.name} (on_enter): rompe vínculo {enemy_card.definition.name} <-> {linked.definition.name}")
-                        break
-
-        elif effect_type == "auto_link":
-            # Link this card to an adjacent allied card
-            if card.position:
-                p, layer, meridian = card.position
-                for dm in [-2, -1, 1, 2]:
-                    for dl in [-1, 0, 1]:
-                        check_m = meridian + dm
-                        check_l = layer + dl
-                        if 0 <= check_m < 15 and 1 <= check_l <= 3:
-                            li = check_l - 1
-                            neighbor_cid = self.board.cells[p][li][check_m]
-                            if neighbor_cid and self.network.can_link(card):
-                                neighbor = self.all_cards.get(neighbor_cid)
-                                if neighbor:
-                                    dist = self.board.spatial_distance(card.position, neighbor.position)
-                                    if dist:
-                                        self.network.add_link(card, neighbor)
-                                        self._log(f"  {card.definition.name} (on_enter): vínculo gratis con {neighbor.definition.name}")
-                                        return
-
-        elif effect_type == "discard":
-            count = params.get("count", 1)
-            discarded = []
-            for _ in range(count):
-                if self.hands[player]:
-                    dc = self.hands[player].pop()
-                    self.discard_piles[player].append(dc)
-                    discarded.append(dc.definition.name)
-            self._log(f"  {card.definition.name} (on_enter): descarta {', '.join(discarded) if discarded else '(mano vacía)'}")
-
-    # ═══════════════════════════════════════════════════════════════
-    # Helpers
-    # ═══════════════════════════════════════════════════════════════
 
     def _destroy_card(self, card: CardInstance, killer: Optional[CardInstance] = None):
         # ─── before_destroy hook ───
-        for mod in self._modifiers.get("before_destroy", []):
+        for mod in self.modifiers.get("before_destroy"):
             if mod.source_card_id == card.card_id and mod.effect_type == "destroy_immunity":
                 source = self.all_cards.get(mod.source_card_id)
                 name = source.definition.name if source else f"#{mod.source_card_id}"
@@ -1215,7 +906,7 @@ class GameState:
         # ─── Dispatch on_kill modifiers for the killer ───
         if killer:
             squads = self.network.find_squads(self.all_cards)
-            for mod in self._modifiers.get("on_kill", []):
+            for mod in self.modifiers.get("on_kill"):
                 c = self.all_cards.get(mod.source_card_id)
                 if not c or c.owner != killer.owner or not c.position or c.position[0] == -1:
                     continue
@@ -1247,7 +938,7 @@ class GameState:
 
         # ─── after_destroy hook ───
         # Transfer links from destroyed card to another
-        for mod in self._modifiers.get("after_destroy", []):
+        for mod in self.modifiers.get("after_destroy"):
             if mod.effect_type == "transfer_links":
                 target = self.all_cards.get(mod.source_card_id)
                 if not target or not target.position:

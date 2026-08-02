@@ -241,7 +241,7 @@ def use_ability(game: GameState, player: int, card: CardInstance,
                     hp_bonus = int(match.group(1))
                 target_card = get_target_card("target_id") or card
                 target_card.current_hp += hp_bonus
-                game._register_temp_modifier(Modifier(
+                game.modifiers.register_temp(Modifier(
                     source_card_id=target_card.card_id, hook="end_of_turn",
                     effect_type="revert_hp_buff", layer="self",
                     params={"delta": hp_bonus}))
@@ -261,7 +261,7 @@ def use_ability(game: GameState, player: int, card: CardInstance,
                     if match:
                         d_bonus = int(match.group(1))
                     target_card = get_target_card("target_id") or card
-                    game._register_temp_modifier(Modifier(
+                    game.modifiers.register_temp(Modifier(
                         source_card_id=target_card.card_id, hook="modify_damage",
                         effect_type="damage_bonus", layer="self",
                         params={"delta": d_bonus}))
@@ -358,10 +358,10 @@ def use_ability(game: GameState, player: int, card: CardInstance,
                 game._temp_colors[target_card.card_id] = color_a
                 # Also register as temp modifiers
                 from .card import Color as C
-                game._register_temp_modifier(Modifier(
+                game.modifiers.register_temp(Modifier(
                     source_card_id=card.card_id, hook="modify_squad",
                     effect_type="color_override", params={"color": color_b}, layer="self"))
-                game._register_temp_modifier(Modifier(
+                game.modifiers.register_temp(Modifier(
                     source_card_id=target_card.card_id, hook="modify_squad",
                     effect_type="color_override", params={"color": color_a}, layer="self"))
                 game.actions_remaining -= cost
@@ -471,7 +471,7 @@ def use_ability(game: GameState, player: int, card: CardInstance,
             # ─── Link cost free this turn ───
             if "costos de vínculo" in desc_lower:
                 # Register temp global modifier instead of _link_cost_free flag
-                game._register_temp_modifier(Modifier(
+                game.modifiers.register_temp(Modifier(
                     source_card_id=card.card_id, hook="before_link",
                     effect_type="link_cost_zero", layer="global"))
                 game.actions_remaining -= cost
@@ -493,7 +493,7 @@ def use_ability(game: GameState, player: int, card: CardInstance,
                     new_color_str = CardColor.INCOLORO
                 game._temp_colors[target_card.card_id] = new_color_str
                 # Also register as temp modifier
-                game._register_temp_modifier(Modifier(
+                game.modifiers.register_temp(Modifier(
                     source_card_id=target_card.card_id, hook="modify_squad",
                     effect_type="color_override", params={"color": new_color_str}, layer="self"))
                 game.actions_remaining -= cost
@@ -517,7 +517,7 @@ def use_ability(game: GameState, player: int, card: CardInstance,
                 for cid in squads[squad_idx].members:
                     game._temp_colors[cid] = new_color
                     # Also register as temp modifier
-                    game._register_temp_modifier(Modifier(
+                    game.modifiers.register_temp(Modifier(
                         source_card_id=cid, hook="modify_squad",
                         effect_type="color_override", params={"color": new_color}, layer="self"))
                 game.actions_remaining -= cost
@@ -657,7 +657,7 @@ def use_ability(game: GameState, player: int, card: CardInstance,
                 key = frozenset(squad.members)
                 # Register temp modifier for each squad member instead of dict
                 for cid in squad.members:
-                    game._register_temp_modifier(Modifier(
+                    game.modifiers.register_temp(Modifier(
                         source_card_id=cid, hook="modify_damage",
                         effect_type="damage_bonus", layer="squad",
                         params={"delta": bonus}))
@@ -732,7 +732,7 @@ def use_ability(game: GameState, player: int, card: CardInstance,
                         for cid in squad.members:
                             mem = game.all_cards.get(cid)
                             if mem and mem.owner == player:
-                                game._register_temp_modifier(Modifier(
+                                game.modifiers.register_temp(Modifier(
                                     source_card_id=cid, hook="modify_damage",
                                     effect_type="damage_bonus", layer="self",
                                     params={"delta": delta}))
@@ -745,7 +745,7 @@ def use_ability(game: GameState, player: int, card: CardInstance,
                 for cid_list in game.board.cells[player]:
                     for cid in cid_list:
                         if cid is not None:
-                            game._register_temp_modifier(Modifier(
+                            game.modifiers.register_temp(Modifier(
                                 source_card_id=cid, hook="before_destroy",
                                 effect_type="destroy_immunity", layer="self",
                                 params={"duration": "turn"}))
@@ -1043,7 +1043,7 @@ def use_ability(game: GameState, player: int, card: CardInstance,
                         for ab in target_card.definition.abilities:
                             if ab.trigger != "on_enter":
                                 # Register as temp modifier that re-applies the effect
-                                game._register_temp_modifier(Modifier(
+                                game.modifiers.register_temp(Modifier(
                                     source_card_id=card.card_id, hook="start_of_turn",
                                     effect_type="copied_ability", layer="self",
                                     params={"desc": ab.description, "source": target_card.definition.name}))

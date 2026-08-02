@@ -33,32 +33,11 @@ def entry_phase(game: GameState) -> None:
     player = game.active_player
     squads = game.network.find_squads(game.all_cards)
 
-    # ─── Dispatch start_of_turn modifiers ───
-    for mod in game._modifiers.get("start_of_turn", []):
-        card = game.all_cards.get(mod.source_card_id)
-        if not card or card.owner != player or not card.position or card.position[0] == -1:
-            continue
-        card_squad = None
-        for sq in squads:
-            if card.card_id in sq.members:
-                card_squad = sq
-                break
-        if not card_squad:
-            continue
-        params = mod.params
-        if params.get("ability_type") == "COLOR":
-            req_color = params.get("color_required")
-            if req_color and game._get_effective_squad_color(card, card_squad).value != req_color:
-                continue
-        if params.get("ability_type") == "FORMATION":
-            req_form = params.get("formation_required")
-            if req_form and card_squad.squad_type.replace("_ampliado", "") != req_form:
-                continue
-        game._apply_trigger_modifier(mod, card, card_squad, squads)
+    game.modifiers.dispatch_squad_hook("start_of_turn", game)
 
     # Military faction: free ascension
     for squad in squads:
-        if squad.get_dominant_color(game._get_color_overrides()) == Color.MILITAR:
+        if squad.get_dominant_color(game.modifiers.get_color_overrides(game)) == Color.MILITAR:
             for cid in squad.members:
                 card = game.all_cards.get(cid)
                 if card and card.owner == player and card.position:
@@ -73,7 +52,7 @@ def entry_phase(game: GameState) -> None:
     # Sabios: extra draw per sage squad
     extra_draws = 0
     for squad in squads:
-        if squad.get_dominant_color(game._get_color_overrides()) == Color.SABIO:
+        if squad.get_dominant_color(game.modifiers.get_color_overrides(game)) == Color.SABIO:
             extra_draws += 1
             for cid in squad.members:
                 card = game.all_cards.get(cid)
@@ -113,7 +92,7 @@ def entry_phase(game: GameState) -> None:
 
     # Politicos: swap positions
     for squad in squads:
-        if squad.get_dominant_color(game._get_color_overrides()) == Color.POLITICO:
+        if squad.get_dominant_color(game.modifiers.get_color_overrides(game)) == Color.POLITICO:
             game._log(f"  [Político] Puedes intercambiar posiciones de 2 cartas por escuadrón.")
 
 
@@ -140,34 +119,11 @@ def exit_phase(game: GameState) -> None:
 
     squads = game.network.find_squads(game.all_cards)
 
-    # ─── 2. Dispatch end_of_turn modifiers ───
-    for mod in game._modifiers.get("end_of_turn", []):
-        if mod.is_temporary:
-            continue
-        card = game.all_cards.get(mod.source_card_id)
-        if not card or card.owner != player or not card.position or card.position[0] == -1:
-            continue
-        card_squad = None
-        for sq in squads:
-            if card.card_id in sq.members:
-                card_squad = sq
-                break
-        if not card_squad:
-            continue
-        params = mod.params
-        if params.get("ability_type") == "COLOR":
-            req_color = params.get("color_required")
-            if req_color and game._get_effective_squad_color(card, card_squad).value != req_color:
-                continue
-        if params.get("ability_type") == "FORMATION":
-            req_form = params.get("formation_required")
-            if req_form and card_squad.squad_type.replace("_ampliado", "") != req_form:
-                continue
-        game._apply_trigger_modifier(mod, card, card_squad, squads)
+    game.modifiers.dispatch_squad_hook("end_of_turn", game)
 
     # Faction effects
     for squad in squads:
-        dom = squad.get_dominant_color(game._get_color_overrides())
+        dom = squad.get_dominant_color(game.modifiers.get_color_overrides(game))
         if dom == Color.SELLADOR:
             bonus = 10
             for cid in squad.members:
@@ -203,7 +159,7 @@ def exit_phase(game: GameState) -> None:
     game._log(f"  Fin del turno. Sellos J{player+1}: {game.seals[player]}")
 
     # Clear temporary HP buffs
-    for mod in game._modifiers.get("end_of_turn", []):
+    for mod in game.modifiers.get("end_of_turn"):
         if mod.is_temporary and mod.effect_type == "revert_hp_buff":
             card = game.all_cards.get(mod.source_card_id)
             if card:
@@ -212,7 +168,7 @@ def exit_phase(game: GameState) -> None:
                 card.current_hp = min(card.current_hp, card.definition.hp)
 
     # Dissolve temporary links
-    for mod in game._modifiers.get("end_of_turn", []):
+    for mod in game.modifiers.get("end_of_turn"):
         if mod.is_temporary and mod.effect_type == "dissolve_temp_link":
             pair = mod.params.get("pair")
             if pair:
@@ -223,7 +179,7 @@ def exit_phase(game: GameState) -> None:
 
     # Clear state
     game._temp_colors = {}
-    game._unregister_temp_modifiers()
+    game.modifiers.cleanup()
 
     # Switch player
     game.active_player = 1 - game.active_player
