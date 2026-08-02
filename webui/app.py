@@ -8,20 +8,19 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import Flask, render_template, request, jsonify, session
 from prototype.game import GameState, Phase
 from prototype.decks import DECKS, DECK_NAMES
+from prototype.ai import BotPlayer
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('NFW_SECRET_KEY') or os.urandom(32)
 
 # Store game state per session
 games = {}
-pending_attacks = {}  # sid -> {attacker, squad_idx, target}
-ai_states = {}  # sid -> {attack_queue: [squad_indices], done_setup: bool}
+pending_attacks = {}  # sid -> {attacker, squad_idx, target, members_ids, squad_type, ...}
 
 def _cleanup_sid(sid):
     """Drop all server-side state for a session id (prevents unbounded leaks)."""
     games.pop(sid, None)
     pending_attacks.pop(sid, None)
-    ai_states.pop(sid, None)
 
 def get_game():
     """Get or create game for current session."""
@@ -273,129 +272,58 @@ def api_action():
     elif action == 'ai_turn':
         result["log"] = []
         sid = session.get('game_id')
-        ai_state = ai_states.get(sid, {})
         
-        # ─── Phase 1: Play cards + link (only once) ───
-        if not ai_state.get('done_setup'):
-            game.phase = Phase.ACTIONS
-            game.actions_remaining = 10
-            
-            # Play up to 4 cards with valid layer selection
-            for _ in range(4):
-                if game.phase != Phase.ACTIONS:
-                    break
-                if not game.hands[player]:
-                    break
-                card = game.hands[player][0]
-                if card.definition.is_spy:
-                    continue
-                
-                has_vg = any("Vanguardia" in a.description for a in card.definition.abilities)
-                has_lf = any("Línea de fuego" in a.description for a in card.definition.abilities)
-                valid_layers = [1]
-                if has_vg or has_lf: valid_layers.append(2)
-                if has_lf: valid_layers.append(3)
-                valid_layers = [l for l in valid_layers if l in card.definition.allowed_layers]
-                
-                played = False
-                for layer in valid_layers:
-                    for m in range(15):
-                        if game.board.cells[player][layer-1][m] is None:
-                            res = game.play_card(player, 0, layer, m)
-                            if res is None:
-                                result["log"].append(f"AI juega {card.definition.name} en L{layer}:{m}")
-                                played = True
-                                break
-                    if played:
-                        break
-                if not played:
-                    break
-            
-            # Link adjacent cards
-            placed = []
-            for li in range(3):
-                for m in range(15):
-                    if game.board.cells[player][li][m] is not None:
-                        placed.append((li, m))
-            
-            for ci_idx, ci in enumerate(placed):
-                for cj in placed[ci_idx+1:]:
-                    if ci[0] == cj[0] and abs(ci[1] - cj[1]) <= 2:
-                        cid_a = game.board.cells[player][ci[0]][ci[1]]
-                        cid_b = game.board.cells[player][cj[0]][cj[1]]
-                        a_card = game.all_cards.get(cid_a)
-                        b_card = game.all_cards.get(cid_b)
-                        if not a_card or not b_card:
-                            continue
-                        if game.network.link_count(a_card) >= a_card.definition.link_capacity:
-                            continue
-                        if game.network.link_count(b_card) >= b_card.definition.link_capacity:
-                            continue
-                        res = game.link_cards(player, a_card, b_card)
-                        if res is None:
-                            result["log"].append(f"AI vincula L{ci[0]+1}:{ci[1]} - L{cj[0]+1}:{cj[1]}")
-            
-            # Reposition V>=2 cards to bring them closer together
-            for li in range(3):
-                for m in range(15):
-                    cid = game.board.cells[player][li][m]
-                    if cid:
-                        card = game.all_cards.get(cid)
-                        if card and card.definition.link_capacity >= 2:
-                            # Move toward center (m=7) if far away
-                            if m < 5:
-                                for _ in range(2):
-                                    err = game.move_card(player, card, 1)
-                                    if err: break
-                            elif m > 9:
-                                for _ in range(2):
-                                    err = game.move_card(player, card, -1)
-                                    if err: break
-            
-            # Start attack phase
-            if game.phase == Phase.ACTIONS:
-                game.start_attack_phase()
-                result["log"].append("AI entra en fase de ataque")
-            
-            # Build attack queue
-            squads = game.get_player_squads(player)
-            attack_queue = list(range(min(len(squads), 2)))  # max 2 attacks
-            ai_state = {'done_setup': True, 'attack_queue': attack_queue}
-            ai_states[sid] = ai_state
+        # Check for stored attack queue from previous ai_turn call
+        queue_key = f"{sid}_queue"
+        stored_queue = pending_attacks.get(queue_key)
         
-        # ─── Phase 2: Process attacks one at a time ───
-        attack_queue = ai_state.get('attack_queue', [])
+        if stored_queue:
+            # Continue with next attack from stored queue
+            next_attack = stored_queue.pop(0)
+            pending_attacks[sid] = next_attack
+            if not stored_queue:
+                pending_attacks.pop(queue_key, None)
+            result["pending_attack"] = next_attack
+            result["log"].append(f"⚔️ AI ataca con escuadrón ({next_attack['squad_type']}) — ¡defiéndete!")
+            result["ok"] = True
+            result["state"] = game_state(game)
+            return jsonify(result)
         
-        if game.phase == Phase.ATTACK and attack_queue:
-            squads = game.get_player_squads(player)
-            sq_idx = attack_queue.pop(0)
-            ai_states[sid] = ai_state  # update with remaining queue
-            
-            if sq_idx < len(squads):
-                squad = squads[sq_idx]
-                # Set up pending attack so human can defend
-                pending_attacks[sid] = {
+        # Full bot turn
+        bot = BotPlayer()
+        bot_result = bot.take_turn(game, player, on_log=lambda msg: result["log"].append(msg))
+        
+        if bot_result.attacks:
+            attack_queue = []
+            for attack in bot_result.attacks:
+                attack_queue.append({
                     'attacker': player,
-                    'squad_idx': sq_idx,
-                    'target': 'grimoire',
-                    'target_id': None,
-                    'squad_type': squad.squad_type,
-                    'squad_damage': squad.base_damage,
-                }
-                result["pending_attack"] = pending_attacks[sid]
-                result["log"].append(f"⚔️ AI ataca con escuadrón {sq_idx} ({squad.squad_type}) — ¡defiéndete!")
-                result["ok"] = True
-                result["state"] = game_state(game)
-                return jsonify(result)
+                    'squad_idx': 0,
+                    'members_ids': attack.members_ids,
+                    'target': attack.target,
+                    'target_id': attack.target_id,
+                    'squad_type': attack.squad_type,
+                    'squad_damage': attack.squad_damage,
+                    'squad_color': attack.squad_color,
+                    'members': attack.members_names,
+                })
+            
+            first_attack = attack_queue.pop(0)
+            pending_attacks[sid] = first_attack
+            
+            if attack_queue:
+                pending_attacks[queue_key] = attack_queue
+            
+            result["pending_attack"] = first_attack
+            result["log"].append(f"⚔️ AI ataca con escuadrón ({first_attack['squad_type']}) — ¡defiéndete!")
+            result["ok"] = True
+            result["state"] = game_state(game)
+            return jsonify(result)
         
-        # ─── Phase 3: All attacks done, end turn ───
-        ai_states.pop(sid, None)
-        game.exit_phase()
-        if not game.game_over:
-            game.start_turn()
-            game.entry_phase()
-        else:
-            _cleanup_sid(sid)  # free the finished game (leak fix)
+        # No attacks — end turn immediately
+        bot.end_turn(game, player)
+        if game.game_over:
+            _cleanup_sid(sid)
         result["ok"] = True
         result["log"].append("AI termina turno")
     
