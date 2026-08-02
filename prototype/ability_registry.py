@@ -1544,6 +1544,70 @@ class AbilityRegistry:
             return None
         self._add("permanent: cannot_ascend_regen", _perm_cannot_ascend_regen, is_active=True)
 
+        # ═══════════════════════════════════════════════════════════════
+        # STUBS: 78 not-implemented permanent passives (grouped by effect)
+        # ═══════════════════════════════════════════════════════════════
+
+        def _perm_stub(name, effect_type, keywords, extra_checks=None):
+            """Create a stub pattern for a permanent passive effect group."""
+            def _stub(desc, ability, cid):
+                if ability.trigger != "permanent": return None
+                for kw in keywords:
+                    if kw not in desc: return None
+                if extra_checks and not extra_checks(desc): return None
+                return [Modifier(source_card_id=cid, hook="permanent",
+                        effect_type=effect_type, layer="self",
+                        params={**_ability_params(ability)})]
+            self._add(f"permanent: {name} (STUB)", _stub, implemented=False)
+
+        # Group by effect type — one stub per mechanic family
+        _perm_stub("sigilo", "sigilo", ["sigilo", "no puede ser atacado"])
+        _perm_stub("sigilo_conditional", "sigilo_conditional", ["sigilo", "vínculo"],
+                   lambda d: "mientras no tenga" in d or "sin vínculo" in d)
+        _perm_stub("guardaespaldas", "guardaespaldas", ["guardaespaldas", "redirige"])
+        _perm_stub("attack_cancel", "pay_seal_cancel_attack", ["cancela", "ataque"])
+        _perm_stub("seal_protection", "seal_loss_cap", ["no puede perder", "sello"])
+        _perm_stub("seal_manipulation", "seal_manipulation", ["sello"],
+                   lambda d: "gana" in d or "pierde" in d or "otorga" in d)
+        _perm_stub("parasite", "parasite_sabotage", ["parasit"])
+        _perm_stub("sabotage", "sabotage_effect", ["sabotaje"])
+        _perm_stub("break_link_on_condition", "break_link_conditional", ["rompe", "vínculo"],
+                   lambda d: "al vincularse" in d or "cuando" in d)
+        _perm_stub("link_immunity", "link_immunity", ["no puede ser vinculad"])
+        _perm_stub("link_ignore", "ignore_link_cost", ["vínculo", "ignorand"])
+        _perm_stub("any_color_majority", "any_color_majority", ["cuenta como", "color"])
+        _perm_stub("damage_reduction", "damage_reduction", ["reduce", "daño"],
+                   lambda d: "no puede ser reducido" in d or "daño reducido" in d)
+        _perm_stub("damage_immunity_conditional", "damage_immunity", ["daño"],
+                   lambda d: "no recibe" in d or "inmune" in d)
+        _perm_stub("potenciamiento_block", "block_potenciamiento", ["potenciamiento", "no recibe"])
+        _perm_stub("potenciamiento_boost", "boost_potenciamiento", ["potenciamiento", "+"])
+        _perm_stub("move_through", "move_through_occupied", ["maniobrabilidad"])
+        _perm_stub("ascend_free", "free_ascend_conditional", ["asciende", "gratis"])
+        _perm_stub("draw_on_condition", "draw_conditional", ["roba"],
+                   lambda d: "cada vez" in d or "al" in d or "cuando" in d)
+        _perm_stub("recover_hp_conditional", "recover_hp_conditional", ["cura", "hp"],
+                   lambda d: "regenera" in d or "recupera" in d)
+        _perm_stub("seals_conditional", "seals_conditional", ["sello"],
+                   lambda d: "final del turno" not in d and "inicio" not in d)
+        _perm_stub("spy_block_attack", "spy_block_attack", ["no puede atacar", "grimorio"],
+                   lambda d: "espía" in d or "infiltra" in d)
+        _perm_stub("spy_intelligence", "spy_intelligence", ["inteligencia"],
+                   lambda d: "al azar" in d or "carta" in d)
+        _perm_stub("formation_block", "block_formation", ["no pueden formar"],
+                   lambda d: "escuadrones" in d or "escuadrón" in d)
+        _perm_stub("node_destroy_on_condition", "destroy_node_conditional", ["destruye", "nodo"])
+        _perm_stub("color_lock", "color_lock", ["color", "no cuenta para"])
+        _perm_stub("multicopy_buff", "multicopy_buff", ["cada copia", "+", "d"])
+        _perm_stub("action_cost_boost", "increase_action_cost", ["cuesta", "acción", "más"],
+                   lambda d: "+" in d)
+        _perm_stub("link_to_enemy", "link_to_enemy", ["vínculo", "enemig"],
+                   lambda d: "puede vincularse" in d and "enemig" in d)
+        _perm_stub("entry_override", "entry_override", ["puede entrar"],
+                   lambda d: "línea de fuego" not in d and "vanguardia" not in d)
+        _perm_stub("other_permanent", "other_permanent_effect", [""],
+                   lambda d: True)  # Catch-all, matched last
+
         print(f"[AbilityRegistry] Registered {len(self._patterns)} patterns")
 
 
