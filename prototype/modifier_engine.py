@@ -259,6 +259,10 @@ class ModifierEngine:
                 req_form = params.get("formation_required")
                 if req_form and card_squad.squad_type.replace("_ampliado", "") != req_form:
                     continue
+            # Evaluate positional/state condition (layer, formation shape, links, etc.)
+            cond = params.get("condition")
+            if cond and not self.evaluate_condition(game, cond, card):
+                continue
             self._apply_trigger_modifier(game, mod, card, card_squad, squads)
 
     # ═══════════════════════════════════════════════════════════════

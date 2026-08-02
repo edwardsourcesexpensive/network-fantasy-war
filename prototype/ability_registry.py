@@ -628,6 +628,113 @@ class AbilityRegistry:
             return None
         self._add("sot: escudo (color/form)", _sot_shield, is_active=True)
 
+        # ─── Grant 1: bonus_seals + condition ───
+        def _sot_bonus_seals_cond(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not ("sello" in desc and ("gana" in desc or "+" in desc)):
+                return None
+            amount = 1
+            m = re.search(r'\+(\d+)\s*sello', desc) or re.search(r'gana\s+(\d+)\s+sello', desc)
+            if m: amount = int(m.group(1))
+            cond = _extract_condition(desc)
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="bonus_seals", layer="self",
+                    params={"amount": amount, "condition": cond, **_ability_params(ability)})]
+        self._add("sot: bonus_seals (conditional)", _sot_bonus_seals_cond)
+
+        # ─── Grant 2: recover_hp (single/squad) + condition ───
+        def _sot_recover_hp(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if "hp" not in desc: return None
+            if not ("recupera" in desc or "regenera" in desc or "+" in desc):
+                return None
+            amount = 1
+            m = re.search(r'\+(\d+)\s*hp', desc) or re.search(r'recupera\s+(\d+)\s*hp', desc)
+            if m: amount = int(m.group(1))
+            scope = "squad" if ("todas" in desc or "escuadrón" in desc) else "self"
+            cond = _extract_condition(desc)
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="recover_hp", layer="self",
+                    params={"amount": amount, "scope": scope if scope == "squad" else "self",
+                            "condition": cond, **_ability_params(ability)})]
+        self._add("sot: recover_hp (conditional)", _sot_recover_hp)
+
+        # ─── Grant 3: recover_graveyard + condition ───
+        def _sot_recover_grave(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not (("resucita" in desc) or ("recupera" in desc and ("cementerio" in desc or "descartes" in desc))):
+                return None
+            cond = _extract_condition(desc)
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="recover_graveyard", layer="self",
+                    params={"condition": cond, **_ability_params(ability)})]
+        self._add("sot: recover_graveyard (conditional)", _sot_recover_grave)
+
+        # ─── Stubs: novel start_of_turn (implemented=False) ───
+        def _sot_reveal_hand(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not ("revela" in desc and "mano" in desc): return None
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="reveal_hand", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("sot: reveal hand (STUB)", _sot_reveal_hand, implemented=False)
+
+        def _sot_tutor_color(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not ("nombra" in desc and "busca" in desc): return None
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="tutor_color", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("sot: tutor color (STUB)", _sot_tutor_color, implemented=False)
+
+        def _sot_any_color(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not ("cuenta como" in desc and "color" in desc): return None
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="any_color_majority", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("sot: any color (STUB)", _sot_any_color, implemented=False)
+
+        def _sot_bonus_attack(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not ("ataque" in desc and "extra" in desc): return None
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="bonus_attack", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("sot: bonus attack (STUB)", _sot_bonus_attack, implemented=False)
+
+        def _sot_bonus_ascension(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not ("ascenso" in desc and ("gratis" in desc or "extra" in desc)): return None
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="bonus_ascension", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("sot: bonus ascension (STUB)", _sot_bonus_ascension, implemented=False)
+
+        def _sot_discard_for_buff(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not ("descarta" in desc and "para dar" in desc): return None
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="discard_for_buff", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("sot: discard for buff (STUB)", _sot_discard_for_buff, implemented=False)
+
+        def _sot_grimoire_armor(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not ("armadura" in desc and "grimorio" in desc): return None
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="grimoire_armor", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("sot: grimoire armor (STUB)", _sot_grimoire_armor, implemented=False)
+
+        def _sot_fusion(desc, ability, cid):
+            if ability.trigger != "start_of_turn": return None
+            if not ("fusion" in desc): return None
+            return [Modifier(source_card_id=cid, hook="start_of_turn",
+                    effect_type="squad_fusion", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("sot: fusion (STUB)", _sot_fusion, implemented=False)
+
         # ═══════════════════════════════════════════════════════════════
         # END_OF_TURN passive patterns
         # ═══════════════════════════════════════════════════════════════
