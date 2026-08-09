@@ -353,6 +353,13 @@ async function toggleDeckDetail(key, el) {
     cardsDiv.innerHTML = '<span style="color:#e94560">Error al cargar.</span>';
   }
 }
+const factionArt = {
+  'Saboteador': '🗡️', 'Espía': '🕵️', 'Monstruo': '👹', 'Militar': '⚔️',
+  'Guerrero': '🪖', 'Sellador': '🛡️', 'Festivo': '🎉', 'Político': '🏛️',
+  'Incoloro': '⚪', 'Naturaleza': '🌿', 'Alquimista': '⚗️', 'Sabio': '📚',
+  'Logistrón': '🔌'
+};
+
 async function showCartas() {
   const modal = document.getElementById('cartas-modal');
   const content = document.getElementById('cartas-content');
@@ -410,7 +417,7 @@ async function showCartas() {
             '<span style="font-weight:bold;font-size:10px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.8);flex:1">' + c.name + '</span>' +
             '<span style="width:18px;height:18px;border-radius:3px;background:#0f3460;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:9px;color:#4fc3f7;border:1px solid #4fc3f7">V' + c.v + '</span>' +
           '</div>' +
-          '<div style="flex:1;background:rgba(0,0,0,0.3);border-radius:4px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;font-size:28px;min-height:50px" class="icon">🎴</div>' +
+          '<div style="flex:1;background:rgba(0,0,0,0.3);border-radius:4px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;font-size:28px;min-height:50px" class="icon">' + (factionArt[c.color] || '🎴') + '</div>' +
           '<div style="font-size:8px;color:rgba(255,255,255,0.7);font-style:italic;margin-bottom:3px;padding:1px 3px;background:rgba(0,0,0,0.3);border-radius:2px;display:inline-block">' + typeLine + ' — ' + c.color + '</div>' +
           '<div style="font-size:8px;color:#e0e0e0;line-height:1.25;background:rgba(0,0,0,0.3);border-radius:4px;padding:4px;min-height:30px;flex-shrink:0;max-height:50px;overflow-y:auto">' + abils + '</div>' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:3px">' +

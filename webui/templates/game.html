@@ -491,6 +491,13 @@ function showCardDetail(cid) {
 }
 
 // ═══ HAND ═══
+const factionArt = {
+  'Saboteador': '🗡️', 'Espía': '🕵️', 'Monstruo': '👹', 'Militar': '⚔️',
+  'Guerrero': '🪖', 'Sellador': '🛡️', 'Festivo': '🎉', 'Político': '🏛️',
+  'Incoloro': '⚪', 'Naturaleza': '🌿', 'Alquimista': '⚗️', 'Sabio': '📚',
+  'Logistrón': '🔌'
+};
+
 function renderHand(s) {
   const p = s.active_player;
   const hand = s.hands[p];
@@ -533,7 +540,7 @@ function renderHand(s) {
           '<span class="card-name">' + c.name + '</span>' +
           '<span class="card-v">V' + c.link_capacity + '</span>' +
         '</div>' +
-        '<div class="card-art icon">🎴</div>' +
+        '<div class="card-art icon">' + (factionArt[c.color] || '🎴') + '</div>' +
         '<div class="card-type">' + typeLine + ' — ' + c.color + '</div>' +
         '<div class="card-text">' + cardText + '</div>' +
         '<div class="card-bottom">' +
