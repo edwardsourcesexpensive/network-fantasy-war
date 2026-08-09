@@ -249,7 +249,8 @@ class ModifierEngine:
                 if card.card_id in sq.members:
                     card_squad = sq
                     break
-            if not card_squad:
+            # Autofobia and similar self-targeting abilities don't require squad membership
+            if not card_squad and mod.effect_type != "autofobia":
                 continue
             params = mod.params
             if params.get("ability_type") == "COLOR":
@@ -361,6 +362,12 @@ class ModifierEngine:
 
         elif effect_type == "break_enemy_link":
             game._log(f"  {card.definition.name}: +{params.get('count', 1)} vínculo enemigo destruible")
+
+        elif effect_type == "autofobia":
+            # Autofobia: if card has no links at end of turn, it is destroyed
+            if game.network.link_count(card) == 0:
+                game._log(f"  {card.definition.name}: Autofobia — sin vínculos, se autodestruye")
+                game._destroy_card(card)
 
         elif effect_type == "bonus_seals":
             amount = params.get("amount", 5)

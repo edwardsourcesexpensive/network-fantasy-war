@@ -108,11 +108,13 @@ def exit_phase(game: GameState) -> None:
     game.phase = Phase.EXIT
     squads = game.network.find_squads(game.all_cards)
 
-    # ─── 1. Purge isolated enemy nodes ───
+    # ─── 1. Purge isolated enemy nodes IN YOUR TERRITORY ───
     enemy = 1 - player
     for cid in list(game.all_cards.keys()):
         card = game.all_cards.get(cid)
-        if card and card.owner == enemy and card.position and card.position[0] != -1:
+        if (card and card.owner == enemy and card.position
+                and card.position[0] == player  # only purge enemies IN your territory
+                and card.position[0] != -1):
             if game.network.link_count(card) == 0 and not card.definition.is_spy:
                 game._destroy_card(card)
                 game._log(f"  Purga: {card.definition.name} aislado, destruido.")

@@ -759,6 +759,10 @@ class GameState:
         self.network.remove_all_links(card)
         self.board.remove_card(card)
 
+        # Remove from global card registry (critical: prevents phantom cards in squads)
+        if card.card_id in self.all_cards:
+            del self.all_cards[card.card_id]
+
         # Unregister all modifiers from this card
         self._unregister_modifiers(card.card_id)
 
