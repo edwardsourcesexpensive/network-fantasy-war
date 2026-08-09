@@ -113,6 +113,46 @@ def api_deck_detail(deck_key):
     })
 
 
+@app.route('/api/cartas')
+def api_cartas():
+    """Return ALL cards in the game, alphabetically sorted."""
+    from prototype.card import ALL_CARDS
+    from prototype.game import ability_implementation_status
+    
+    cards = []
+    for c in ALL_CARDS:
+        abilities_data = []
+        impl_count = 0
+        for a in (c.abilities or []):
+            status = ability_implementation_status(a)
+            if status == "implemented":
+                impl_count += 1
+            abilities_data.append({
+                "desc": a.description,
+                "type": a.ability_type.name,
+                "cost": a.action_cost,
+                "status": status,
+            })
+        cards.append({
+            "name": c.name,
+            "color": c.color.value,
+            "hp": c.hp,
+            "v": c.link_capacity,
+            "d": c.damage_bonus,
+            "layers": c.allowed_layers,
+            "formations": c.allowed_formations if c.allowed_formations else [],
+            "is_spy": c.is_spy,
+            "is_logistron": c.is_logistron,
+            "abilities_detail": abilities_data,
+            "impl_count": impl_count,
+            "total_abilities": len(c.abilities) if c.abilities else 0,
+        })
+    
+    # Sort alphabetically by name
+    cards.sort(key=lambda x: x["name"])
+    return jsonify(cards)
+
+
 @app.route('/rules')
 def serve_rules():
     """Serve the rules reference PDF."""

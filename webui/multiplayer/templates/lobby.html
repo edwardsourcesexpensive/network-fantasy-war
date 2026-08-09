@@ -41,6 +41,7 @@ button.secondary:hover{background:#1a3a5c}
   <div style="margin-top:12px;display:flex;gap:6px">
     <button onclick="window.open('/rules','_blank')" style="flex:1;background:#0f3460;color:#4fc3f7;font-size:11px;padding:6px">📜 Reglas (PDF)</button>
     <button onclick="showDecks()" style="flex:1;background:#0f3460;color:#ffd700;font-size:11px;padding:6px">📚 Ver Decks</button>
+    <button onclick="showCartas()" style="flex:1;background:#0f3460;color:#ba68c8;font-size:11px;padding:6px">🎴 Cartas</button>
   </div>
 </div>
 
@@ -52,6 +53,17 @@ button.secondary:hover{background:#1a3a5c}
       <button onclick="document.getElementById('decks-modal').style.display='none'" style="background:none;border:1px solid #e94560;color:#e94560;padding:4px 12px;cursor:pointer;border-radius:4px;font-size:16px">✕</button>
     </div>
     <div id="decks-content" style="color:#aaa;font-size:11px">Cargando...</div>
+  </div>
+</div>
+
+<!-- Cartas modal -->
+<div id="cartas-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:100;overflow-y:auto;padding:20px">
+  <div style="max-width:1200px;margin:20px auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="color:#ba68c8;margin:0">🎴 Todas las Cartas</h2>
+      <button onclick="document.getElementById('cartas-modal').style.display='none'" style="background:none;border:1px solid #ba68c8;color:#ba68c8;padding:4px 12px;cursor:pointer;border-radius:4px;font-size:16px">✕</button>
+    </div>
+    <div id="cartas-content" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;justify-items:center">Cargando...</div>
   </div>
 </div>
 
@@ -339,6 +351,81 @@ async function toggleDeckDetail(key, el) {
     cardsDiv.innerHTML = html;
   } catch(e) {
     cardsDiv.innerHTML = '<span style="color:#e94560">Error al cargar.</span>';
+  }
+}
+async function showCartas() {
+  const modal = document.getElementById('cartas-modal');
+  const content = document.getElementById('cartas-content');
+  modal.style.display = 'block';
+  content.innerHTML = 'Cargando...';
+  try {
+    const r = await fetch('/api/cartas');
+    const cartas = await r.json();
+    // Sort alphabetically by name
+    cartas.sort((a,b) => a.name.localeCompare(b.name));
+    let html = '';
+    const colorMap = {
+      'Saboteador': '#e94560', 'Espía': '#9b59b6', 'Monstruo': '#e67e22',
+      'Militar': '#3498db', 'Guerrero': '#e74c3c', 'Sellador': '#f1c40f',
+      'Festivo': '#1abc9c', 'Político': '#2ecc71', 'Incoloro': '#95a5a6',
+      'Naturaleza': '#27ae60', 'Alquimista': '#8e44ad', 'Sabio': '#2980b9',
+      'Logistrón': '#7f8c8d'
+    };
+    for (const c of cartas) {
+      const clr = colorMap[c.color] || '#aaa';
+      const spyIcon = c.is_spy ? '🕵️' : '';
+      const logiIcon = c.is_logistron ? '🔌' : '';
+      
+      // Layer dots
+      const layerDots = [1,2,3].map(l => 
+        '<div style="width:12px;height:12px;border-radius:2px;background:' + 
+        (c.layers.includes(l) ? '#4fc3f7' : 'rgba(255,255,255,0.15)') + 
+        ';border:1px solid ' + (c.layers.includes(l) ? '#4fc3f7' : 'rgba(255,255,255,0.2)') + 
+        ';display:flex;align-items:center;justify-content:center;font-size:6px;color:' + 
+        (c.layers.includes(l) ? '#000' : 'rgba(255,255,255,0.4)') + '">L' + l + '</div>'
+      ).join('');
+      
+      // Formation icons
+      const formIcons = [
+        {key:'triangle', icon:'△'},
+        {key:'square', icon:'□'},
+        {key:'pentagon', icon:'⬠'}
+      ].map(f => 
+        '<div style="width:16px;height:16px;border-radius:3px;background:' + 
+        (c.formations.includes(f.key) ? 'rgba(233,69,96,0.4)' : 'rgba(0,0,0,0.5)') + 
+        ';border:1px solid ' + (c.formations.includes(f.key) ? '#e94560' : 'rgba(255,255,255,0.2)') + 
+        ';display:flex;align-items:center;justify-content:center;font-size:8px;color:' + 
+        (c.formations.includes(f.key) ? '#ff6b81' : 'rgba(255,255,255,0.3)') + '">' + f.icon + '</div>'
+      ).join('');
+      
+      const typeLine = c.is_spy ? 'Espía' : (c.is_logistron ? 'Logistrón' : 'Unidad');
+      const abils = c.abilities_detail ? c.abilities_detail.map(a => {
+        const dot = a.status === 'implemented' ? '●' : a.status === 'partial' ? '◐' : '○';
+        return dot + ' ' + a.desc;
+      }).join('<br>') : (c.abilities || []).join('<br>');
+      
+      html += '<div style="width:160px;height:260px;border-radius:10px;position:relative;box-shadow:0 3px 8px rgba(0,0,0,0.4);display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(135deg,#1a1a2e 0%,#0f0f1a 100%);border:2px solid ' + clr + '">' +
+        '<div style="padding:6px;display:flex;flex-direction:column;height:100%;position:relative">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);border-radius:4px;padding:3px 6px;margin-bottom:4px">' +
+            '<span style="font-weight:bold;font-size:10px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.8);flex:1">' + c.name + '</span>' +
+            '<span style="width:18px;height:18px;border-radius:3px;background:#0f3460;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:9px;color:#4fc3f7;border:1px solid #4fc3f7">V' + c.v + '</span>' +
+          '</div>' +
+          '<div style="flex:1;background:rgba(0,0,0,0.3);border-radius:4px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;font-size:28px;min-height:50px" class="icon">🎴</div>' +
+          '<div style="font-size:8px;color:rgba(255,255,255,0.7);font-style:italic;margin-bottom:3px;padding:1px 3px;background:rgba(0,0,0,0.3);border-radius:2px;display:inline-block">' + typeLine + ' — ' + c.color + '</div>' +
+          '<div style="font-size:8px;color:#e0e0e0;line-height:1.25;background:rgba(0,0,0,0.3);border-radius:4px;padding:4px;min-height:30px;flex-shrink:0;max-height:50px;overflow-y:auto">' + abils + '</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:3px">' +
+            '<div style="display:flex;gap:2px">' + layerDots + '</div>' +
+            '<div style="display:flex;gap:2px">' + formIcons + '</div>' +
+            '<div style="background:rgba(0,0,0,0.5);border-radius:3px;padding:1px 4px;font-weight:bold;font-size:9px;color:#fff;border:1px solid rgba(255,255,255,0.2)">' + c.hp + ' / ' + c.d + '</div>' +
+          '</div>' +
+        '</div>' +
+        (spyIcon ? '<div style="position:absolute;top:4px;right:4px;font-size:11px;z-index:5" class="icon">' + spyIcon + '</div>' : '') +
+        (logiIcon ? '<div style="position:absolute;top:4px;right:4px;font-size:11px;z-index:5" class="icon">' + logiIcon + '</div>' : '') +
+      '</div>';
+    }
+    content.innerHTML = html;
+  } catch(e) {
+    content.innerHTML = '<span style="color:#e94560">Error al cargar cartas: ' + e.message + '</span>';
   }
 }
 </script>
