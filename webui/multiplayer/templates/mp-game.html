@@ -241,6 +241,7 @@ body.p1-turn{background:#1a2e1a}
   <button class="btn" onclick="location.reload()">Refresh</button>
   <button class="btn" onclick="window.open('/rules','_blank')" style="background:#0f3460;color:#4fc3f7;font-size:10px">📜 Reglas</button>
   <button class="btn" onclick="showDecks()" style="background:#0f3460;color:#ffd700;font-size:10px">📚 Decks</button>
+  <button class="btn" onclick="showHelp()" style="background:#0f3460;color:#4fc3f7;font-size:10px">❓ Ayuda</button>
   <span id="player-indicator"></span>
 </div>
 </div>
@@ -253,6 +254,27 @@ body.p1-turn{background:#1a2e1a}
       <button onclick="document.getElementById('decks-modal').style.display='none'" style="background:none;border:1px solid #e94560;color:#e94560;padding:4px 12px;cursor:pointer;border-radius:4px;font-size:16px">✕</button>
     </div>
     <div id="decks-content" style="color:#aaa;font-size:11px">Cargando...</div>
+  </div>
+</div>
+
+<!-- Help modal -->
+<div id="help-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:110;overflow-y:auto;padding:20px">
+  <div style="max-width:640px;margin:20px auto;background:#16213e;border:1px solid #4fc3f7;border-radius:8px;padding:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="color:#4fc3f7;margin:0">❓ Cómo funciona la interfaz</h2>
+      <button onclick="document.getElementById('help-modal').style.display='none'" style="background:none;border:1px solid #4fc3f7;color:#4fc3f7;padding:4px 12px;cursor:pointer;border-radius:4px;font-size:16px">✕</button>
+    </div>
+    <div style="color:#aaa;font-size:12px;line-height:1.7">
+      <p><b style="color:#ffd700">Cartas (mano):</b> borde = facción. Burbuja <b style="color:#4fc3f7">V</b> = capacidad de vínculo. Puntos abajo a la izq. = capas permitidas (L1/L2/L3). Iconos △□⬠ = formaciones permitidas. HP/D abajo a la der. Click en una carta para ver el panel de detalle completo.</p>
+      <p><b style="color:#ffd700">Tablero:</b> tus cartas abajo, oponente arriba. 3 capas × meridianos. Secuencia para jugar: click carta en mano → click casilla → <b>Jugar carta</b>.</p>
+      <p><b style="color:#ffd700">Líneas de vínculo:</b><br>
+        <span style="color:#ffd700">— Amarilla sólida</span> = vínculo normal<br>
+        <span style="color:#00e5ff">— Azul punteada</span> = al menos un extremo es un Logistrón 🔌<br>
+        <span style="color:#e94560">— Roja punteada</span> = vínculo entre jugadores distintos (espía/robo)</p>
+      <p><b style="color:#ffd700">Botones:</b> Vincular (selecciona 2 cartas tuyas), Ascender, Atacar →, Fin Turno, Refresh (recarga estado), Reglas (PDF), Decks.</p>
+      <p><b style="color:#ffd700">Escuadrones:</b> se forman al vincular cartas compatibles. En fase de ataque, click en tu escuadrón → objetivo (grimorio o escuadrón rival) → defensa del oponente.</p>
+      <p><b style="color:#ffd700">Fases del turno:</b> Entrada → Acciones (jugar/vincular/habilidades) → Ataque → Salida. El botón cambia según la fase activa.</p>
+    </div>
   </div>
 </div>
 
@@ -841,6 +863,10 @@ socket.on('error', data => {
 });
 
 window.addEventListener('resize', () => { if (state) renderLinks(state); });
+
+function showHelp() {
+  document.getElementById('help-modal').style.display = 'block';
+}
 
 async function showDecks() {
   const modal = document.getElementById('decks-modal');
