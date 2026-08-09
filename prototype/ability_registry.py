@@ -1932,7 +1932,7 @@ class AbilityRegistry:
         # Reina Madre: L1 +2 HP y vínculos sin acciones
         def _p2_reina(desc, ability, cid):
             if ability.trigger != "permanent": return None
-            if "L1" not in desc and "ganan +2 HP" not in desc: return None
+            if "l1" not in desc and "ganan +2 HP" not in desc: return None
             return [Modifier(source_card_id=cid, hook="modify_squad",
                     effect_type="layer_buff", layer="network",
                     params={"layer": 1, "hp": 2, **_ability_params(ability)})]
@@ -1941,7 +1941,7 @@ class AbilityRegistry:
         # Pregonero del Pueblo: jugar en L1 sin acciones
         def _p2_pregonero(desc, ability, cid):
             if ability.trigger != "permanent": return None
-            if "L1" not in desc and "sin acciones" not in desc: return None
+            if "l1" not in desc and "sin acciones" not in desc: return None
             return [Modifier(source_card_id=cid, hook="before_play",
                     effect_type="play_layer_free", layer="network",
                     params={"layer": 1, "max_per_turn": 2, **_ability_params(ability)})]
@@ -2102,6 +2102,214 @@ class AbilityRegistry:
                     effect_type="infiltrate_low_layer", layer="self",
                     params={"layers": [1, 2], **_ability_params(ability)})]
         self._add("permanent: infiltrate_low (Espía Trinchera)", _p3_espia_trinchera)
+
+        # ═══════════════════════════════════════════════════════════════
+        # REAL P4 PATTERNS — remaining permanent passives (20 cards)
+        # ═══════════════════════════════════════════════════════════════
+
+        # --- DAMAGE_ON_EVENT (3 cards) ---
+
+        # Saboteadora de Formaciones: vínculo roto = daño grimorio
+        def _p4_saboteadora_form(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "vínculo enemigo roto" not in desc and "inflige" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="after_link",
+                    effect_type="damage_on_link_break", layer="self",
+                    params={"damage": 1, **_ability_params(ability)})]
+        self._add("permanent: damage_on_link_break (Saboteadora Form)", _p4_saboteadora_form)
+
+        # Campo de Espinas: atacantes reciben daño
+        def _p4_campo_espinas(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "atacantes enemigos" not in desc and "reciben" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="damage_to_attacker", layer="squad",
+                    params={"damage": 1, **_ability_params(ability)})]
+        self._add("permanent: damage_to_attacker (Campo Espinas)", _p4_campo_espinas)
+
+        # Vid Espinosa: atacantes reciben daño
+        def _p4_vid_espinosa(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "atacantes contra" not in desc and "reciben" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="damage_to_attacker", layer="squad",
+                    params={"damage": 1, **_ability_params(ability)})]
+        self._add("permanent: damage_to_attacker (Vid Espinosa)", _p4_vid_espinosa)
+
+        # --- FORMATION_OVERRIDE (2 cards) ---
+
+        # Alquimista de la Forma: L1 forma pentágono
+        def _p4_alquimista_forma(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "l1" not in desc and "forman pentágonos" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="layer_formation_override", layer="network",
+                    params={"layer": 1, "formation": "pentagon", **_ability_params(ability)})]
+        self._add("permanent: layer_formation (Alquimista Forma)", _p4_alquimista_forma)
+
+        # Místico del Nexo: L1/L2 forman pentágono como L3
+        def _p4_mistico(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "l1/l2" not in desc and "como si estuvieran en L3" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="layer_formation_override", layer="network",
+                    params={"layers": [1, 2], "as_layer": 3, "formation": "pentagon", **_ability_params(ability)})]
+        self._add("permanent: layer_formation (Místico)", _p4_mistico)
+
+        # --- PLACEMENT_OVERRIDE (3 cards) ---
+
+        # Enjambre de Sombras: ignora adyacencia para copias
+        def _p4_enjambre(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "ignora" not in desc and "adyacencia" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="ignore_adjacency_copies", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: ignore_adjacency (Enjambre)", _p4_enjambre)
+
+        # Nodo Fantasma: no ocupa celda
+        def _p4_nodo_fantasma(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no ocupa" not in desc and "compartir celda" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="shared_cell", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: shared_cell (Nodo Fantasma)", _p4_nodo_fantasma)
+
+        # Presidente: colocar en lado enemigo
+        def _p4_presidente(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "lado enemigo" not in desc and "colocarse" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="place_enemy_territory", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: place_enemy (Presidente)", _p4_presidente)
+
+        # --- NETWORK_RANGE (4 cards) ---
+
+        # Enrutador Cuántico: potenciamiento entre territorios
+        def _p4_enrutador(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "potenciamiento" not in desc and "entre territorios" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="cross_territory_potenciamiento", layer="network",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: cross_pot (Enrutador)", _p4_enrutador)
+
+        # Puente Táctico: atacar a distancia 2
+        def _p4_puente(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "distancia de red 2" not in desc and "atacar nodos" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="extended_attack_range", layer="squad",
+                    params={"range": 2, **_ability_params(ability)})]
+        self._add("permanent: extended_range (Puente)", _p4_puente)
+
+        # Maestro de la Vanguardia: L2 vincula L1 sin distancia máxima
+        def _p4_maestro_vanguardia(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "L2" not in desc and "sin distancia máxima" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_link",
+                    effect_type="no_link_distance_limit", layer="network",
+                    params={"from_layer": 2, "to_layer": 1, **_ability_params(ability)})]
+        self._add("permanent: no_link_limit (Maestro Vanguardia)", _p4_maestro_vanguardia)
+
+        # Torre de Señal: vinculadas atacan con alcance máximo
+        def _p4_torre(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "alcance máximo" not in desc and "vinculadas a" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="max_attack_range", layer="squad",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: max_range (Torre)", _p4_torre)
+
+        # --- ATTACK_OVERRIDE (2 cards) ---
+
+        # Capitán de Batallón: L1 atacan como L2
+        def _p4_capitan(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "l1" not in desc and "como si estuvieran en L2" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="layer_attack_as", layer="squad",
+                    params={"from_layer": 1, "as_layer": 2, **_ability_params(ability)})]
+        self._add("permanent: layer_attack_as (Capitán)", _p4_capitan)
+
+        # Sabio Guerrero: ataca solo
+        def _p4_sabio_guerrero(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "ataca solo" not in desc and "sin escuadrón" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="attack_solo", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: attack_solo (Sabio Guerrero)", _p4_sabio_guerrero)
+
+        # --- DEFENSE_OVERRIDE (2 cards) ---
+
+        # Guardiana de la Muralla: escuadrones V<5 no atacan grimorio
+        def _p4_guardiana(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "V total < 5" not in desc and "no pueden atacar" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="block_weak_squad_grimoire", layer="self",
+                    params={"max_v": 5, **_ability_params(ability)})]
+        self._add("permanent: block_weak (Guardiana)", _p4_guardiana)
+
+        # Flautista de la Vanguardia: vinculadas no son objetivo
+        def _p4_flautista(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no pueden ser objetivo" not in desc and "vinculadas a" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_destroy",
+                    effect_type="linked_target_immunity", layer="squad",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: linked_immunity (Flautista)", _p4_flautista)
+
+        # --- ABILITY_AMPLIFY (1 card) ---
+
+        # Patriarca de la Orden: habilidades Sellador duplicadas
+        def _p4_patriarca(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "Sellador" not in desc and "duplican" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="amplify_faction_abilities", layer="network",
+                    params={"faction": "sellador", **_ability_params(ability)})]
+        self._add("permanent: amplify_faction (Patriarca)", _p4_patriarca)
+
+        # --- LINK_FREEDOM (1 card) ---
+
+        # Núcleo Definitivo: vincula cualquier territorio, muerte = -10 sellos
+        def _p4_nucleo_definitivo(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "cualquier territorio" not in desc and "al morir" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_link",
+                    effect_type="link_any_territory", layer="self",
+                    params={**_ability_params(ability)}),
+                    Modifier(source_card_id=cid, hook="before_destroy",
+                    effect_type="death_lose_seals", layer="self",
+                    params={"seals": 10, **_ability_params(ability)})]
+        self._add("permanent: link_any+death_seals (Núcleo Def)", _p4_nucleo_definitivo)
+
+        # --- ASCEND_BLOCK (1 card) ---
+
+        # Jardín de Piedra: enemigas no ascienden
+        def _p4_jardin(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no pueden ascender" not in desc and "enemigas" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="on_ascend",
+                    effect_type="block_enemy_ascend", layer="global",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: block_enemy_ascend (Jardín)", _p4_jardin)
+
+        # --- DAMAGE_SHARE (1 card) ---
+
+        # Mente Colmena: Sabios comparten D máximo
+        def _p4_mente_colmena(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "comparten su D" not in desc and "usan el mayor" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="share_max_damage", layer="network",
+                    params={"faction": "sabio", **_ability_params(ability)})]
+        self._add("permanent: share_max_damage (Mente Colmena)", _p4_mente_colmena)
+
 
 
 
