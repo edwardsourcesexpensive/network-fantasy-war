@@ -239,6 +239,7 @@ body.p1-turn{background:#1a2e1a}
   <button class="btn" onclick="doAction('end_turn')">Fin Turno</button>
   <button class="btn" onclick="surrender()" style="background:#8b0000;color:#fff;border-color:#8b0000">🏳️ Rendirse</button>
   <button class="btn" onclick="location.reload()">Refresh</button>
+  <button class="btn" onclick="flipBoard()">🔄 Flip</button>
   <button class="btn" onclick="window.open('/rules','_blank')" style="background:#0f3460;color:#4fc3f7;font-size:10px">📜 Reglas</button>
   <button class="btn" onclick="showDecks()" style="background:#0f3460;color:#ffd700;font-size:10px">📚 Decks</button>
   <button class="btn" onclick="showHelp()" style="background:#0f3460;color:#4fc3f7;font-size:10px">❓ Ayuda</button>
@@ -828,6 +829,11 @@ function doAction(act, extraArgs = {}) {
 function surrender() {
   if (!confirm('¿Rendirse? Tu oponente ganará la partida.')) return;
   socket.emit('game_action', { action: 'surrender', args: {} });
+}
+
+function flipBoard() {
+  flipped = !flipped;
+  renderBoard(state);
 }
 
 // ═══ Socket Events ═══
