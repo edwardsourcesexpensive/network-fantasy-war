@@ -306,6 +306,14 @@ class GameState:
             return err
 
         if card.definition.is_spy:
+            # P3: Check if infiltration is blocked
+            infiltrate_err = self.modifiers.can_infiltrate(self, card)
+            if infiltrate_err:
+                return infiltrate_err
+            
+            # P3: Get allowed infiltration layers
+            allowed_layers = self.modifiers.get_infiltrate_layer(self, card)
+            
             # Disuelve vínculos con unidades propias antes de infiltrarse
             for neighbor_id in list(self.network.get_links(card)):
                 neighbor = self.all_cards.get(neighbor_id)
@@ -316,15 +324,24 @@ class GameState:
             self.spies_infiltrated[player].append(card.card_id)
             self.board.frontier_cards.remove(card.card_id)
             enemy = 1 - player
-            # Place spy in enemy L3, any free meridian
-            m = self.board.find_empty_meridian(enemy, 3)
-            if m is None:
+            # P3: Try allowed layers (default L3, Espía de Trinchera can go L1/L2)
+            placed = False
+            for target_layer in allowed_layers:
+                m = self.board.find_empty_meridian(enemy, target_layer)
+                if m is not None:
+                    self.board.place_card(enemy, card, target_layer, m)
+                    placed = True
+                    break
+            if not placed:
                 self.board.place_spy_frontier(card)
                 return "No hay espacio en territorio enemigo para infiltrar."
-            self.board.place_card(enemy, card, 3, m)
             card.owner = player  # Still owned by original player
             self.actions_remaining -= 1
-            self._log(f"¡{card.definition.name} se infiltra en territorio enemigo! L3:{m}")
+            self._log(f"¡{card.definition.name} se infiltra en territorio enemigo! L{card.position[1]}:{card.position[2]}")
+            
+            # P3: Post-infiltration effects
+            self.modifiers.on_spy_infiltrate(self, card, card.position[1])
+            
             return None
 
         _, layer, meridian = card.position
@@ -600,6 +617,8 @@ class GameState:
         turn_manager.start_attack_phase(self)
 
     def exit_phase(self):
+        # P3: Check spy turn effects before cleanup
+        self.modifiers.check_spy_turn_effects(self, self.active_player)
         turn_manager.exit_phase(self)
 
     # ═══════════════════════════════════════════════════════════════
@@ -876,6 +895,41 @@ class GameState:
         if not opponent_hand:
             return None
         return random.choice(opponent_hand)
+
+    def spy_return(self, player: int, spy_card: CardInstance) -> Optional[str]:
+        """Return an infiltrated spy to the frontier."""
+        if player != self.active_player:
+            return "No es tu turno."
+        if self.phase != Phase.ACTIONS:
+            return "No estás en la fase de acciones."
+        if spy_card.card_id not in self.spies_infiltrated[player]:
+            return "Ese espía no está infiltrado."
+        
+        # Check if spy can return (Maestro de Espías, Agente Triple)
+        if not self.modifiers.can_return_to_frontier(self, spy_card):
+            return "Este espía no puede regresar a la frontera."
+        
+        cost = self.modifiers.get_infiltrate_cost(self, spy_card)
+        if self.actions_remaining < cost:
+            return f"Necesitas {cost} acciones (tienes {self.actions_remaining})."
+        
+        # Remove from enemy territory
+        enemy = 1 - player
+        if spy_card.position and spy_card.position[0] == enemy:
+            self.board.remove_card(spy_card)
+        
+        # Remove from infiltrated list
+        self.spies_infiltrated[player].remove(spy_card.card_id)
+        
+        # Remove any attachments
+        if spy_card.card_id in self._attached:
+            del self._attached[spy_card.card_id]
+        
+        # Place on frontier
+        self.board.place_spy_frontier(spy_card)
+        self.actions_remaining -= cost
+        self._log(f"J{player+1} regresa {spy_card.definition.name} a la frontera.")
+        return None
 
     # ═══════════════════════════════════════════════════════════════
     # Trigger Modifier Dispatch

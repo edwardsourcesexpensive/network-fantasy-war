@@ -835,3 +835,153 @@ class ModifierEngine:
                     result["hp"] += mod.params.get("hp", 0)
                     result["free_link"] = True
         return result
+
+    # ═══════════════════════════════════════════════════════════════
+    # P3: Spy/parasite effect handlers
+    # ═══════════════════════════════════════════════════════════════
+
+    def get_spy_mods(self, game: GameState, card) -> list[Modifier]:
+        """Get all spy_infiltrate modifiers for a card."""
+        return [m for m in self._modifiers.get("spy_infiltrate", [])
+                if m.source_card_id == card.card_id]
+
+    def has_spy_effect(self, game: GameState, card, effect_type: str) -> bool:
+        """Check if a spy card has a specific effect."""
+        for mod in self.get_spy_mods(game, card):
+            if mod.effect_type == effect_type:
+                return True
+        return False
+
+    def can_infiltrate(self, game: GameState, card) -> Optional[str]:
+        """Check if a spy can infiltrate (not blocked by Centinela)."""
+        if not card.definition.is_spy:
+            return "No es un espía."
+        
+        # Check if enemy has Centinela de la Puerta in L1
+        enemy = 1 - card.owner
+        for mod in self._modifiers.get("spy_infiltrate", []):
+            if mod.effect_type == "block_enemy_infiltrate":
+                source = game.all_cards.get(mod.source_card_id)
+                if source and source.owner == enemy:
+                    if source.position and source.position[1] == 1:
+                        return f"{source.definition.name} bloquea infiltración."
+        return None
+
+    def get_infiltrate_layer(self, game: GameState, card) -> list[int]:
+        """Get allowed infiltration layers for a spy (default [3])."""
+        for mod in self.get_spy_mods(game, card):
+            if mod.effect_type == "infiltrate_low_layer":
+                return mod.params.get("layers", [1, 2])
+        return [3]
+
+    def can_return_to_frontier(self, game: GameState, card) -> bool:
+        """Check if a spy can return to frontier."""
+        for mod in self.get_spy_mods(game, card):
+            if mod.effect_type in ("infiltrate_return", "infiltrate_unlimited"):
+                return True
+        return False
+
+    def get_infiltrate_cost(self, game: GameState, card) -> int:
+        """Get infiltration cost (default 1 action)."""
+        for mod in self.get_spy_mods(game, card):
+            if mod.effect_type == "infiltrate_return":
+                return mod.params.get("cost", 1)
+        return 1
+
+    def on_spy_infiltrate(self, game: GameState, card, target_layer: int = 3):
+        """Execute post-infiltration effects."""
+        for mod in self.get_spy_mods(game, card):
+            if mod.effect_type == "parasite_sabotage_intel":
+                # Sombra Infiltrada: attach to a Logistron if possible
+                enemy = 1 - card.owner
+                for cid, c in game.all_cards.items():
+                    if c.owner == enemy and c.definition.is_logistron and c.position:
+                        game._attached[card.card_id] = cid
+                        game._log(f"  {card.definition.name}: parasitando {c.definition.name}")
+                        break
+                        
+            elif mod.effect_type == "block_squad_attack_grimoire":
+                # Agente Durmiente: mark a squad as unable to attack grimoire
+                game._log(f"  {card.definition.name}: escuadrón marcado (no ataca grimorio)")
+                
+            elif mod.effect_type == "poison_node":
+                # Envenenador: attach to a node, poison it
+                enemy = 1 - card.owner
+                for cid, c in game.all_cards.items():
+                    if c.owner == enemy and c.position and not c.definition.is_spy:
+                        game._attached[card.card_id] = cid
+                        game._log(f"  {card.definition.name}: envenenando {c.definition.name}")
+                        break
+                        
+            elif mod.effect_type == "infiltrate_unlimited":
+                # Agente Triple: steal a seal
+                enemy = 1 - card.owner
+                steal = mod.params.get("steal_seal", 1)
+                if game.seals[enemy] >= steal:
+                    game.seals[enemy] -= steal
+                    game.seals[card.owner] += steal
+                    game._log(f"  {card.definition.name}: roba {steal} sello ({game.seals[card.owner]})")
+
+    def check_spy_turn_effects(self, game: GameState, player: int):
+        """Check turn-based spy effects (Dormido, Topo Paciente)."""
+        for spy_id in list(game.spies_infiltrated[player]):
+            spy = game.all_cards.get(spy_id)
+            if not spy:
+                continue
+                
+            for mod in self.get_spy_mods(game, spy):
+                if mod.effect_type == "delayed_destroy_links":
+                    turns = mod.params.get("turns", 2)
+                    # Track infiltration turn
+                    key = f"_infiltrate_turn_{spy_id}"
+                    if not hasattr(game, key):
+                        setattr(game, key, game.turn_number)
+                    elif game.turn_number - getattr(game, key) >= turns:
+                        # Destroy all links of the host squad
+                        host_id = game._attached.get(spy_id)
+                        if host_id:
+                            host = game.all_cards.get(host_id)
+                            if host:
+                                for linked_id in list(game.network.get_links(host)):
+                                    linked = game.all_cards.get(linked_id)
+                                    if linked:
+                                        game.network.remove_link(host, linked)
+                                        game._log(f"  {spy.definition.name}: destruye vínculo {host.definition.name} <-> {linked.definition.name}")
+                        # Remove the tracker
+                        delattr(game, key)
+                        
+                elif mod.effect_type == "delayed_destroy_grimoire":
+                    turns = mod.params.get("turns", 3)
+                    min_spies = mod.params.get("min_spies", 5)
+                    key = f"_infiltrate_turn_{spy_id}"
+                    if not hasattr(game, key):
+                        setattr(game, key, game.turn_number)
+                    elif game.turn_number - getattr(game, key) >= turns:
+                        if len(game.spies_infiltrated[player]) >= min_spies:
+                            enemy = 1 - player
+                            game.seals[enemy] = 0
+                            game._log(f"  {spy.definition.name}: ¡DESTRUYE GRIMORIO ENEMIGO!")
+                            game._end_game(player)
+                        delattr(game, key)
+
+    def get_spy_v_bonus(self, game: GameState, player: int) -> int:
+        """Get V bonus for spies (Red de Inteligencia)."""
+        bonus = 0
+        for mod in self._modifiers.get("spy_infiltrate", []):
+            if mod.effect_type == "spy_buff_reveal":
+                source = game.all_cards.get(mod.source_card_id)
+                if source and source.owner == player:
+                    bonus += mod.params.get("v_bonus", 1)
+        return bonus
+
+    def can_spy_attack_grimoire(self, game: GameState, spy_card) -> bool:
+        """Check if a spy's host squad is blocked from attacking grimoire."""
+        host_id = game._attached.get(spy_card.card_id)
+        if not host_id:
+            return True
+        
+        for mod in self._modifiers.get("spy_infiltrate", []):
+            if mod.effect_type == "block_squad_attack_grimoire":
+                if mod.source_card_id == spy_card.card_id:
+                    return False
+        return True

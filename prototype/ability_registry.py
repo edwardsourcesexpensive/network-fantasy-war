@@ -57,30 +57,26 @@ class AbilityRegistry:
 
         Active abilities are skipped — they don't produce Modifiers.
         Returns empty list if no passive pattern matches.
-        Catch-all patterns (name ending in STUB with empty keyword) are suppressed
-        when any real pattern also matches.
+        Stub patterns (implemented=False) are suppressed when any real pattern matches.
         """
         desc = ability.description.lower()
         cid = card.card_id
         mods = []
-        catchall_mods = []
+        stub_mods = []
 
         for pat in self._patterns:
             if pat.is_active:
                 continue
             result = pat.try_parse(desc, ability, cid)
             if result is not None:
-                # Check if this is a catch-all stub (matches everything)
-                is_catchall = (pat.name.endswith("other_permanent (STUB)")
-                              and pat.implemented is False)
-                if is_catchall:
-                    catchall_mods.extend(result)
+                if pat.implemented is False:
+                    stub_mods.extend(result)
                 else:
                     mods.extend(result)
 
-        # Only include catch-all if no real pattern matched
+        # Only include stubs if no real pattern matched
         if not mods:
-            mods.extend(catchall_mods)
+            mods.extend(stub_mods)
 
         return mods
 
@@ -1985,6 +1981,128 @@ class AbilityRegistry:
                     effect_type="death_lose_game", layer="self",
                     params={**_ability_params(ability)})]
         self._add("permanent: high_cost+death_lose (Arquitecto)", _p2_arquitecto)
+
+        # ═══════════════════════════════════════════════════════════════
+        # REAL P3 PATTERNS — spy/parasite system
+        # ═══════════════════════════════════════════════════════════════
+
+        # --- 1. Sombra Infiltrada: sabotaje + inteligencia ---
+        def _p3_sombra(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "parasitismo" not in desc and "sabotaje" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="parasite_sabotage_intel", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: parasite_sabotage_intel (Sombra)", _p3_sombra)
+
+        # --- 2. Agente Durmiente: escuadrón no ataca grimorio ---
+        def _p3_agente_durmiente(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no puede atacar" not in desc or "grimorio" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="block_squad_attack_grimoire", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: block_squad_attack (Agente Durmiente)", _p3_agente_durmiente)
+
+        # --- 3. Doble Agente: ver 2 cartas al azar ---
+        def _p3_doble_agente(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "ver" not in desc or "cartas al azar" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="reveal_random_cards", layer="self",
+                    params={"count": 2, **_ability_params(ability)})]
+        self._add("permanent: reveal_random (Doble Agente)", _p3_doble_agente)
+
+        # --- 4. Topo Paciente: destruye vínculos tras 2 turnos ---
+        def _p3_topo(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "2 turnos" not in desc and "destruye todos los vínculos" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="delayed_destroy_links", layer="self",
+                    params={"turns": 2, **_ability_params(ability)})]
+        self._add("permanent: delayed_destroy_links (Topo)", _p3_topo)
+
+        # --- 5. Maestro de Espías: infiltrarse y regresar ---
+        def _p3_maestro_espias(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "infiltrarse y regresar" not in desc and "regresar a la frontera" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="infiltrate_return", layer="self",
+                    params={"cost": 1, **_ability_params(ability)})]
+        self._add("permanent: infiltrate_return (Maestro Espías)", _p3_maestro_espias)
+
+        # --- 6. Núcleo Central: vincularse ambos territorios ---
+        def _p3_nucleo(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "ambos territorios" not in desc and "sin ser espía" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_link",
+                    effect_type="cross_territory_link", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: cross_territory_link (Núcleo)", _p3_nucleo)
+
+        # --- 7. Merodeador: inteligencia al atacar parasitado ---
+        def _p3_merodeador(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "inteligencia" not in desc or "parasitado" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="attack_intel", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: attack_intel (Merodeador)", _p3_merodeador)
+
+        # --- 8. Envenenador: nodo enemigo pierde HP ---
+        def _p3_envenenador(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "pierde" not in desc or "hp" not in desc or "final de cada turno" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="poison_node", layer="self",
+                    params={"amount": 1, **_ability_params(ability)})]
+        self._add("permanent: poison_node (Envenenador)", _p3_envenenador)
+
+        # --- 9. Dormido: destruye grimorio con 5+ espías ---
+        def _p3_dormido(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "3 turnos" not in desc and "destruye grimorio" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="delayed_destroy_grimoire", layer="self",
+                    params={"turns": 3, "min_spies": 5, **_ability_params(ability)})]
+        self._add("permanent: delayed_destroy_grimoire (Dormido)", _p3_dormido)
+
+        # --- 10. Agente Triple: infiltrarse sin límite, roba sello ---
+        def _p3_agente_triple(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "sin límite" not in desc and "roba 1 sello" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="infiltrate_unlimited", layer="self",
+                    params={"steal_seal": 1, **_ability_params(ability)})]
+        self._add("permanent: infiltrate_unlimited (Agente Triple)", _p3_agente_triple)
+
+        # --- 11. Red de Inteligencia: espías +1 V, ver mano enemiga ---
+        def _p3_red_inteligencia(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "ver mano enemiga" not in desc and "+1 v" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="spy_buff_reveal", layer="network",
+                    params={"v_bonus": 1, **_ability_params(ability)})]
+        self._add("permanent: spy_buff_reveal (Red Inteligencia)", _p3_red_inteligencia)
+
+        # --- 12. Centinela de la Puerta: espías enemigos no infiltran ---
+        def _p3_centinela(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no pueden infiltrarse" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="block_enemy_infiltrate", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: block_infiltrate (Centinela)", _p3_centinela)
+
+        # --- 13. Espía de Trinchera: infiltra L1/L2, no asciende ---
+        def _p3_espia_trinchera(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "L1 o L2" not in desc and "no asciende" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="spy_infiltrate",
+                    effect_type="infiltrate_low_layer", layer="self",
+                    params={"layers": [1, 2], **_ability_params(ability)})]
+        self._add("permanent: infiltrate_low (Espía Trinchera)", _p3_espia_trinchera)
+
 
 
 
