@@ -294,11 +294,47 @@ async function toggleDeckDetail(key, el) {
       const implPct = c.total_abilities ? Math.round(c.impl_count / c.total_abilities * 100) : 100;
       const badgeClr = implPct >= 100 ? '#2ecc71' : implPct >= 50 ? '#f1c40f' : '#e94560';
       const badge = c.total_abilities ? ' <span style="color:' + badgeClr + ';font-size:9px">[' + c.impl_count + '/' + c.total_abilities + ']</span>' : '';
-      html += '<div style="background:#0a1a2e;border:1px solid #222;border-radius:3px;padding:5px 8px;margin:3px 0;font-size:10px">' +
-        '<span style="color:' + clr + ';font-weight:bold">' + c.name + '</span>' + badge +
-        ' <span style="color:#888">HP:' + c.hp + ' D:' + c.d + ' V:' + c.v + ' L:' + c.layers.join(',') + '</span>' +
-        (tags.length ? ' <span style="color:#4fc3f7;font-size:9px">' + tags.join(' ') + '</span>' : '') +
-        ab + '</div>';
+      // Magic-style mini card
+      const colorClass = c.is_logistron ? 'logistron' : c.color.toLowerCase();
+      const spyIcon = c.is_spy ? '🕵️' : '';
+      const logiIcon = c.is_logistron ? '🔌' : '';
+      
+      // Layer dots
+      const layerDots = [1,2,3].map(l => 
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:' + 
+        (c.layers.includes(l) ? '#4fc3f7' : 'rgba(255,255,255,0.15)') + 
+        ';border:1px solid ' + (c.layers.includes(l) ? '#4fc3f7' : 'rgba(255,255,255,0.2)') + 
+        ';margin-right:2px;font-size:6px;color:' + (c.layers.includes(l) ? '#000' : 'rgba(255,255,255,0.4)') + 
+        ';text-align:center;line-height:10px">L' + l + '</span>'
+      ).join('');
+      
+      // Formation icons
+      const formIcons = [
+        {key:'triangle', icon:'△'},
+        {key:'square', icon:'□'},
+        {key:'pentagon', icon:'⬠'}
+      ].map(f => 
+        '<span style="display:inline-block;width:14px;height:14px;border-radius:2px;background:' + 
+        (c.formations.includes(f.key) ? 'rgba(233,69,96,0.4)' : 'rgba(0,0,0,0.5)') + 
+        ';border:1px solid ' + (c.formations.includes(f.key) ? '#e94560' : 'rgba(255,255,255,0.2)') + 
+        ';margin-right:2px;font-size:8px;color:' + (c.formations.includes(f.key) ? '#ff6b81' : 'rgba(255,255,255,0.3)') + 
+        ';text-align:center;line-height:14px">' + f.icon + '</span>'
+      ).join('');
+      
+      html += '<div style="background:#0a1a2e;border:1px solid #222;border-radius:6px;padding:8px;margin:4px 0;font-size:10px;border-left:3px solid ' + clr + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+          '<span style="color:' + clr + ';font-weight:bold;font-size:11px">' + c.name + '</span>' + 
+          '<span style="background:#0f3460;color:#4fc3f7;padding:1px 5px;border-radius:2px;font-size:9px;border:1px solid #4fc3f7">V' + c.v + '</span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+          '<span style="color:#888;font-size:9px">HP:' + c.hp + ' D:' + c.d + '</span>' +
+          '<span style="color:#888;font-size:9px">' + spyIcon + logiIcon + '</span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<div>' + layerDots + '</div>' +
+          '<div>' + formIcons + '</div>' +
+        '</div>' +
+        badge + ab + '</div>';
     }
     cardsDiv.innerHTML = html;
   } catch(e) {
