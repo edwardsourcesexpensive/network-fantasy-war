@@ -81,6 +81,7 @@ body.p1-turn{background:#1a2e1a}
 .mtg-card .formation-icon.allowed{background:rgba(233,69,96,0.4);border-color:#e94560;color:#ff6b81}
 .mtg-card .card-stats{background:rgba(0,0,0,0.5);border-radius:4px;padding:2px 6px;font-weight:bold;font-size:11px;color:#fff;border:1px solid rgba(255,255,255,0.2)}
 .mtg-card .spy-icon{position:absolute;top:6px;right:6px;font-size:12px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));z-index:5}
+.mtg-card .icon{font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif}
 .mtg-card .logi-icon{position:absolute;top:6px;right:6px;font-size:12px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));z-index:5}
 
 #controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
@@ -498,8 +499,8 @@ function renderHand(s) {
   hand.forEach(c => {
     const cls = selectedHand === c.index ? 'mtg-card selected' : 'mtg-card';
     const colorClass = c.is_logistron ? 'logistron' : c.color.toLowerCase();
-    const spyIcon = c.is_spy ? '<div class="spy-icon">🕵️</div>' : '';
-    const logiIcon = c.is_logistron ? '<div class="logi-icon">🔌</div>' : '';
+    const spyIcon = c.is_spy ? '<div class="spy-icon icon">🕵️</div>' : '';
+    const logiIcon = c.is_logistron ? '<div class="logi-icon icon">🔌</div>' : '';
     
     // Layer dots
     const layers = [1,2,3].map(l => 
@@ -532,7 +533,7 @@ function renderHand(s) {
           '<span class="card-name">' + c.name + '</span>' +
           '<span class="card-v">V' + c.link_capacity + '</span>' +
         '</div>' +
-        '<div class="card-art">🎴</div>' +
+        '<div class="card-art icon">🎴</div>' +
         '<div class="card-type">' + typeLine + ' — ' + c.color + '</div>' +
         '<div class="card-text">' + cardText + '</div>' +
         '<div class="card-bottom">' +
