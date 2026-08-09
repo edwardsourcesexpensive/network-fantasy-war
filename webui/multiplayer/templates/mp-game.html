@@ -69,7 +69,7 @@ body.p1-turn{background:#1a2e1a}
 .mtg-card .spy-icon{position:absolute;top:4px;right:4px;font-size:11px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));z-index:5}
 .mtg-card .icon{font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif}
 .mtg-card .logi-icon{position:absolute;top:4px;right:4px;font-size:11px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));z-index:5}
-#card-detail{position:fixed;bottom:8px;right:8px;background:#16213e;border:1px solid #e94560;border-radius:4px;padding:12px;max-width:280px;z-index:50;display:none;font-size:11px}
+#card-detail{position:fixed;bottom:8px;right:8px;background:#16213e;border:2px solid #e94560;border-radius:8px;padding:16px;max-width:400px;max-height:70vh;overflow-y:auto;z-index:50;display:none;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,0.6)}
 #card-detail h3{color:#e94560;margin-bottom:4px}
 #card-detail .stat{color:#4fc3f7}
 #card-detail .ability{color:#aaa;margin:2px 0;padding-left:8px;border-left:2px solid #333}
@@ -456,19 +456,70 @@ function selectHand(idx) {
 
 function showHandDetail(c) {
   const panel = document.getElementById('card-detail');
-  document.getElementById('detail-name').textContent = c.name + ' [' + c.color + ']';
+  document.getElementById('detail-name').textContent = c.name;
+  
+  // Color-coded border
+  const colorMap = {
+    'Saboteador': '#e94560', 'Espía': '#9b59b6', 'Monstruo': '#e67e22',
+    'Militar': '#3498db', 'Guerrero': '#e74c3c', 'Sellador': '#f1c40f',
+    'Festivo': '#1abc9c', 'Político': '#2ecc71', 'Incoloro': '#95a5a6',
+    'Naturaleza': '#27ae60', 'Alquimista': '#8e44ad', 'Sabio': '#2980b9',
+    'Logistrón': '#7f8c8d'
+  };
+  const clr = colorMap[c.color] || '#aaa';
+  panel.style.borderColor = clr;
+  
+  // Stats row with layer dots and formation icons
+  const layerDots = [1,2,3].map(l => 
+    '<span style="display:inline-block;width:16px;height:16px;border-radius:3px;background:' + 
+    ((c.allowed_layers||[]).includes(l) ? '#4fc3f7' : 'rgba(255,255,255,0.15)') + 
+    ';border:1px solid ' + ((c.allowed_layers||[]).includes(l) ? '#4fc3f7' : 'rgba(255,255,255,0.2)') + 
+    ';margin-right:3px;font-size:8px;color:' + ((c.allowed_layers||[]).includes(l) ? '#000' : 'rgba(255,255,255,0.4)') + 
+    ';text-align:center;line-height:16px">L' + l + '</span>'
+  ).join('');
+  
+  const formIcons = [
+    {key:'triangle', icon:'△'},
+    {key:'square', icon:'□'},
+    {key:'pentagon', icon:'⬠'}
+  ].map(f => 
+    '<span style="display:inline-block;width:20px;height:20px;border-radius:3px;background:' + 
+    ((c.allowed_formations||[]).includes(f.key) ? 'rgba(233,69,96,0.4)' : 'rgba(0,0,0,0.5)') + 
+    ';border:1px solid ' + ((c.allowed_formations||[]).includes(f.key) ? '#e94560' : 'rgba(255,255,255,0.2)') + 
+    ';margin-right:3px;font-size:10px;color:' + ((c.allowed_formations||[]).includes(f.key) ? '#ff6b81' : 'rgba(255,255,255,0.3)') + 
+    ';text-align:center;line-height:20px">' + f.icon + '</span>'
+  ).join('');
+  
+  const typeLine = c.is_spy ? 'Espía' : (c.is_logistron ? 'Logistrón' : 'Unidad');
+  
   document.getElementById('detail-stats').innerHTML =
-    '<span class="stat">HP:' + c.hp + '</span> ' +
-    '<span class="stat">D:' + (c.damage_bonus || 0) + '</span> ' +
-    '<span class="stat">V:' + (c.link_capacity || 0) + '</span> ' +
-    '<span class="stat">G:' + (c.grado || '?') + '</span> ' +
-    '<span class="stat">L:' + (c.allowed_layers || []).join(',') + '</span>';
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<span style="color:' + clr + ';font-weight:bold">' + c.color + '</span>' +
+      '<span style="background:#0f3460;color:#4fc3f7;padding:2px 8px;border-radius:3px;font-size:11px;border:1px solid #4fc3f7">V' + (c.link_capacity||0) + '</span>' +
+    '</div>' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      '<div>' + layerDots + '</div>' +
+      '<div>' + formIcons + '</div>' +
+    '</div>' +
+    '<div style="color:#888;font-size:11px;margin-bottom:4px">' + typeLine + ' · HP:' + c.hp + ' · D:' + (c.damage_bonus||0) + '</div>';
+  
+  // Full ability text — no truncation, larger font
   let ah = '';
-  if (c.abilities) {
-    c.abilities.forEach(a => { ah += '<div class="ability">' + a + '</div>'; });
+  if (c.abilities_detail && c.abilities_detail.length) {
+    c.abilities_detail.forEach(a => {
+      const dot = a.status === 'implemented' ? '<span style="color:#2ecc71">●</span>' :
+                 a.status === 'partial' ? '<span style="color:#f1c40f">◐</span>' :
+                 '<span style="color:#e94560">○</span>';
+      ah += '<div style="padding:6px 8px;background:rgba(0,0,0,0.2);border-radius:4px;margin:4px 0;font-size:11px;line-height:1.4">' + dot + ' ' + a.desc + '</div>';
+    });
+  } else if (c.abilities && c.abilities.length) {
+    c.abilities.forEach(a => {
+      ah += '<div style="padding:6px 8px;background:rgba(0,0,0,0.2);border-radius:4px;margin:4px 0;font-size:11px;line-height:1.4">' + a + '</div>';
+    });
   }
-  document.getElementById('detail-abilities').innerHTML = ah || '<span class="stat">Sin habilidades</span>';
+  document.getElementById('detail-abilities').innerHTML = ah || '<span style="color:#555;font-size:11px">Sin habilidades</span>';
   panel.style.display = 'block';
+  panel.style.maxWidth = '400px';
 }
 
 function showCardDetail(cell) {
