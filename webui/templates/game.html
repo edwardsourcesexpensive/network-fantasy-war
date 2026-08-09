@@ -120,6 +120,60 @@ body.phase-attack .phase-actions{display:none}
 body.phase-attack .phase-attack{display:flex}
 
 /* ═══════════════════════════════════════════════════════════════
+   MINI CARDS ON BOARD
+   ═══════════════════════════════════════════════════════════════ */
+
+.cell.occupied.mini-card{
+  width:110px;height:70px;padding:2px;
+  display:flex;flex-direction:column;
+  font-family:'Segoe UI',sans-serif;
+  border-radius:4px;
+  overflow:hidden;
+  position:relative;
+}
+
+.cell.occupied.mini-card.militar{background:linear-gradient(135deg,#1a3a1a 0%,#0d1f0d 100%);border:1px solid #4caf50}
+.cell.occupied.mini-card.politico{background:linear-gradient(135deg,#1a2a4a 0%,#0d1525 100%);border:1px solid #4fc3f7}
+.cell.occupied.mini-card.sellador{background:linear-gradient(135deg,#3a1a4a 0%,#1f0d25 100%);border:1px solid #ba68c8}
+.cell.occupied.mini-card.guerrero{background:linear-gradient(135deg,#4a2a1a 0%,#25150d 100%);border:1px solid #ff9800}
+.cell.occupied.mini-card.naturaleza{background:linear-gradient(135deg,#1a4a2a 0%,#0d2515 100%);border:1px solid #8bc34a}
+.cell.occupied.mini-card.alquimista{background:linear-gradient(135deg,#4a4a1a 0%,#25250d 100%);border:1px solid #ffeb3b}
+.cell.occupied.mini-card.festivo{background:linear-gradient(135deg,#4a1a3a 0%,#250d1f 100%);border:1px solid #e91e63}
+.cell.occupied.mini-card.logistron{background:linear-gradient(135deg,#3a3a3a 0%,#1a1a1a 100%);border:1px solid #9e9e9e}
+.cell.occupied.mini-card.saboteador{background:linear-gradient(135deg,#3a1a2a 0%,#1f0d15 100%);border:1px solid #e94560}
+.cell.occupied.mini-card.monstruo{background:linear-gradient(135deg,#4a1a1a 0%,#250d0d 100%);border:1px solid #e67e22}
+.cell.occupied.mini-card.sabio{background:linear-gradient(135deg,#1a2a3a 0%,#0d1525 100%);border:1px solid #2980b9}
+.cell.occupied.mini-card.incoloro{background:linear-gradient(135deg,#2a2a2a 0%,#1a1a1a 100%);border:1px solid #95a5a6}
+.cell.occupied.mini-card.espía{background:linear-gradient(135deg,#2a1a3a 0%,#150d1f 100%);border:1px solid #9b59b6}
+
+.mini-card-header{
+  display:flex;justify-content:space-between;align-items:center;
+  background:rgba(0,0,0,0.4);border-radius:2px;padding:1px 3px;margin-bottom:2px;
+}
+.mini-card-name{font-weight:bold;font-size:7px;color:#fff;flex:1}
+.mini-card-v{
+  width:12px;height:12px;border-radius:2px;background:#0f3460;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:bold;font-size:6px;color:#4fc3f7;border:1px solid #4fc3f7;
+}
+.mini-card-art{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  font-size:16px;background:rgba(0,0,0,0.2);border-radius:2px;margin-bottom:2px;
+  min-height:20px;
+}
+.mini-card-stats{
+  display:flex;justify-content:space-between;
+  font-size:6px;padding:1px 2px;background:rgba(0,0,0,0.3);border-radius:2px;margin-bottom:2px;
+}
+.mini-hp{color:#4fc3f7}
+.mini-dmg{color:#e94560}
+.mini-card-footer{
+  display:flex;justify-content:space-between;align-items:center;
+}
+.mini-layers{display:flex;gap:1px}
+.mini-formations{display:flex;gap:1px}
+
+/* ═══════════════════════════════════════════════════════════════
    MOBILE RESPONSIVE (≤768px)
    ═══════════════════════════════════════════════════════════════ */
 
@@ -399,10 +453,6 @@ function frontierHtml(s) {
 
 function cellHtml(player, layer, m, s) {
   const pkey = 'p' + player;
-  // Layer mapping depends on player position on screen:
-  // When player is at TOP of screen: displayLayer 1=L1, 2=L2, 3=L3
-  // When player is at BOTTOM: displayLayer 1=L3, 2=L2, 3=L1
-  // Player at top = (player==1 && !flipped) || (player==0 && flipped)
   const playerAtTop = flipped ? player === 0 : player === 1;
   const gameLayer = playerAtTop ? layer : 4 - layer;
   const actualLayer = gameLayer - 1;
@@ -412,10 +462,23 @@ function cellHtml(player, layer, m, s) {
     const cls = isPT ? 'cell play-target' : 'cell';
     return '<div class="' + cls + '" onclick="selectBoardCell(' + player + ',' + gameLayer + ',' + m + ')" title="J' + (player+1) + ' L' + gameLayer + ':' + m + '"></div>';
   }
-  const cls = cell.foreign ? 'cell occupied foreign' : 'cell occupied';
+  const cls = cell.foreign ? 'cell occupied foreign mini-card' : 'cell occupied mini-card';
   const sel = selectedBoard === cell.id ? ' selected' : '';
   const hpPct = cell.max_hp > 0 ? Math.round(cell.hp/cell.max_hp*100) : 100;
-  return '<div class="' + cls + sel + '" data-cid="' + cell.id + '" onclick="showCardDetail(' + cell.id + ')" title="' + cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + cell.d + ' | V:' + cell.v_used + '/' + cell.v + ' | G:' + (cell.grado||'?') + '">' + cell.short + '<span class="vused">' + cell.v_used + '/' + cell.v + '</span><span class="hp" style="color:' + (hpPct<50?'#e94560':'#888') + '">' + cell.hp + '</span></div>';
+  const colorClass = cell.color ? cell.color.toLowerCase() : 'incoloro';
+  const artEmoji = factionArt[cell.color] || '🎴';
+  
+  return '<div class="' + cls + ' ' + colorClass + sel + '" data-cid="' + cell.id + '" onclick="showCardDetail(' + cell.id + ')" title="' + cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + cell.d + ' | V:' + cell.v_used + '/' + cell.v + ' | G:' + (cell.grado||'?') + '">' +
+    '<div class="mini-card-header">' +
+      '<span class="mini-card-name">' + (cell.short || cell.name.substring(0, 10)) + '</span>' +
+      '<span class="mini-card-v">V' + cell.v + '</span>' +
+    '</div>' +
+    '<div class="mini-card-art icon">' + artEmoji + '</div>' +
+    '<div class="mini-card-stats">' +
+      '<span class="mini-hp" style="color:' + (hpPct<50?'#e94560':'#4fc3f7') + '">HP:' + cell.hp + '</span>' +
+      '<span class="mini-dmg">D:' + (cell.d || 0) + '</span>' +
+    '</div>' +
+  '</div>';
 }
 
 // ═══ SVG LINKS ═══

@@ -146,6 +146,71 @@ body.p1-turn{background:#1a2e1a}
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   MINI CARDS ON BOARD
+   ═══════════════════════════════════════════════════════════════ */
+
+.cell.occupied.mini-card{
+  width:110px;height:70px;padding:2px;
+  display:flex;flex-direction:column;
+  font-family:'Segoe UI',sans-serif;
+  border-radius:4px;
+  overflow:hidden;
+  position:relative;
+}
+
+.cell.occupied.mini-card.militar{background:linear-gradient(135deg,#1a3a1a 0%,#0d1f0d 100%);border:1px solid #4caf50}
+.cell.occupied.mini-card.politico{background:linear-gradient(135deg,#1a2a4a 0%,#0d1525 100%);border:1px solid #4fc3f7}
+.cell.occupied.mini-card.sellador{background:linear-gradient(135deg,#3a1a4a 0%,#1f0d25 100%);border:1px solid #ba68c8}
+.cell.occupied.mini-card.guerrero{background:linear-gradient(135deg,#4a2a1a 0%,#25150d 100%);border:1px solid #ff9800}
+.cell.occupied.mini-card.naturaleza{background:linear-gradient(135deg,#1a4a2a 0%,#0d2515 100%);border:1px solid #8bc34a}
+.cell.occupied.mini-card.alquimista{background:linear-gradient(135deg,#4a4a1a 0%,#25250d 100%);border:1px solid #ffeb3b}
+.cell.occupied.mini-card.festivo{background:linear-gradient(135deg,#4a1a3a 0%,#250d1f 100%);border:1px solid #e91e63}
+.cell.occupied.mini-card.logistron{background:linear-gradient(135deg,#3a3a3a 0%,#1a1a1a 100%);border:1px solid #9e9e9e}
+.cell.occupied.mini-card.saboteador{background:linear-gradient(135deg,#3a1a2a 0%,#1f0d15 100%);border:1px solid #e94560}
+.cell.occupied.mini-card.monstruo{background:linear-gradient(135deg,#4a1a1a 0%,#250d0d 100%);border:1px solid #e67e22}
+.cell.occupied.mini-card.sabio{background:linear-gradient(135deg,#1a2a3a 0%,#0d1525 100%);border:1px solid #2980b9}
+.cell.occupied.mini-card.incoloro{background:linear-gradient(135deg,#2a2a2a 0%,#1a1a1a 100%);border:1px solid #95a5a6}
+.cell.occupied.mini-card.espía{background:linear-gradient(135deg,#2a1a3a 0%,#150d1f 100%);border:1px solid #9b59b6}
+
+.mini-card-header{
+  display:flex;justify-content:space-between;align-items:center;
+  background:rgba(0,0,0,0.4);border-radius:2px;padding:1px 3px;margin-bottom:2px;
+}
+.mini-card-name{font-weight:bold;font-size:7px;color:#fff;flex:1}
+.mini-card-v{
+  width:12px;height:12px;border-radius:2px;background:#0f3460;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:bold;font-size:6px;color:#4fc3f7;border:1px solid #4fc3f7;
+}
+.mini-card-art{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  font-size:16px;background:rgba(0,0,0,0.2);border-radius:2px;margin-bottom:2px;
+  min-height:20px;
+}
+.mini-card-stats{
+  display:flex;justify-content:space-between;
+  font-size:6px;padding:1px 2px;background:rgba(0,0,0,0.3);border-radius:2px;margin-bottom:2px;
+}
+.mini-hp{color:#4fc3f7}
+.mini-dmg{color:#e94560}
+.mini-card-footer{
+  display:flex;justify-content:space-between;align-items:center;
+}
+.mini-layers{display:flex;gap:1px}
+.mini-formations{display:flex;gap:1px}
+
+/* Mobile: even smaller mini cards */
+@media (max-width: 768px) {
+  .cell.occupied.mini-card{width:50px;height:45px}
+  .mini-card-name{font-size:5px}
+  .mini-card-v{width:8px;height:8px;font-size:4px}
+  .mini-card-art{font-size:10px;min-height:12px}
+  .mini-card-stats{font-size:4px}
+  .mini-layers .layer-dot{width:5px;height:5px;font-size:3px}
+  .mini-formations .formation-icon{width:6px;height:6px;font-size:3px}
+}
+
+/* ═══════════════════════════════════════════════════════════════
    TABLET (769px-1024px)
    ═══════════════════════════════════════════════════════════════ */
 
@@ -274,10 +339,48 @@ function territoryHtml(player, seals, s) {
         const max = cell.v || 0;
         const abils = cell.abilities ? cell.abilities.map(a => a.length > 40 ? a.substring(0,37)+'...' : a).join(' | ') : '';
         const tt = cell.name + ' | ' + cell.color + ' | HP:' + cell.hp + '/' + cell.max_hp + ' | D:' + (cell.d || 0) + ' | V:' + used + '/' + max + ' | G:' + (cell.grado || '?') + (abils ? ' | ' + abils : '');
-        h += '<div class="cell occupied' + sel + '" data-cid="' + cid + '" title="' + tt + '" onclick="selectBoard(\'' + cid + '\');showCardDetail(window._lastCell||cell)" onmouseenter="window._lastCell=cell">' +
-             cell.name.substring(0, 8) +
-             '<span class="hp">' + cell.hp + '</span>' +
-             '<span class="v">' + used + '/' + max + '</span>' +
+        // Mini card on board
+        const colorClass = cell.is_logistron ? 'logistron' : cell.color.toLowerCase();
+        const spyIcon = cell.is_spy ? '🕵️' : '';
+        const logiIcon = cell.is_logistron ? '🔌' : '';
+        const artEmoji = factionArt[cell.color] || '🎴';
+        
+        // Layer dots
+        const layerDots = [1,2,3].map(l => 
+          '<span style="display:inline-block;width:8px;height:8px;border-radius:1px;background:' + 
+          ((cell.allowed_layers||[]).includes(l) ? '#4fc3f7' : 'rgba(255,255,255,0.15)') + 
+          ';border:1px solid ' + ((cell.allowed_layers||[]).includes(l) ? '#4fc3f7' : 'rgba(255,255,255,0.2)') + 
+          ';margin-right:1px;font-size:4px;color:' + ((cell.allowed_layers||[]).includes(l) ? '#000' : 'rgba(255,255,255,0.4)') + 
+          ';text-align:center;line-height:8px">L' + l + '</span>'
+        ).join('');
+        
+        // Formation icons
+        const formIcons = [
+          {key:'triangle', icon:'△'},
+          {key:'square', icon:'□'},
+          {key:'pentagon', icon:'⬠'}
+        ].map(f => 
+          '<span style="display:inline-block;width:10px;height:10px;border-radius:1px;background:' + 
+          ((cell.allowed_formations||[]).includes(f.key) ? 'rgba(233,69,96,0.4)' : 'rgba(0,0,0,0.5)') + 
+          ';border:1px solid ' + ((cell.allowed_formations||[]).includes(f.key) ? '#e94560' : 'rgba(255,255,255,0.2)') + 
+          ';margin-right:1px;font-size:5px;color:' + ((cell.allowed_formations||[]).includes(f.key) ? '#ff6b81' : 'rgba(255,255,255,0.3)') + 
+          ';text-align:center;line-height:10px">' + f.icon + '</span>'
+        ).join('');
+        
+        h += '<div class="cell occupied mini-card ' + colorClass + sel + '" data-cid="' + cid + '" title="' + tt + '" onclick="selectBoard(\'' + cid + '\');showCardDetail(window._lastCell||cell)" onmouseenter="window._lastCell=cell">' +
+             '<div class="mini-card-header">' +
+               '<span class="mini-card-name">' + cell.name.substring(0, 10) + '</span>' +
+               '<span class="mini-card-v">V' + max + '</span>' +
+             '</div>' +
+             '<div class="mini-card-art icon">' + artEmoji + spyIcon + logiIcon + '</div>' +
+             '<div class="mini-card-stats">' +
+               '<span class="mini-hp">HP:' + cell.hp + '</span>' +
+               '<span class="mini-dmg">D:' + (cell.d || 0) + '</span>' +
+             '</div>' +
+             '<div class="mini-card-footer">' +
+               '<div class="mini-layers">' + layerDots + '</div>' +
+               '<div class="mini-formations">' + formIcons + '</div>' +
+             '</div>' +
              '</div>';
       } else {
         const isPlayable = myTurn && !isAttack && dl === 1;  // only L1 by default
