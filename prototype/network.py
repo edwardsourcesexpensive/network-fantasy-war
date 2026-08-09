@@ -181,11 +181,16 @@ class Network:
                                 and _owner(neighbor) == seed_owner):
                             queue.append(neighbor)
                 
-                # Form lines greedily: each node in at most one line
+                # Form maximal disjoint lines: each line is exactly 2 linked cards.
+                # A card may belong to only ONE line (attack once per turn rule).
+                # In a path A-B-C, we get line {A,B} and C stays unpaired.
+                # In a path A-B-C-D, we get lines {A,B} and {C,D}.
                 paired = set()
+                # Sort for determinism; process nodes in order
                 for a in sorted(component):
                     if a in paired:
                         continue
+                    # Find the first unpaired neighbor in this component
                     for b in sorted(self.links.get(a, set())):
                         if b in component and b not in paired and b > a:
                             squads.append(Squad(
@@ -196,7 +201,7 @@ class Network:
                             ))
                             paired.add(a)
                             paired.add(b)
-                            break
+                            break  # a is now used; move to next unpaired node
                 
                 # Remaining unpaired cards in this component
                 for c in component - paired:

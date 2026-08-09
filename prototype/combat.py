@@ -28,6 +28,7 @@ class AttackResult:
     double_damage: bool
     attacker: int
     defender: int
+    attacking_squad: "Squad"  # the squad that executed the attack
     blocked: bool = False
     block_reason: Optional[str] = None
 
@@ -189,6 +190,7 @@ class CombatEngine:
             double_damage=double_damage,
             attacker=attacker,
             defender=defender,
+            attacking_squad=attacking_squad,
         )
 
     def calculate_defense(self, game: GameState, defending_squad: Optional[Squad],
