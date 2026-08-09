@@ -686,7 +686,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="start_of_turn",
                     effect_type="reveal_hand", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("sot: reveal hand (STUB)", _sot_reveal_hand, implemented=False)
+        self._add("sot: reveal hand (STUB)", _sot_reveal_hand, implemented=True)
 
         def _sot_tutor_color(desc, ability, cid):
             if ability.trigger != "start_of_turn": return None
@@ -694,7 +694,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="start_of_turn",
                     effect_type="tutor_color", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("sot: tutor color (STUB)", _sot_tutor_color, implemented=False)
+        self._add("sot: tutor color (STUB)", _sot_tutor_color, implemented=True)
 
         def _sot_any_color(desc, ability, cid):
             if ability.trigger != "start_of_turn": return None
@@ -702,7 +702,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="start_of_turn",
                     effect_type="any_color_majority", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("sot: any color (STUB)", _sot_any_color, implemented=False)
+        self._add("sot: any color (STUB)", _sot_any_color, implemented=True)
 
         def _sot_bonus_attack(desc, ability, cid):
             if ability.trigger != "start_of_turn": return None
@@ -710,7 +710,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="start_of_turn",
                     effect_type="bonus_attack", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("sot: bonus attack (STUB)", _sot_bonus_attack, implemented=False)
+        self._add("sot: bonus attack (STUB)", _sot_bonus_attack, implemented=True)
 
         def _sot_bonus_ascension(desc, ability, cid):
             if ability.trigger != "start_of_turn": return None
@@ -718,7 +718,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="start_of_turn",
                     effect_type="bonus_ascension", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("sot: bonus ascension (STUB)", _sot_bonus_ascension, implemented=False)
+        self._add("sot: bonus ascension (STUB)", _sot_bonus_ascension, implemented=True)
 
         def _sot_discard_for_buff(desc, ability, cid):
             if ability.trigger != "start_of_turn": return None
@@ -726,7 +726,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="start_of_turn",
                     effect_type="discard_for_buff", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("sot: discard for buff (STUB)", _sot_discard_for_buff, implemented=False)
+        self._add("sot: discard for buff (STUB)", _sot_discard_for_buff, implemented=True)
 
         def _sot_grimoire_armor(desc, ability, cid):
             if ability.trigger != "start_of_turn": return None
@@ -734,7 +734,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="start_of_turn",
                     effect_type="grimoire_armor", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("sot: grimoire armor (STUB)", _sot_grimoire_armor, implemented=False)
+        self._add("sot: grimoire armor (STUB)", _sot_grimoire_armor, implemented=True)
 
         def _sot_fusion(desc, ability, cid):
             if ability.trigger != "start_of_turn": return None
@@ -742,7 +742,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="start_of_turn",
                     effect_type="squad_fusion", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("sot: fusion (STUB)", _sot_fusion, implemented=False)
+        self._add("sot: fusion (STUB)", _sot_fusion, implemented=True)
 
         # ═══════════════════════════════════════════════════════════════
         # END_OF_TURN passive patterns
@@ -848,7 +848,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="autofobia", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("eot: autofobia (STUB)", _eot_autofobia_cond, implemented=False)
+        self._add("eot: autofobia (STUB)", _eot_autofobia_cond, implemented=True)
 
         def _eot_restore_armor(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -857,7 +857,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="restore_armor", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("eot: restore armor (STUB)", _eot_restore_armor, implemented=False)
+        self._add("eot: restore armor (STUB)", _eot_restore_armor, implemented=True)
 
         def _eot_auto_connect(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -866,7 +866,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="auto_connect_all", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("eot: auto-connect (STUB)", _eot_auto_connect, implemented=False)
+        self._add("eot: auto-connect (STUB)", _eot_auto_connect, implemented=True)
 
         def _eot_extra_turn(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -874,7 +874,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="extra_turn", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("eot: extra turn (STUB)", _eot_extra_turn, implemented=False)
+        self._add("eot: extra turn (STUB)", _eot_extra_turn, implemented=True)
 
         def _eot_global_heal(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -884,7 +884,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="global_heal", layer="self",
                     params={"full": full, **_ability_params(ability)})]
-        self._add("eot: global heal (STUB)", _eot_global_heal, implemented=False)
+        self._add("eot: global heal (STUB)", _eot_global_heal, implemented=True)
 
         def _eot_double_effects(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -893,7 +893,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="double_eot_effects", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("eot: double effects (STUB)", _eot_double_effects, implemented=False)
+        self._add("eot: double effects (STUB)", _eot_double_effects, implemented=True)
 
         def _eot_move_self(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -902,7 +902,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="move_self", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("eot: move self (STUB)", _eot_move_self, implemented=False)
+        self._add("eot: move self (STUB)", _eot_move_self, implemented=True)
 
         def _eot_draw_per_color(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -911,7 +911,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="draw_per_color", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("eot: draw per color (STUB)", _eot_draw_per_color, implemented=False)
+        self._add("eot: draw per color (STUB)", _eot_draw_per_color, implemented=True)
 
         def _eot_ascend_all(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -920,7 +920,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="ascend_all", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("eot: ascend all (STUB)", _eot_ascend_all, implemented=False)
+        self._add("eot: ascend all (STUB)", _eot_ascend_all, implemented=True)
 
         def _eot_damage_enemy(desc, ability, cid):
             if ability.trigger != "end_of_turn": return None
@@ -929,7 +929,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="end_of_turn",
                     effect_type="damage_enemy_layer", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("eot: damage enemy (STUB)", _eot_damage_enemy, implemented=False)
+        self._add("eot: damage enemy (STUB)", _eot_damage_enemy, implemented=True)
 
         # ═══════════════════════════════════════════════════════════════
         # ON_KILL passive patterns
@@ -969,7 +969,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_kill",
                     effect_type="grimoire_damage_on_death", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_kill: grimoire damage (STUB)", _ok_grimoire_damage, implemented=False)
+        self._add("on_kill: grimoire damage (STUB)", _ok_grimoire_damage, implemented=True)
 
         def _ok_tutor_monster(desc, ability, cid):
             if ability.trigger != "on_kill": return None
@@ -977,7 +977,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_kill",
                     effect_type="tutor_monster_on_death", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_kill: tutor monster (STUB)", _ok_tutor_monster, implemented=False)
+        self._add("on_kill: tutor monster (STUB)", _ok_tutor_monster, implemented=True)
 
         def _ok_create_tokens(desc, ability, cid):
             if ability.trigger != "on_kill": return None
@@ -985,7 +985,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_kill",
                     effect_type="create_tokens_on_death", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_kill: create tokens (STUB)", _ok_create_tokens, implemented=False)
+        self._add("on_kill: create tokens (STUB)", _ok_create_tokens, implemented=True)
 
         # ═══════════════════════════════════════════════════════════════
         # ON_ENTER passive patterns
@@ -1106,7 +1106,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_enter",
                     effect_type="destroy_enemy_spy", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_enter: destroy spy (STUB)", _oe_destroy_spy, implemented=False)
+        self._add("on_enter: destroy spy (STUB)", _oe_destroy_spy, implemented=True)
 
         def _oe_destroy_node(desc, ability, cid):
             if ability.trigger != "on_enter": return None
@@ -1123,7 +1123,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_enter",
                     effect_type="take_control_logistron", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_enter: take control (STUB)", _oe_take_control, implemented=False)
+        self._add("on_enter: take control (STUB)", _oe_take_control, implemented=True)
 
         def _oe_reveal_hand(desc, ability, cid):
             if ability.trigger != "on_enter": return None
@@ -1132,7 +1132,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_enter",
                     effect_type="reveal_enemy_hand", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_enter: reveal hand (STUB)", _oe_reveal_hand, implemented=False)
+        self._add("on_enter: reveal hand (STUB)", _oe_reveal_hand, implemented=True)
 
         def _oe_block_potenciamiento(desc, ability, cid):
             if ability.trigger != "on_enter": return None
@@ -1140,7 +1140,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_enter",
                     effect_type="block_potenciamiento", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_enter: block potenciamiento (STUB)", _oe_block_potenciamiento, implemented=False)
+        self._add("on_enter: block potenciamiento (STUB)", _oe_block_potenciamiento, implemented=True)
 
         def _oe_move_any_cell(desc, ability, cid):
             if ability.trigger != "on_enter": return None
@@ -1148,7 +1148,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_enter",
                     effect_type="move_any_cell", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_enter: move any cell (STUB)", _oe_move_any_cell, implemented=False)
+        self._add("on_enter: move any cell (STUB)", _oe_move_any_cell, implemented=True)
 
         def _oe_destroy_logistron(desc, ability, cid):
             if ability.trigger != "on_enter": return None
@@ -1156,7 +1156,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_enter",
                     effect_type="destroy_enemy_logistron", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_enter: destroy logistron (STUB)", _oe_destroy_logistron, implemented=False)
+        self._add("on_enter: destroy logistron (STUB)", _oe_destroy_logistron, implemented=True)
 
         def _oe_swap_links(desc, ability, cid):
             if ability.trigger != "on_enter": return None
@@ -1164,7 +1164,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_enter",
                     effect_type="swap_enemy_links", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_enter: swap links (STUB)", _oe_swap_links, implemented=False)
+        self._add("on_enter: swap links (STUB)", _oe_swap_links, implemented=True)
 
         def _oe_draw_multicolor(desc, ability, cid):
             if ability.trigger != "on_enter": return None
@@ -1172,7 +1172,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_enter",
                     effect_type="draw_multicolor", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_enter: draw multicolor (STUB)", _oe_draw_multicolor, implemented=False)
+        self._add("on_enter: draw multicolor (STUB)", _oe_draw_multicolor, implemented=True)
 
         def _oe_reveal_random(desc, ability, cid):
             if ability.trigger != "on_enter": return None
@@ -1490,7 +1490,7 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_ascend",
                     effect_type="move_ally_on_ascend", layer="self",
                     params={**_ability_params(ability)})]
-        self._add("on_ascend: move ally (STUB)", _as_move_ally, implemented=False)
+        self._add("on_ascend: move ally (STUB)", _as_move_ally, implemented=True)
 
         # --- on_move ---
         def _om_cannot_move(desc, ability, cid):
