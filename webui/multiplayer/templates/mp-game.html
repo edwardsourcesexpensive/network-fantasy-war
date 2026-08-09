@@ -322,7 +322,7 @@ let state = null;
 let selectedBoard = null;
 let selectedHand = null;
 let linkTarget = null;
-let flipped = false;
+let flipped = MY_ID === 1;  // J2 ve sus cartas abajo, J1 arriba
 
 // Phase-aware control visibility
 function updateControls(s) {
