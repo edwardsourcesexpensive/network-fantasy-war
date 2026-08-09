@@ -296,6 +296,11 @@ class GameState:
         return None
 
     def ascend(self, player: int, card: CardInstance, free: bool = False) -> Optional[str]:
+        # P1: Check permanent cannot_ascend modifiers
+        ascend_err = self.modifiers.check_cannot_ascend(self, card)
+        if ascend_err:
+            return ascend_err
+        
         err = self.can_ascend(player, card, free=free)
         if err:
             return err
@@ -548,6 +553,10 @@ class GameState:
         if cost > 0 and self.actions_remaining < cost:
             return f"Necesitas {cost} acciones (tienes {self.actions_remaining})."
 
+        # P1: Check if link is unbreakable
+        if self.modifiers.check_link_unbreakable(self, card_a, card_b):
+            self._log(f"  🔒 Vínculo protegido: no puede ser roto")
+        
         self.network.add_link(card_a, card_b)
 
         # ─── after_link hook ───
@@ -668,6 +677,12 @@ class GameState:
                                 break
                         if mod.source_card_id == target_card_id or target_card_id in squad_members:
                             return f"{source_card.definition.name} tiene Sigilo: no puede ser atacado."
+            
+            # P1: Additional before_attack immunities from permanent passives
+            immunity_err = self.modifiers.check_before_attack_immunity(
+                self, target_card_id, attacking_squad)
+            if immunity_err:
+                return immunity_err
 
         # Calculate attack damage
         base = attacking_squad.base_damage
@@ -791,20 +806,13 @@ class GameState:
 
         if target == "grimoire":
             # ─── grimoire_defense hook ───
-            # Cap max seal loss, apply grimoire armor
-            for mod in self.modifiers.get("grimoire_defense"):
-                source_card = self.all_cards.get(mod.source_card_id)
-                if not source_card or source_card.owner != defender:
-                    continue
-                if mod.effect_type == "max_seal_loss":
-                    cap = mod.params.get("max", 999)
-                    if net_damage > cap:
-                        self._log(f"  🛡️ {source_card.definition.name}: daño capado de {net_damage} a {cap}")
-                        net_damage = cap
-                elif mod.effect_type == "grimoire_armor":
-                    armor_val = mod.params.get("armor", 0)
-                    net_damage = max(0, net_damage - armor_val)
-                    self._log(f"  🛡️ {source_card.definition.name}: +{armor_val} armadura al grimorio")
+            # Use ModifierEngine's unified grimoire defense (handles P1 permanent passives)
+            net_damage, cancel_reason = self.modifiers.apply_grimoire_defense(
+                self, defender, net_damage, attack_type="normal")
+            if cancel_reason:
+                self._log(f"  🛡️ {cancel_reason}")
+                self._attacked_squads.add(frozenset(member_set))
+                return None
 
             self.seals[defender] -= net_damage
             self._log(f"  ¡{net_damage} sellos destruidos! Grimorio enemigo: {self.seals[defender]}")
@@ -882,6 +890,11 @@ class GameState:
                 name = source.definition.name if source else f"#{mod.source_card_id}"
                 self._log(f"  🛡️ {name} es inmune a destrucción.")
                 return  # Card survives
+        
+        # P1: Additional destroy immunities from permanent passives
+        if self.modifiers.check_destroy_immunity(self, card, destroyer=killer):
+            self._log(f"  🛡️ {card.definition.name} es inmune a destrucción.")
+            return  # Card survives
 
         self.network.remove_all_links(card)
         self.board.remove_card(card)

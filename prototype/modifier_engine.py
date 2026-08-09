@@ -51,6 +51,7 @@ class ModifierEngine:
             "on_kill": [],
             "on_enter": [],
             "on_attack": [],
+            "permanent": [],
         }
 
     # ═══════════════════════════════════════════════════════════════
@@ -471,3 +472,230 @@ class ModifierEngine:
                     game.discard_piles[player].append(dc)
                     discarded.append(dc.definition.name)
             game._log(f"  {card.definition.name} (on_enter): descarta {', '.join(discarded) if discarded else '(mano vacía)'}")
+
+    # ═══════════════════════════════════════════════════════════════
+    # P1: Permanent passive effect handlers
+    # ═══════════════════════════════════════════════════════════════
+
+    def get_permanent_modifiers(self, hook_name: str) -> list[Modifier]:
+        """Get permanent modifiers that route to a specific hook.
+        
+        Permanent abilities are registered with hook='permanent' but
+        their effect_type determines which game system they interact with.
+        This accessor lets dispatch sites query them by their target hook.
+        """
+        return [m for m in self._modifiers.get("permanent", []) 
+                if m.params.get("target_hook") == hook_name]
+
+    def has_permanent_effect(self, effect_type: str, card_id: int = None) -> bool:
+        """Check if any permanent modifier with the given effect_type exists.
+        
+        If card_id is provided, only check modifiers from that card.
+        """
+        for mod in self._modifiers.get("permanent", []):
+            if mod.effect_type != effect_type:
+                continue
+            if card_id is not None and mod.source_card_id != card_id:
+                continue
+            return True
+        return False
+
+    def get_permanent_effects(self, effect_type: str, card_id: int = None) -> list[Modifier]:
+        """Get all permanent modifiers with the given effect_type."""
+        results = []
+        for mod in self._modifiers.get("permanent", []):
+            if mod.effect_type != effect_type:
+                continue
+            if card_id is not None and mod.source_card_id != card_id:
+                continue
+            results.append(mod)
+        return results
+
+    def check_cannot_ascend(self, game: GameState, card) -> Optional[str]:
+        """Check if a card cannot ascend due to permanent modifiers."""
+        for mod in self._modifiers.get("on_ascend", []):
+            if mod.source_card_id != card.card_id:
+                continue
+            if mod.effect_type == "cannot_ascend":
+                return f"{card.definition.name} no puede ascender."
+        return None
+
+    def check_link_unbreakable(self, game: GameState, card_a, card_b) -> bool:
+        """Check if a link is protected from being broken."""
+        for mod in self._modifiers.get("before_link", []):
+            if mod.effect_type != "link_unbreakable":
+                continue
+            # Check if either card is the source of this protection
+            if mod.source_card_id in (card_a.card_id, card_b.card_id):
+                return True
+        return False
+
+    def get_grimoire_defense_mods(self, game: GameState, defender: int) -> list[Modifier]:
+        """Get all active grimoire_defense modifiers for a player."""
+        results = []
+        for mod in self._modifiers.get("grimoire_defense", []):
+            source = game.all_cards.get(mod.source_card_id)
+            if not source or source.owner != defender:
+                continue
+            if not source.position or source.position[0] == -1:
+                continue
+            results.append(mod)
+        return results
+
+    def apply_grimoire_defense(self, game: GameState, defender: int, 
+                                net_damage: int, attack_type: str = "normal") -> tuple[int, Optional[str]]:
+        """Apply grimoire_defense modifiers to reduce/cancel damage.
+        
+        Returns (modified_damage, cancel_reason).
+        cancel_reason is None if attack proceeds, or a string if cancelled.
+        """
+        for mod in self.get_grimoire_defense_mods(game, defender):
+            source = game.all_cards.get(mod.source_card_id)
+            if not source:
+                continue
+                
+            if mod.effect_type == "max_seal_loss":
+                cap = mod.params.get("max", 999)
+                if net_damage > cap:
+                    game._log(f"  🛡️ {source.definition.name}: daño capado de {net_damage} a {cap}")
+                    net_damage = cap
+                    
+            elif mod.effect_type == "pay_seal_cancel_attack":
+                cost = mod.params.get("cost", 1)
+                if game.seals[defender] >= cost:
+                    game.seals[defender] -= cost
+                    game._log(f"  🛡️ {source.definition.name}: paga {cost} sello(s), cancela ataque")
+                    return 0, f"Ataque cancelado por {source.definition.name}"
+                    
+            elif mod.effect_type == "deny_attack_per_turn":
+                # Track usage per turn
+                used_key = f"_deny_attack_used_{mod.source_card_id}"
+                if not getattr(game, used_key, False):
+                    setattr(game, used_key, True)
+                    game._log(f"  🛡️ {source.definition.name}: niega ataque")
+                    return 0, f"Ataque negado por {source.definition.name}"
+                    
+            elif mod.effect_type == "cannot_lose":
+                min_seals = mod.params.get("min_seals", 1)
+                if game.seals[defender] - net_damage < min_seals:
+                    net_damage = max(0, game.seals[defender] - min_seals)
+                    game._log(f"  🛡️ {source.definition.name}: daño reducido a {net_damage} (no puede perder)")
+                    
+        return net_damage, None
+
+    def check_before_attack_immunity(self, game: GameState, target_card_id: int, 
+                                      attacker_squad=None) -> Optional[str]:
+        """Check if a target is immune to attacks due to before_attack modifiers."""
+        target = game.all_cards.get(target_card_id)
+        if not target:
+            return None
+            
+        for mod in self._modifiers.get("before_attack", []):
+            source = game.all_cards.get(mod.source_card_id)
+            if not source:
+                continue
+                
+            # Sigilo: cannot be attacked
+            if mod.effect_type == "sigilo_conditional":
+                if mod.source_card_id == target_card_id:
+                    cond = mod.params.get("condition", {})
+                    if cond.get("type") == "no_links":
+                        if game.network.link_count(target) == 0:
+                            return f"{source.definition.name} tiene Sigilo: no puede ser atacado."
+                            
+            # Linked enemy cannot attack (Enredadera)
+            if mod.effect_type == "linked_enemy_cannot_attack":
+                if attacker_squad and mod.source_card_id in attacker_squad.members:
+                    # Check if any enemy is linked to the Enredadera
+                    for cid in attacker_squad.members:
+                        c = game.all_cards.get(cid)
+                        if c and game.network.has_link(c, source):
+                            return f"{source.definition.name}: cartas vinculadas no pueden atacar."
+                            
+            # Cannot defend (Berserker)
+            if mod.effect_type == "cannot_defend":
+                if mod.source_card_id == target_card_id:
+                    return f"{source.definition.name} no puede defender."
+                    
+        return None
+
+    def apply_modify_damage(self, game: GameState, base_damage: int, 
+                            attacker_squad, defender_squad=None) -> int:
+        """Apply modify_damage modifiers to attack damage."""
+        damage = base_damage
+        
+        for mod in self._modifiers.get("modify_damage", []):
+            source = game.all_cards.get(mod.source_card_id)
+            if not source:
+                continue
+                
+            # Damage irreducible (Berserker)
+            if mod.effect_type == "damage_irreducible":
+                if attacker_squad and mod.source_card_id in attacker_squad.members:
+                    game._log(f"  ⚔️ {source.definition.name}: daño irreducible")
+                    # Mark that this damage cannot be reduced by defense
+                    # The actual implementation is in game.py where defense is calculated
+                    pass
+                    
+        return damage
+
+    def check_destroy_immunity(self, game: GameState, card, destroyer=None) -> bool:
+        """Check if a card is immune to destruction."""
+        for mod in self._modifiers.get("before_destroy", []):
+            if mod.effect_type == "destroy_immunity":
+                if mod.source_card_id == card.card_id:
+                    return True
+            elif mod.effect_type == "destroy_immunity_type":
+                if mod.source_card_id == card.card_id:
+                    immune_to = mod.params.get("immune_to", "")
+                    if destroyer and immune_to in destroyer.definition.name.lower():
+                        return True
+            elif mod.effect_type == "ability_target_immunity":
+                if mod.source_card_id == card.card_id:
+                    return True
+            elif mod.effect_type == "ability_target_immunity_faction":
+                if mod.source_card_id == card.card_id:
+                    faction = mod.params.get("faction", "")
+                    if destroyer and faction in destroyer.definition.color.value.lower():
+                        return True
+        return False
+
+    def get_color_faction_mods(self, game: GameState, player: int) -> list[Modifier]:
+        """Get all color_faction modifiers for a player."""
+        results = []
+        for mod in self._modifiers.get("color_faction", []):
+            source = game.all_cards.get(mod.source_card_id)
+            if source and source.owner == player:
+                results.append(mod)
+        return results
+
+    def get_additional_factions(self, game: GameState, card) -> list[str]:
+        """Get additional factions a card counts as (Carismático, Canalizador)."""
+        factions = []
+        for mod in self.get_color_faction_mods(game, card.owner):
+            if mod.effect_type == "add_faction" and mod.layer == "network":
+                # Applies to all cards in network
+                factions.append(mod.params.get("faction", ""))
+            elif mod.effect_type == "count_as_factions" and mod.source_card_id == card.card_id:
+                factions.extend(mod.params.get("factions", []))
+        return factions
+
+    def get_defense_bonus(self, game: GameState, squad) -> int:
+        """Get defense bonus from modify_squad modifiers."""
+        bonus = 0
+        for mod in self._modifiers.get("modify_squad", []):
+            if mod.effect_type == "defense_bonus":
+                if mod.source_card_id in squad.members:
+                    bonus += mod.params.get("amount", 0)
+        return bonus
+
+    def get_linked_hp_bonus(self, game: GameState, card) -> int:
+        """Get HP bonus from linked cards (Nodo Ancla)."""
+        bonus = 0
+        for mod in self._modifiers.get("modify_squad", []):
+            if mod.effect_type == "linked_hp_bonus":
+                # Check if card is linked to the source
+                source = game.all_cards.get(mod.source_card_id)
+                if source and game.network.has_link(card, source):
+                    bonus += mod.params.get("amount", 0)
+        return bonus

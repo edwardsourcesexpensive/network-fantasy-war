@@ -57,17 +57,30 @@ class AbilityRegistry:
 
         Active abilities are skipped — they don't produce Modifiers.
         Returns empty list if no passive pattern matches.
+        Catch-all patterns (name ending in STUB with empty keyword) are suppressed
+        when any real pattern also matches.
         """
         desc = ability.description.lower()
         cid = card.card_id
         mods = []
+        catchall_mods = []
 
         for pat in self._patterns:
             if pat.is_active:
                 continue
             result = pat.try_parse(desc, ability, cid)
             if result is not None:
-                mods.extend(result)
+                # Check if this is a catch-all stub (matches everything)
+                is_catchall = (pat.name.endswith("other_permanent (STUB)")
+                              and pat.implemented is False)
+                if is_catchall:
+                    catchall_mods.extend(result)
+                else:
+                    mods.extend(result)
+
+        # Only include catch-all if no real pattern matched
+        if not mods:
+            mods.extend(catchall_mods)
 
         return mods
 
@@ -1545,8 +1558,196 @@ class AbilityRegistry:
         self._add("permanent: cannot_ascend_regen", _perm_cannot_ascend_regen, is_active=True)
 
         # ═══════════════════════════════════════════════════════════════
-        # STUBS: 78 not-implemented permanent passives (grouped by effect)
+
         # ═══════════════════════════════════════════════════════════════
+        # REAL P1 PATTERNS — permanent passives routed to existing hooks
+        # ═══════════════════════════════════════════════════════════════
+
+        # --- 1. Duelista de la Brecha: sigilo mientras no tenga vínculos ---
+        def _p1_duelista_sigilo(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "sigilo" not in desc or "no tenga vínculos" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="sigilo_conditional", layer="self",
+                    params={"condition": {"type": "no_links"}, **_ability_params(ability)})]
+        self._add("permanent: sigilo_conditional (Duelista)", _p1_duelista_sigilo)
+
+        # --- 2. Saboteadora de Capas: rompe 2 vínculos al vincularse ---
+        def _p1_saboteadora(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "vincularse" not in desc or "rompe" not in desc or "vínculo" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="after_link",
+                    effect_type="break_enemy_links_on_link", layer="self",
+                    params={"count": 2, **_ability_params(ability)})]
+        self._add("permanent: break_link_on_link (Saboteadora)", _p1_saboteadora)
+
+        # --- 3. Enredadera Estranguladora: enemigos vinculados no atacan ---
+        def _p1_enredadera(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "vinculadas a" not in desc or "no pueden atacar" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="linked_enemy_cannot_attack", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: linked_enemy_cannot_attack (Enredadera)", _p1_enredadera)
+
+        # --- 4. Manto de Hojas: vínculos irrompibles por Saboteadores ---
+        def _p1_manto(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no pueden ser rotos" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_link",
+                    effect_type="link_unbreakable", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: link_unbreakable (Manto)", _p1_manto)
+
+        # --- 5. Nómada del Páramo: cambia de layer gratis ---
+        def _p1_nomada(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "cambia de layer" not in desc and "acción gratuita" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_actions",
+                    effect_type="free_layer_change", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: free_layer_change (Nómada)", _p1_nomada)
+
+        # --- 6. Generalísimo: ascensos gratuitos + multi-capa ---
+        def _p1_generalisimo(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "ascensos" not in desc or "gratuitos" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_actions",
+                    effect_type="free_ascend_all", layer="squad",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: free_ascend_all (Generalísimo)", _p1_generalisimo)
+
+        # --- 7. Vagabundo: moverse sin costo de ascenso ---
+        def _p1_vagabundo(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "moverse" not in desc or "sin costo" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_actions",
+                    effect_type="free_move", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: free_move (Vagabundo)", _p1_vagabundo)
+
+        # --- 8. Nodo Ancla: no asciende + +2 HP ---
+        def _p1_nodo_ancla(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no ascienden" not in desc and "no ascienda" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="on_ascend",
+                    effect_type="cannot_ascend", layer="squad",
+                    params={**_ability_params(ability)}),
+                    Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="linked_hp_bonus", layer="squad",
+                    params={"amount": 2, **_ability_params(ability)})]
+        self._add("permanent: cannot_ascend+hp (Nodo Ancla)", _p1_nodo_ancla)
+
+        # --- 9. Arquitecta del Muro: max 5 sellos/ataque ---
+        def _p1_arquitecta(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no puede perder más de" not in desc or "sello" not in desc: return None
+            import re
+            m = re.search(r"más de (\d+)", desc)
+            cap = int(m.group(1)) if m else 5
+            return [Modifier(source_card_id=cid, hook="grimoire_defense",
+                    effect_type="max_seal_loss", layer="self",
+                    params={"max": cap, **_ability_params(ability)})]
+        self._add("permanent: max_seal_loss (Arquitecta)", _p1_arquitecta)
+
+        # --- 10. Diplomática de la Corte: paga 1 sello, cancela ataque ---
+        def _p1_diplomatica(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "paga" not in desc or "cancela" not in desc or "ataque" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="grimoire_defense",
+                    effect_type="pay_seal_cancel_attack", layer="self",
+                    params={"cost": 1, **_ability_params(ability)})]
+        self._add("permanent: pay_seal_cancel (Diplomática)", _p1_diplomatica)
+
+        # --- 11. Embajador Extranjero: niega 1 ataque/turno ---
+        def _p1_embajador(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "niega" not in desc or "ataque" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="grimoire_defense",
+                    effect_type="deny_attack_per_turn", layer="self",
+                    params={"count": 1, **_ability_params(ability)})]
+        self._add("permanent: deny_attack (Embajador)", _p1_embajador)
+
+        # --- 12. Piedra Filosofal: no pierdes, sellos >= 1 ---
+        def _p1_piedra(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no puedes perder" not in desc and "sellos no bajan" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="grimoire_defense",
+                    effect_type="cannot_lose", layer="self",
+                    params={"min_seals": 1, **_ability_params(ability)})]
+        self._add("permanent: cannot_lose (Piedra)", _p1_piedra)
+
+        # --- 13. Carismático Supremo: cartas = Festivas ---
+        def _p1_carismatico(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "consideran" not in desc or "festivas" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="color_faction",
+                    effect_type="add_faction", layer="network",
+                    params={"faction": "festivo", **_ability_params(ability)})]
+        self._add("permanent: add_faction (Carismático)", _p1_carismatico)
+
+        # --- 14. Canalizador Arcano: cuenta como Alquimista y Sabio ---
+        def _p1_canalizador(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "cuenta como" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="color_faction",
+                    effect_type="count_as_factions", layer="self",
+                    params={"factions": ["alquimista", "sabio"], **_ability_params(ability)})]
+        self._add("permanent: count_as_factions (Canalizador)", _p1_canalizador)
+
+        # --- 15. Árbol del Fin de los Tiempos: inmune a Monstruos ---
+        def _p1_arbol(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "inmunes a destrucción" not in desc and "inmune" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_destroy",
+                    effect_type="destroy_immunity_type", layer="squad",
+                    params={"immune_to": "monstruo", **_ability_params(ability)})]
+        self._add("permanent: destroy_immunity (Árbol)", _p1_arbol)
+
+        # --- 16. Ministro de Defensa: +3 defensa escuadrón ---
+        def _p1_ministro(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "ganan" not in desc or "defensa" not in desc: return None
+            import re
+            m = re.search(r"\+(\d+)", desc)
+            amount = int(m.group(1)) if m else 3
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="defense_bonus", layer="squad",
+                    params={"amount": amount, **_ability_params(ability)})]
+        self._add("permanent: defense_bonus (Ministro)", _p1_ministro)
+
+        # --- 17. Berserker del Norte: no defiende, daño irreducible ---
+        def _p1_berserker(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no puede defender" not in desc: return None
+            mods = [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="cannot_defend", layer="self",
+                    params={**_ability_params(ability)})]
+            if "no puede ser reducido" in desc or "irreducible" in desc:
+                mods.append(Modifier(source_card_id=cid, hook="modify_damage",
+                    effect_type="damage_irreducible", layer="self",
+                    params={**_ability_params(ability)}))
+            return mods
+        self._add("permanent: cannot_defend+irreducible (Berserker)", _p1_berserker)
+
+        # --- 18. Alimaña: no es objetivo de habilidades ---
+        def _p1_alimana(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no puede ser objetivo" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_destroy",
+                    effect_type="ability_target_immunity", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: ability_target_immunity (Alimaña)", _p1_alimana)
+
+        # --- 19. Diputado Belicoso: no es objetivo políticas ---
+        def _p1_diputado(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no puede ser objetivo" not in desc or "políticas" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_destroy",
+                    effect_type="ability_target_immunity_faction", layer="self",
+                    params={"faction": "politico", **_ability_params(ability)})]
+        self._add("permanent: ability_target_immunity_faction (Diputado)", _p1_diputado)
+
 
         def _perm_stub(name, effect_type, keywords, extra_checks=None):
             """Create a stub pattern for a permanent passive effect group."""
@@ -1562,34 +1763,16 @@ class AbilityRegistry:
 
         # Group by effect type — one stub per mechanic family
         _perm_stub("sigilo", "sigilo", ["sigilo", "no puede ser atacado"])
-        _perm_stub("sigilo_conditional", "sigilo_conditional", ["sigilo", "vínculo"],
-                   lambda d: "mientras no tenga" in d or "sin vínculo" in d)
         _perm_stub("guardaespaldas", "guardaespaldas", ["guardaespaldas", "redirige"])
-        _perm_stub("attack_cancel", "pay_seal_cancel_attack", ["cancela", "ataque"])
-        _perm_stub("seal_protection", "seal_loss_cap", ["no puede perder", "sello"])
-        _perm_stub("seal_manipulation", "seal_manipulation", ["sello"],
-                   lambda d: "gana" in d or "pierde" in d or "otorga" in d)
         _perm_stub("parasite", "parasite_sabotage", ["parasit"])
         _perm_stub("sabotage", "sabotage_effect", ["sabotaje"])
-        _perm_stub("break_link_on_condition", "break_link_conditional", ["rompe", "vínculo"],
-                   lambda d: "al vincularse" in d or "cuando" in d)
         _perm_stub("link_immunity", "link_immunity", ["no puede ser vinculad"])
         _perm_stub("link_ignore", "ignore_link_cost", ["vínculo", "ignorand"])
-        _perm_stub("any_color_majority", "any_color_majority", ["cuenta como", "color"])
-        _perm_stub("damage_reduction", "damage_reduction", ["reduce", "daño"],
-                   lambda d: "no puede ser reducido" in d or "daño reducido" in d)
-        _perm_stub("damage_immunity_conditional", "damage_immunity", ["daño"],
-                   lambda d: "no recibe" in d or "inmune" in d)
         _perm_stub("potenciamiento_block", "block_potenciamiento", ["potenciamiento", "no recibe"])
         _perm_stub("potenciamiento_boost", "boost_potenciamiento", ["potenciamiento", "+"])
         _perm_stub("move_through", "move_through_occupied", ["maniobrabilidad"])
-        _perm_stub("ascend_free", "free_ascend_conditional", ["asciende", "gratis"])
-        _perm_stub("draw_on_condition", "draw_conditional", ["roba"],
-                   lambda d: "cada vez" in d or "al" in d or "cuando" in d)
         _perm_stub("recover_hp_conditional", "recover_hp_conditional", ["cura", "hp"],
                    lambda d: "regenera" in d or "recupera" in d)
-        _perm_stub("seals_conditional", "seals_conditional", ["sello"],
-                   lambda d: "final del turno" not in d and "inicio" not in d)
         _perm_stub("spy_block_attack", "spy_block_attack", ["no puede atacar", "grimorio"],
                    lambda d: "espía" in d or "infiltra" in d)
         _perm_stub("spy_intelligence", "spy_intelligence", ["inteligencia"],
