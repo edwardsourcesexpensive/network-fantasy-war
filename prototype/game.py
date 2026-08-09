@@ -196,6 +196,8 @@ class GameState:
             source.pop(index)
             self.actions_remaining -= 1
             self._log(f"J{player+1} juega {card.definition.name} en la FRONTERA.")
+            # Register modifiers even for spies on frontier (P3)
+            self.modifiers.register(self, card)
             return None
 
         if not card.definition.is_logistron:

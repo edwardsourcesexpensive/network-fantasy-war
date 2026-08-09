@@ -1932,7 +1932,8 @@ class AbilityRegistry:
         # Reina Madre: L1 +2 HP y vínculos sin acciones
         def _p2_reina(desc, ability, cid):
             if ability.trigger != "permanent": return None
-            if "l1" not in desc and "ganan +2 HP" not in desc: return None
+            if "mientras esté en l1" not in desc and "ganan +2 hp" not in desc: return None
+            if "forman" in desc: return None  # Exclude Místico
             return [Modifier(source_card_id=cid, hook="modify_squad",
                     effect_type="layer_buff", layer="network",
                     params={"layer": 1, "hp": 2, **_ability_params(ability)})]
