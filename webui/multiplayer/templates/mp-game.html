@@ -96,6 +96,64 @@ body.p1-turn{background:#1a2e1a}
 .def-opt{padding:8px 12px;background:#0f3460;border:1px solid #333;border-radius:3px;cursor:pointer;margin:4px 0;font-size:11px;text-align:left}
 .def-opt:hover{background:#1a3a5c;border-color:#4fc3f7}
 .wait-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:70;display:none;align-items:center;justify-content:center;font-size:18px;color:#ffd700}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE (≤768px)
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  body{font-size:10px}
+  
+  /* Controls: stack vertically, full width */
+  #controls{flex-direction:column;align-items:stretch;padding:4px 6px;gap:3px}
+  #controls .btn{width:100%;padding:8px;font-size:12px}
+  #player-indicator{margin-left:0;text-align:center}
+  
+  /* Board: smaller cells, horizontal scroll */
+  #board-container{margin:4px 4px;overflow-x:auto;overflow-y:hidden}
+  .row{gap:1px}
+  .cell{width:50px;height:35px;font-size:14px}
+  .cell .hp{font-size:6px}
+  .cell .v{font-size:6px}
+  .cell .dmg{font-size:6px}
+  .territory-label{font-size:8px}
+  .frontier{font-size:8px;padding:1px}
+  
+  /* Hand: horizontal scroll, smaller cards */
+  #hand-cards{flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;padding:4px 6px;gap:6px;-webkit-overflow-scrolling:touch}
+  .mtg-card{width:120px;height:180px;flex-shrink:0}
+  .mtg-card .card-art{font-size:20px;min-height:35px}
+  .mtg-card .card-name{font-size:9px}
+  .mtg-card .card-v{width:16px;height:16px;font-size:8px}
+  .mtg-card .card-text{font-size:7px;max-height:35px;min-height:25px}
+  .mtg-card .card-type{font-size:7px}
+  .mtg-card .layer-dot{width:8px;height:8px;font-size:4px}
+  .mtg-card .formation-icon{width:12px;height:12px;font-size:7px}
+  .mtg-card .card-stats{font-size:8px;padding:1px 3px}
+  
+  /* Card detail: full width bottom sheet */
+  #card-detail{left:0;right:0;bottom:0;max-width:100%;max-height:60vh;border-radius:12px 12px 0 0;border:2px solid #e94560;border-bottom:none}
+  
+  /* Log: smaller */
+  #log{font-size:8px;max-height:60px;margin:4px 6px}
+  
+  /* Squads panel: full width */
+  #squads-panel{margin:4px 6px;font-size:9px}
+  
+  /* Victory overlay: smaller text */
+  #victory-overlay h1{font-size:24px}
+  #victory-overlay .vstat{font-size:12px}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TABLET (769px-1024px)
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .cell{width:80px;height:45px;font-size:16px}
+  .mtg-card{width:140px;height:210px}
+  #hand-cards{flex-wrap:wrap}
+}
 </style>
 </head>
 <body>

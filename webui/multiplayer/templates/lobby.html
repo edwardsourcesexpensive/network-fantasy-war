@@ -25,6 +25,38 @@ button.secondary:hover{background:#1a3a5c}
 .deck-option:hover{background:#1a3a5c;border-color:#4fc3f7}
 .deck-option.selected{border-color:#e94560;background:#2a1a2e}
 .wait-msg{color:#888;font-style:italic;font-size:13px}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE (≤768px)
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  body{padding:10px}
+  h1{font-size:18px}
+  .sub{font-size:10px;margin-bottom:16px}
+  
+  .panel{width:100%;max-width:100%;padding:12px;margin-bottom:12px}
+  .panel h2{font-size:12px}
+  
+  input,select,button{padding:12px;font-size:14px}
+  button{font-size:14px}
+  
+  .code{font-size:24px;letter-spacing:4px}
+  
+  /* Cartas modal: full width, smaller cards */
+  #cartas-modal{padding:10px}
+  #cartas-modal>div{max-width:100%}
+  #cartas-content{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  #cartas-content .mtg-card{width:120px;height:180px}
+  
+  /* Decks modal: full width */
+  #decks-modal>div{max-width:100%;padding:12px}
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .panel{width:90%;max-width:500px}
+  #cartas-content{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+}
 </style>
 </head>
 <body>
