@@ -699,3 +699,139 @@ class ModifierEngine:
                 if source and game.network.has_link(card, source):
                     bonus += mod.params.get("amount", 0)
         return bonus
+
+    # ═══════════════════════════════════════════════════════════════
+    # P2: Medium-effort permanent passive effect handlers
+    # ═══════════════════════════════════════════════════════════════
+
+    def check_attack_override(self, game: GameState, card, context: str) -> Optional[str]:
+        """Check attack overrides (multi-target, same-turn, unblockable, etc.)."""
+        for mod in self._modifiers.get("before_attack", []):
+            if mod.source_card_id != card.card_id:
+                continue
+            
+            if mod.effect_type == "attack_in_actions_phase":
+                if context == "actions_phase":
+                    return None  # Allowed
+                return f"{card.definition.name} solo puede atacar en Fase de Acciones."
+                
+            elif mod.effect_type == "attack_same_turn":
+                # Check if card was played this turn
+                if getattr(card, '_played_this_turn', False):
+                    return None  # Allowed
+                return f"{card.definition.name} no puede atacar el mismo turno que fue jugado."
+                
+        return None
+
+    def check_unblockable(self, game: GameState, attacker, defender_squad) -> bool:
+        """Check if attacker is unblockable by defender squad."""
+        for mod in self._modifiers.get("before_attack", []):
+            if mod.source_card_id != attacker.card_id:
+                continue
+            if mod.effect_type == "unblockable_by_v1":
+                # Check if all defenders have V=1
+                all_v1 = True
+                for cid in defender_squad.members:
+                    c = game.all_cards.get(cid)
+                    if c and c.definition.hp > 1:  # V approximated by HP
+                        all_v1 = False
+                        break
+                if all_v1:
+                    return True
+        return False
+
+    def get_hand_limit(self, game: GameState, player: int) -> int:
+        """Get max hand size for a player (default 7)."""
+        for mod in self._modifiers.get("conditional_draw", []):
+            source = game.all_cards.get(mod.source_card_id)
+            if not source or source.owner != player:
+                continue
+            if mod.effect_type == "no_hand_limit":
+                return 999
+            elif mod.effect_type == "max_hand_size":
+                return mod.params.get("max", 10)
+        return 7
+
+    def get_draw_count(self, game: GameState, player: int) -> int:
+        """Get number of cards to draw at start of turn (default 2)."""
+        for mod in self._modifiers.get("conditional_draw", []):
+            source = game.all_cards.get(mod.source_card_id)
+            if not source or source.owner != player:
+                continue
+            if mod.effect_type == "reveal_hand_draw":
+                return mod.params.get("count", 3)
+        return 2
+
+    def check_play_override(self, game: GameState, player: int, card, 
+                            source: str = "hand") -> tuple[int, Optional[str]]:
+        """Check play cost overrides. Returns (cost, error)."""
+        cost = 1  # Default cost
+        
+        for mod in self._modifiers.get("before_play", []):
+            source_card = game.all_cards.get(mod.source_card_id)
+            if not source_card or source_card.owner != player:
+                continue
+            
+            if mod.effect_type == "play_cost_zero":
+                cost = 0
+            elif mod.effect_type == "play_from_opponent_hand":
+                if source == "opponent_hand":
+                    cost = 1  # Can play from opponent hand
+            elif mod.effect_type == "play_from_discard":
+                if source == "discard":
+                    cost = 1
+            elif mod.effect_type == "play_from_graveyard_cost":
+                if source == "graveyard":
+                    cost = 1 + mod.params.get("extra_cost", 0)
+            elif mod.effect_type == "play_layer_free":
+                if card.position and card.position[1] == mod.params.get("layer", 1):
+                    cost = 0
+            elif mod.effect_type == "play_layer_discount":
+                if card.position and card.position[1] == mod.params.get("layer", 1):
+                    cost = max(0, cost - mod.params.get("discount", 0))
+            elif mod.effect_type == "high_cost":
+                cost = mod.params.get("cost", 1)
+        
+        return cost, None
+
+    def check_lose_game_condition(self, game: GameState, card, event: str) -> bool:
+        """Check if a card's death or action causes game loss."""
+        for mod in self._modifiers.get("before_destroy", []):
+            if mod.source_card_id != card.card_id:
+                continue
+            if mod.effect_type == "death_lose_game" and event == "death":
+                return True
+        return False
+
+    def get_potenciamiento_mods(self, game: GameState, squad) -> dict:
+        """Get potenciamiento modifiers for a squad."""
+        result = {"multiplier": 1, "no_decay": False, "share": False}
+        for mod in self._modifiers.get("modify_squad", []):
+            if mod.source_card_id not in squad.members:
+                continue
+            if mod.effect_type == "double_potenciamiento":
+                result["multiplier"] = 2
+            elif mod.effect_type == "potenciamiento_no_decay":
+                result["no_decay"] = True
+            elif mod.effect_type == "share_potenciamiento":
+                result["share"] = True
+        return result
+
+    def check_no_squad(self, game: GameState, card) -> bool:
+        """Check if a card cannot form squads."""
+        for mod in self._modifiers.get("modify_squad", []):
+            if mod.source_card_id == card.card_id:
+                if mod.effect_type in ("no_squad", "no_squad_destroy_adjacent", 
+                                       "no_squad_destroy_allies"):
+                    return True
+        return False
+
+    def get_layer_buffs(self, game: GameState, player: int, layer: int) -> dict:
+        """Get buffs for cards in a specific layer."""
+        result = {"hp": 0, "free_link": False}
+        for mod in self._modifiers.get("modify_squad", []):
+            if mod.effect_type == "layer_buff":
+                if mod.params.get("layer") == layer:
+                    result["hp"] += mod.params.get("hp", 0)
+                    result["free_link"] = True
+        return result

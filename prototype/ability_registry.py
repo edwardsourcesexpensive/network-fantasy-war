@@ -1748,6 +1748,245 @@ class AbilityRegistry:
                     params={"faction": "politico", **_ability_params(ability)})]
         self._add("permanent: ability_target_immunity_faction (Diputado)", _p1_diputado)
 
+        # ═══════════════════════════════════════════════════════════════
+        # REAL P2 PATTERNS — medium-effort permanent passives
+        # ═══════════════════════════════════════════════════════════════
+
+        # --- ATTACK_OVERRIDE (4 cards) ---
+
+        # Emperador de los Dos Territorios: atacar durante Fase de Acciones
+        def _p2_emperador(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "fase de acciones" not in desc or "atacar" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="attack_in_actions_phase", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: attack_in_actions (Emperador)", _p2_emperador)
+
+        # Kraken del Abismo: atacar hasta 3 objetivos
+        def _p2_kraken(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "3 objetivos" not in desc and "hasta 3" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="multi_target_attack", layer="self",
+                    params={"max_targets": 3, **_ability_params(ability)})]
+        self._add("permanent: multi_target (Kraken)", _p2_kraken)
+
+        # Espadachín Veloz: atacar el mismo turno jugado
+        def _p2_espadachin(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "mismo turno" not in desc or "jugado" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="attack_same_turn", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: attack_same_turn (Espadachín)", _p2_espadachin)
+
+        # Bestia Callejera: no puede ser bloqueado por V=1
+        def _p2_bestia(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no puede ser bloqueado" not in desc or "v=1" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="unblockable_by_v1", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: unblockable_v1 (Bestia)", _p2_bestia)
+
+        # --- HAND/DRAW (5 cards) ---
+
+        # Biblioteca Viviente: sin límite de mano
+        def _p2_biblioteca(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "sin límite de mano" not in desc and "no pierdes sellos" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="conditional_draw",
+                    effect_type="no_hand_limit", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: no_hand_limit (Biblioteca)", _p2_biblioteca)
+
+        # Mente Maestra: jugar cartas de la mano del oponente
+        def _p2_mente_maestra(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "mano del oponente" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="play_from_opponent_hand", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: play_opponent_hand (Mente Maestra)", _p2_mente_maestra)
+
+        # Poeta del Circuito: roba 1 / +2 armadura
+        def _p2_poeta(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "roba" not in desc and "armadura" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="conditional_draw",
+                    effect_type="conditional_draw_armor", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: conditional_draw_armor (Poeta)", _p2_poeta)
+
+        # Omnisciente: mano enemiga revelada + roba 3
+        def _p2_omnisciente(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "mano enemiga revelada" not in desc and "robas 3" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="conditional_draw",
+                    effect_type="reveal_hand_draw", layer="self",
+                    params={"count": 3, **_ability_params(ability)})]
+        self._add("permanent: reveal_hand_draw (Omnisciente)", _p2_omnisciente)
+
+        # Sabio Absoluto: mano máxima 10
+        def _p2_sabio(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "mano máxima" not in desc and "no pierdes sellos" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="conditional_draw",
+                    effect_type="max_hand_size", layer="self",
+                    params={"max": 10, **_ability_params(ability)})]
+        self._add("permanent: max_hand_size (Sabio)", _p2_sabio)
+
+        # --- POTENCIAMIENTO (3 cards) ---
+
+        # Duplicadora de Esencias: potenciamiento duplicado
+        def _p2_duplicadora(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "potenciamiento" not in desc or "duplica" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="double_potenciamiento", layer="squad",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: double_pot (Duplicadora)", _p2_duplicadora)
+
+        # Amplificador de Señal: potenciamiento no decae
+        def _p2_amplificador(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "potenciamiento" not in desc or "no decae" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="potenciamiento_no_decay", layer="squad",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: pot_no_decay (Amplificador)", _p2_amplificador)
+
+        # Distribuidor de Carga: compartir potenciamiento
+        def _p2_distribuidor(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "potenciamiento" not in desc or "comparten" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="share_potenciamiento", layer="network",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: share_pot (Distribuidor)", _p2_distribuidor)
+
+        # --- FORMATION (3 cards) ---
+
+        # Ermitaño del Tablero: no forma escuadrones, ataca solo
+        def _p2_ermitano(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no forma escuadrones" not in desc and "ataca solo" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="no_squad", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: no_squad (Ermitaño)", _p2_ermitano)
+
+        # Apocalipsis Viviente: no forma escuadrones, destruye adyacentes
+        def _p2_apocalipsis(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no forma escuadrones" not in desc and "destruye cartas adyacentes" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="no_squad_destroy_adjacent", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: no_squad_destroy (Apocalipsis)", _p2_apocalipsis)
+
+        # Horror Cósmico: no forma escuadrones, destruye tus otras cartas
+        def _p2_horror(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no forma escuadrones" not in desc and "destruye todas tus otras" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="no_squad_destroy_allies", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: no_squad_destroy_allies (Horror)", _p2_horror)
+
+        # --- PLAY_OVERRIDE (7 cards) ---
+
+        # Canciller del Tesoro: jugar cartas cuesta 0
+        def _p2_canciller(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "cuesta 0" not in desc and "cuestan 0" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="play_cost_zero", layer="squad",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: play_cost_zero (Canciller)", _p2_canciller)
+
+        # Gran Alquimista: jugar cartas de la pila de descartes
+        def _p2_gran_alquimista(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "pila de descartes" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="play_from_discard", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: play_from_discard (Gran Alquimista)", _p2_gran_alquimista)
+
+        # Archivero Supremo: jugar cartas del cementerio +2 acciones
+        def _p2_archivero(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "cementerio" not in desc and "2 acciones extra" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="play_from_graveyard_cost", layer="self",
+                    params={"extra_cost": 2, **_ability_params(ability)})]
+        self._add("permanent: play_graveyard_cost (Archivero)", _p2_archivero)
+
+        # Conmutador: vínculos no cuestan acciones
+        def _p2_conmutador(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "no cuestan acciones" not in desc and "cuestan 0" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_link",
+                    effect_type="link_cost_zero", layer="squad",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: link_cost_zero (Conmutador)", _p2_conmutador)
+
+        # Reina Madre: L1 +2 HP y vínculos sin acciones
+        def _p2_reina(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "L1" not in desc and "ganan +2 HP" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="modify_squad",
+                    effect_type="layer_buff", layer="network",
+                    params={"layer": 1, "hp": 2, **_ability_params(ability)})]
+        self._add("permanent: layer_buff (Reina Madre)", _p2_reina)
+
+        # Pregonero del Pueblo: jugar en L1 sin acciones
+        def _p2_pregonero(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "L1" not in desc and "sin acciones" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="play_layer_free", layer="network",
+                    params={"layer": 1, "max_per_turn": 2, **_ability_params(ability)})]
+        self._add("permanent: play_layer_free (Pregonero)", _p2_pregonero)
+
+        # Enrutador de Retaguardia: reduce 1 acción jugar en L1
+        def _p2_enrutador(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "reduce 1 acción" not in desc and "L1" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="play_layer_discount", layer="network",
+                    params={"layer": 1, "discount": 1, **_ability_params(ability)})]
+        self._add("permanent: play_layer_discount (Enrutador)", _p2_enrutador)
+
+        # --- WIN_CONDITION (2 cards) ---
+
+        # Deus Ex Machina: cuesta 4 acciones, si ataca y sobrevive pierdes
+        def _p2_deus(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "cuesta 4 acciones" not in desc and "pierdes la partida" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="high_cost", layer="self",
+                    params={"cost": 4, **_ability_params(ability)}),
+                    Modifier(source_card_id=cid, hook="before_attack",
+                    effect_type="attack_lose_if_survives", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: high_cost+attack_lose (Deus)", _p2_deus)
+
+        # El Arquitecto: cuesta 3 acciones, sin límite de vínculos, al morir pierdes
+        def _p2_arquitecto(desc, ability, cid):
+            if ability.trigger != "permanent": return None
+            if "cuesta 3 acciones" not in desc and "sin límite de vínculos" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="before_play",
+                    effect_type="high_cost", layer="self",
+                    params={"cost": 3, **_ability_params(ability)}),
+                    Modifier(source_card_id=cid, hook="before_destroy",
+                    effect_type="death_lose_game", layer="self",
+                    params={**_ability_params(ability)})]
+        self._add("permanent: high_cost+death_lose (Arquitecto)", _p2_arquitecto)
+
+
 
         def _perm_stub(name, effect_type, keywords, extra_checks=None):
             """Create a stub pattern for a permanent passive effect group."""
