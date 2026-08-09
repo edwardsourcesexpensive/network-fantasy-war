@@ -38,13 +38,36 @@ body.p1-turn{background:#1a2e1a}
 .cell.attack-target{border:2px dashed #e94560;cursor:crosshair}
 .cell.attack-target:hover{background:#3a1010;border-color:#ff4444}
 .frontier{background:#1a0a0a;color:#e94560;font-size:10px;padding:2px;text-align:center;margin:3px 0;border-top:1px solid #e94560;border-bottom:1px solid #e94560}
-#hand-cards{display:flex;gap:4px;flex-wrap:wrap;padding:6px 10px;background:#16213e;margin:0 10px;border-radius:4px;min-height:40px}
-.hand-card{background:#0f3460;border:1px solid #333;border-radius:3px;padding:4px 8px;cursor:pointer;font-size:10px;max-width:130px;transition:all .1s}
-.hand-card:hover{background:#1a3a5c;border-color:#4fc3f7}
-.hand-card.selected{border-color:#e94560;box-shadow:0 0 4px #e94560}
-.hand-card .hn{font-weight:bold;font-size:11px;margin-bottom:2px}
-.hand-card .hs{color:#4fc3f7;font-size:9px}
-.hand-card .ha{color:#888;font-size:8px;margin-top:2px}
+#hand-cards{display:flex;gap:8px;flex-wrap:wrap;padding:6px 10px;background:#16213e;margin:0 10px;border-radius:4px;min-height:40px}
+.mtg-card{width:160px;height:240px;border-radius:10px;position:relative;box-shadow:0 3px 8px rgba(0,0,0,0.4);display:flex;flex-direction:column;overflow:hidden;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s;font-family:'Segoe UI',sans-serif;flex-shrink:0}
+.mtg-card:hover{transform:translateY(-3px);box-shadow:0 6px 14px rgba(0,0,0,0.5)}
+.mtg-card.selected{box-shadow:0 0 0 2px #e94560,0 6px 14px rgba(0,0,0,0.5)}
+.mtg-card.militar{background:linear-gradient(135deg,#1a3a1a 0%,#0d1f0d 100%);border:2px solid #4caf50}
+.mtg-card.politico{background:linear-gradient(135deg,#1a2a4a 0%,#0d1525 100%);border:2px solid #4fc3f7}
+.mtg-card.sellador{background:linear-gradient(135deg,#3a1a4a 0%,#1f0d25 100%);border:2px solid #ba68c8}
+.mtg-card.guerrero{background:linear-gradient(135deg,#4a2a1a 0%,#25150d 100%);border:2px solid #ff9800}
+.mtg-card.naturaleza{background:linear-gradient(135deg,#1a4a2a 0%,#0d2515 100%);border:2px solid #8bc34a}
+.mtg-card.alquimista{background:linear-gradient(135deg,#4a4a1a 0%,#25250d 100%);border:2px solid #ffeb3b}
+.mtg-card.festivo{background:linear-gradient(135deg,#4a1a3a 0%,#250d1f 100%);border:2px solid #e91e63}
+.mtg-card.logistron{background:linear-gradient(135deg,#3a3a3a 0%,#1a1a1a 100%);border:2px solid #9e9e9e}
+.mtg-card .card-frame{padding:6px;display:flex;flex-direction:column;height:100%;position:relative}
+.mtg-card .card-header{display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.4);border-radius:4px;padding:3px 6px;margin-bottom:4px}
+.mtg-card .card-name{font-weight:bold;font-size:10px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.8);flex:1}
+.mtg-card .card-v{width:18px;height:18px;border-radius:3px;background:#0f3460;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:9px;color:#4fc3f7;border:1px solid #4fc3f7;box-shadow:0 2px 3px rgba(0,0,0,0.3)}
+.mtg-card .card-art{flex:1;background:rgba(0,0,0,0.3);border-radius:4px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;font-size:28px;position:relative;overflow:hidden;min-height:50px}
+.mtg-card .card-art::before{content:'';position:absolute;top:0;left:0;right:0;bottom:0;background:radial-gradient(circle at 30% 30%,rgba(255,255,255,0.1) 0%,transparent 50%)}
+.mtg-card .card-type{font-size:8px;color:rgba(255,255,255,0.7);font-style:italic;margin-bottom:3px;padding:1px 3px;background:rgba(0,0,0,0.3);border-radius:2px;display:inline-block}
+.mtg-card .card-text{font-size:8px;color:#e0e0e0;line-height:1.25;background:rgba(0,0,0,0.3);border-radius:4px;padding:4px;min-height:30px;flex-shrink:0;max-height:50px;overflow-y:auto}
+.mtg-card .card-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:3px}
+.mtg-card .card-layers{display:flex;gap:2px}
+.mtg-card .layer-dot{width:10px;height:10px;border-radius:2px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:5px;color:rgba(255,255,255,0.4)}
+.mtg-card .layer-dot.allowed{background:#4fc3f7;border-color:#4fc3f7;color:#000}
+.mtg-card .card-formations{display:flex;gap:2px}
+.mtg-card .formation-icon{width:14px;height:14px;border-radius:2px;background:rgba(0,0,0,0.5);border:1px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:8px;color:rgba(255,255,255,0.3)}
+.mtg-card .formation-icon.allowed{background:rgba(233,69,96,0.4);border-color:#e94560;color:#ff6b81}
+.mtg-card .card-stats{background:rgba(0,0,0,0.5);border-radius:3px;padding:1px 4px;font-weight:bold;font-size:9px;color:#fff;border:1px solid rgba(255,255,255,0.2)}
+.mtg-card .spy-icon{position:absolute;top:4px;right:4px;font-size:11px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));z-index:5}
+.mtg-card .logi-icon{position:absolute;top:4px;right:4px;font-size:11px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));z-index:5}
 #card-detail{position:fixed;bottom:8px;right:8px;background:#16213e;border:1px solid #e94560;border-radius:4px;padding:12px;max-width:280px;z-index:50;display:none;font-size:11px}
 #card-detail h3{color:#e94560;margin-bottom:4px}
 #card-detail .stat{color:#4fc3f7}
@@ -214,11 +237,49 @@ function renderHand(s) {
     const sel = selectedHand === c.index ? ' selected' : '';
     const abils = c.abilities ? c.abilities.map(a => a.length > 50 ? a.substring(0,47)+'...' : a).join(' | ') : '';
     const tooltip = c.name + ' | ' + c.color + ' | HP:' + c.hp + ' D:' + (c.damage_bonus||0) + ' V:' + (c.link_capacity||0) + ' G:' + (c.grado||'?') + ' | L:' + (c.allowed_layers||[]).join(',') + (abils ? ' | ' + abils : '');
-    return '<div class="hand-card' + sel + '" onclick="selectHand(' + c.index + ')" title="' + tooltip + '">' +
-           '<div class="hn">' + c.name + '</div>' +
-           '<div class="hs">' + c.color + ' | HP:' + c.hp + ' D:' + c.damage_bonus + ' V:' + c.link_capacity + ' | L:' + c.allowed_layers.join(',') + '</div>' +
-           (abils ? '<div class="ha">' + abils + '</div>' : '') +
-           '</div>';
+    
+    // Magic-style card
+    const colorClass = c.is_logistron ? 'logistron' : c.color.toLowerCase();
+    const spyIcon = c.is_spy ? '<div class="spy-icon">🕵️</div>' : '';
+    const logiIcon = c.is_logistron ? '<div class="logi-icon">🔌</div>' : '';
+    
+    // Layer dots
+    const layers = [1,2,3].map(l => 
+      '<div class="layer-dot' + ((c.allowed_layers||[]).includes(l) ? ' allowed' : '') + '">L' + l + '</div>'
+    ).join('');
+    
+    // Formation icons
+    const formations = [
+      {key:'triangle', icon:'△'},
+      {key:'square', icon:'□'},
+      {key:'pentagon', icon:'⬠'}
+    ].map(f => 
+      '<div class="formation-icon' + ((c.allowed_formations||[]).includes(f.key) ? ' allowed' : '') + '">' + f.icon + '</div>'
+    ).join('');
+    
+    // Card text
+    const cardText = abils ? abils : '<em style="color:#555">Sin habilidades</em>';
+    
+    // Type line
+    const typeLine = c.is_spy ? 'Espía' : (c.is_logistron ? 'Logistrón' : 'Unidad');
+    
+    return '<div class="mtg-card ' + colorClass + sel + '" onclick="selectHand(' + c.index + ')" title="' + tooltip + '">' +
+      spyIcon + logiIcon +
+      '<div class="card-frame">' +
+        '<div class="card-header">' +
+          '<span class="card-name">' + c.name + '</span>' +
+          '<span class="card-v">V' + (c.link_capacity||0) + '</span>' +
+        '</div>' +
+        '<div class="card-art">🎴</div>' +
+        '<div class="card-type">' + typeLine + ' — ' + c.color + '</div>' +
+        '<div class="card-text">' + cardText + '</div>' +
+        '<div class="card-bottom">' +
+          '<div class="card-layers">' + layers + '</div>' +
+          '<div class="card-formations">' + formations + '</div>' +
+          '<div class="card-stats">' + c.hp + ' / ' + (c.damage_bonus||0) + '</div>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
   }).join('');
   div.innerHTML += '<div style="color:#888;font-size:9px;margin-left:8px;align-self:center">Oponente: ' + (s.opponent_hand_size || 0) + ' cartas</div>';
 }
