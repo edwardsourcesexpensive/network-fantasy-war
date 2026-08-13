@@ -458,7 +458,8 @@ class Squad:
 
 
 def calculate_potenciamiento(attacking_squad: Squad, all_squads: list[Squad],
-                              network: Network, cards: dict[int, CardInstance]) -> int:
+                              network: Network, cards: dict[int, CardInstance],
+                              flat: bool = False) -> int:
     """Calculate total potenciamiento an attacking squad receives from friendly squads."""
     def _owner_of(cid):
         c = cards.get(cid)
@@ -504,6 +505,6 @@ def calculate_potenciamiento(attacking_squad: Squad, all_squads: list[Squad],
                     connected = True
 
         if connected and min_distance <= squad.empowerment_range:
-            total += squad.empowerment
+            total += 1 if flat else squad.empowerment
 
     return total

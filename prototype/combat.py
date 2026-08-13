@@ -227,7 +227,7 @@ class CombatEngine:
             return DefenseResult(defense=0, armor=0, def_pot=0)
 
         all_squads = game.network.find_squads(game.all_cards)
-        def_pot = calculate_potenciamiento(defending_squad, all_squads, game.network, game.all_cards) // 2
+        def_pot = calculate_potenciamiento(defending_squad, all_squads, game.network, game.all_cards, flat=True)
 
         # Festivo: +2 armor to links
         armor = 0
