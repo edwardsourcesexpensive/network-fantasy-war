@@ -102,6 +102,7 @@ class RulesPDF(FPDF):
 
     def quote(self, t):
         """Blockquote with left bar."""
+        t = sanitize(t)
         self.space(2)
         y0 = self.get_y()
         bar_x = self.l_margin + 1
@@ -144,7 +145,7 @@ class RulesPDF(FPDF):
         self.set_text_color(*ACCENT)
         self._x()
         for i, h in enumerate(headers):
-            self.cell(widths[i], 5.5, h, border=1, fill=True, align='C')
+            self.cell(widths[i], 5.5, sanitize(h), border=1, fill=True, align='C')
         self.ln()
 
         # Rows
@@ -153,7 +154,7 @@ class RulesPDF(FPDF):
         for row in rows:
             self._x()
             for i, cell in enumerate(row):
-                self.cell(widths[i], 5, str(cell)[:60], border=1, align='C')
+                self.cell(widths[i], 5, sanitize(str(cell))[:60], border=1, align='C')
             self.ln()
         self.ln(2)
 
@@ -177,11 +178,18 @@ class RulesPDF(FPDF):
 # ── Markdown Parser ──
 
 def sanitize(text):
-    """Replace problematic Unicode chars for PDF compatibility."""
-    return text.replace('\u2014', '--').replace('\u2013', '-') \
+    """Replace problematic Unicode chars + strip markdown for PDF compatibility."""
+    text = text.replace('\u2014', '--').replace('\u2013', '-') \
                .replace('\u2018', "'").replace('\u2019', "'") \
                .replace('\u201c', '"').replace('\u201d', '"') \
                .replace('\u2026', '...').replace('\u00a0', ' ')
+    # strip markdown emphasis/code/tags (bold, inline code, strikethrough, [TAG] markers)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'`(.+?)`', r'\1', text)
+    text = re.sub(r'~~(.+?)~~', r'\1', text)
+    text = re.sub(r'\[(?:NUEVO|PENDIENTE|COMPLETADO[^\]]*|REDISEÑADO|REFORMULADO|EXPANDIDO|FORMALIZADO)\]', '', text)
+    text = text.replace('**', '')  # any unpaired leftovers
+    return text
 
 def parse_md(path):
     """Parse markdown into a list of elements."""
