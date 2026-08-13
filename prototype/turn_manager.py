@@ -115,7 +115,7 @@ def exit_phase(game: GameState) -> None:
         if (card and card.owner == enemy and card.position
                 and card.position[0] == player  # only purge enemies IN your territory
                 and card.position[0] != -1):
-            if game.network.link_count(card) == 0 and not card.definition.is_spy:
+            if game.network.link_count(card) == 0:
                 game._destroy_card(card)
                 game._log(f"  Purga: {card.definition.name} aislado, destruido.")
 
