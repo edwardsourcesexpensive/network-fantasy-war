@@ -217,6 +217,11 @@ body.phase-attack .phase-attack{display:flex}
   .mtg-card{width:140px;height:210px}
   #hand-cards{flex-wrap:wrap}
 }
+
+/* Desktop: cells stretch so all 15 columns fit the container (no clipped columns) */
+@media (min-width: 769px) {
+  .cell{flex:1 1 0;min-width:44px}
+}
 </style>
 </head>
 <body class="phase-actions">
