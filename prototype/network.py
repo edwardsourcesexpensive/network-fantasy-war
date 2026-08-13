@@ -93,6 +93,33 @@ class Network:
                     queue.append(neighbor)
         return visited
 
+    def bridge_distance(self, cards: dict[int, CardInstance],
+                        squad_a_members: set[int], squad_b_members: set[int]) -> Optional[int]:
+        """Min network distance between two member-sets via a path that crosses a
+        logistrón. Returns None if no such path exists — a direct non-logistrón
+        link between squads grants no connection (§7.1)."""
+        best = None
+        for start in squad_a_members:
+            if start not in self.links:
+                continue
+            queue = deque([(start, 0, False)])  # (node, dist, saw_logistron)
+            seen = {(start, False)}
+            while queue:
+                node, dist, saw = queue.popleft()
+                for nb in self.links.get(node, ()):
+                    c = cards.get(nb)
+                    nb_saw = saw or (c is not None and c.definition.is_logistron)
+                    nd = dist + 1
+                    if nb in squad_b_members:
+                        if nb_saw and (best is None or nd < best):
+                            best = nd
+                        continue
+                    key = (nb, nb_saw)
+                    if key not in seen:
+                        seen.add(key)
+                        queue.append((nb, nd, nb_saw))
+        return best
+
     def find_squads(self, cards: dict[int, CardInstance]) -> list["Squad"]:
         """
         Find all squad formations in the network.
@@ -493,16 +520,9 @@ def calculate_potenciamiento(attacking_squad: Squad, all_squads: list[Squad],
         if not any(_is_alive(m) for m in squad.members):
             continue
         connected = False
-        min_distance = float('inf')
-        for a_member in attacking_squad.members:
-            for b_member in squad.members:
-                dist = network.network_distance(
-                    CardInstance(a_member, None, 0),
-                    CardInstance(b_member, None, 0)
-                )
-                if dist is not None and dist < min_distance:
-                    min_distance = dist
-                    connected = True
+        min_distance = network.bridge_distance(cards, attacking_squad.members, squad.members)
+        if min_distance is not None:
+            connected = True
 
         if connected and min_distance <= squad.empowerment_range:
             total += 1 if flat else squad.empowerment
