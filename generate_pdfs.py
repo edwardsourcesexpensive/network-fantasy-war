@@ -161,121 +161,139 @@ class NFWPDF(FPDF):
 def gen_ui_guide():
     pdf = NFWPDF('Network Fantasy War - Guia Web')
     pdf.set_margin(18)
-    
+
     pdf.cover('NETWORK FANTASY WAR', 'Guia de la Interfaz Web',
-              'Como jugar desde el navegador\nhttp://localhost:5000')
-    
-    pdf.new_page('1. Instalacion y Arranque')
-    pdf.txt('Requisito unico: Python 3.10+.')
+              'Multijugador online + juego local')
+
+    pdf.new_page('1. Como Jugar')
+    pdf.txt('El juego se juega en el navegador. La version desplegada es la multijugador:')
     pdf.box([
-        ('Instalar Flask', 'pip install flask'),
-        ('Arrancar servidor', 'python -m webui.app'),
-        ('Abrir en navegador', 'http://localhost:5000'),
+        ('Online (desplegado)', 'https://network-fantasy-war-production.up.railway.app/'),
+        ('Local multijugador', 'python -m webui.multiplayer.app  ->  http://localhost:5001'),
+        ('Local 1 jugador (pruebas)', 'python -m webui.app  ->  http://localhost:5000'),
     ])
-    
-    pdf.sec('2. Pantalla de Inicio')
+    pdf.txt('Requisitos (solo local): Python 3.10+ y flask / flask-socketio.')
+
+    pdf.sec('2. Pantalla de Inicio (lobby)')
     pdf.txt(
-        'Al abrir, veras la seleccion de modo:\n'
-        '- 1 Jugador vs IA: controlas a J1, la IA juega automaticamente\n'
-        '- 2 Jugadores (hotseat): ambos comparten la misma pantalla, alternando turnos'
+        'Al abrir el juego ves tres modos:\n'
+        '- Jugar vs IA: partida contra el bot; eliges mazo y empieza al instante\n'
+        '- Crear sala (2 jugadores): generas un codigo de 4 letras/digitos y lo compartes\n'
+        '- Unirse a sala: introduces el codigo que te paso tu oponente'
+    )
+    pdf.sub('Botones del lobby')
+    pdf.txt(
+        'Debajo de los modos hay accesos directos:\n'
+        '- Reglas (PDF): abre el manual de reglas\n'
+        '- Ver Decks: lista los 8 mazos con estadisticas y cartas\n'
+        '- Cartas: galeria de las 370 cartas del juego\n'
+        '- Ayuda: resumen rapido de la interfaz'
     )
     pdf.sub('Seleccion de Mazo')
     pdf.txt(
-        'En modo 2 jugadores, J1 elige primero (fondo azul oscuro), luego J2 (fondo verde). '
-        'En modo 1 jugador, tu eliges y la IA recibe uno aleatorio.\n\n'
-        '8 mazos disponibles: Muro Inquebrantable, Filo Carmesi, Red de Sombras, '
-        'Colegio Arcano, Asamblea Popular, Legion de Acero, Jardin Salvaje, Consejo Arcano.'
+        'Al crear o unirte a una sala (y en vs IA) eliges tu mazo. Hay 8 mazos de 50 cartas:\n'
+        'Muro Inquebrantable, Filo Carmesi, Red de Sombras, Colegio Arcano, '
+        'Asamblea Popular, Legion de Acero, Jardin Salvaje, Consejo Arcano.'
     )
-    
-    pdf.sec('3. El Tablero')
+
+    pdf.sec('3. Crear / Unirse a Sala')
     pdf.txt(
-        'Muestra los territorios de J2 (arriba) y J1 (abajo) separados por la frontera. '
+        'Crear: eliges mazo y pulsas "Crear sala". Aparece un codigo de 4 letras que '
+        'le pasas a tu oponente. Unirse: el oponente escribe ese codigo en "Unirse a sala", '
+        'elige su mazo y pulsa "Unirse". Cuando ambos estan listos, la partida empieza '
+        'y ambos van al tablero.'
+    )
+
+    pdf.sec('4. El Tablero')
+    pdf.txt(
+        'Muestra los territorios de ambos jugadores separados por la frontera. '
         'Cada territorio tiene 3 filas (L1, L2, L3) de 15 celdas.\n\n'
         '- Celda azul oscuro: libre para jugar\n'
-        '- Celda azul marino con nombre: carta en juego (HP abajo-derecha, V arriba-derecha)\n'
+        '- Celda con mini-carta: carta en juego (borde = faccion; HP/D abajo-derecha; V arriba-derecha)\n'
         '- Celda rojo oscuro: carta enemiga infiltrada (espia)\n\n'
-        'Lineas doradas: vinculos entre cartas aliadas\n'
-        'Lineas rojas punteadas: vinculos entre territorios (espias/logistrones)'
+        'Lineas de vinculo:\n'
+        '- Amarilla solida: vinculo normal\n'
+        '- Azul punteada: uno de los extremos es un Logistron\n'
+        '- Roja punteada: vinculo entre jugadores distintos (espia)'
     )
-    pdf.sub('Hover y Panel de Detalle')
+    pdf.sub('Panel de Detalle')
     pdf.txt(
-        'Pasar el cursor sobre una carta del tablero muestra tooltip con nombre, color, HP, D, V.\n'
-        'Al hacer CLIC en una carta del tablero: panel flotante con todas sus habilidades.\n'
-        'Las cartas en la mano muestran sus habilidades en texto directamente.'
+        'Al hacer CLIC en una carta del tablero se abre un panel flotante con sus '
+        'habilidades completas y, si tiene habilidades activas, los botones para usarlas '
+        '(con su coste en acciones).'
     )
     pdf.sub('Fondo por Jugador')
     pdf.txt(
-        'El fondo cambia segun el turno: azul oscuro para J1, verde oscuro para J2. '
-        'El indicador superior muestra de quien es el turno.'
+        'El fondo cambia segun el turno (azul oscuro para J1, verde para J2) y el '
+        'indicador superior muestra de quien es el turno.'
     )
     pdf.sub('Boton Flip')
     pdf.txt(
-        'El boton Flip (ultimo a la derecha) invierte el tablero: el jugador activo queda '
-        'arriba, cerca de su mano. Util en hotseat sin girar la pantalla.'
+        'El boton Flip invierte el tablero para que el jugador activo quede abajo, '
+        'cerca de su mano.'
     )
-    
-    pdf.sec('4. Acciones del Jugador')
-    
-    pdf.sub('4.1 Jugar una Carta')
+
+    pdf.sec('5. Acciones del Jugador')
+
+    pdf.sub('5.1 Jugar una Carta')
     pdf.txt(
-        '1. Clic en una carta de tu mano (se resalta con borde rojo)\n'
-        '2. Clic en una celda vacia del tablero (borde azul punteado)\n'
-        '3. Boton "Jugar carta" - la carta aparece en el tablero. Cuesta 1 accion.'
+        '1. Clic en una carta de tu mano (se resalta)\n'
+        '2. Clic en una celda vacia del tablero\n'
+        '3. Boton "Jugar carta". Cuesta 1 accion.'
     )
-    
-    pdf.sub('4.2 Vincular Cartas')
+
+    pdf.sub('5.2 Vincular Cartas')
     pdf.txt(
-        '1. Clic en una carta del tablero (se selecciona)\n'
-        '2. Boton "Vincular" - la carta queda en modo vinculacion\n'
-        '3. Clic en otra carta - el vinculo se crea automaticamente\n'
-        'Si no es valido, aparece mensaje de error.'
+        '1. Clic en una carta del tablero\n'
+        '2. Boton "Vincular"\n'
+        '3. Clic en otra carta: el vinculo se crea si es valido (distancia, color, capacidad V).'
     )
-    
-    pdf.sub('4.3 Ascender')
+
+    pdf.sub('5.3 Ascender')
     pdf.txt(
-        '1. Selecciona una carta en el tablero\n'
-        '2. Boton "Ascender" - sube un layer\n'
-        'L1-L2: 1 accion. L2-L3: 2 acciones. Respeta restricciones de capa.'
+        'Selecciona una carta y pulsa "Ascender". L1->L2: 1 accion. L2->L3: 2 acciones. '
+        'Respeta las restricciones de capa de la carta.'
     )
-    
-    pdf.sub('4.4 Fase de Ataque')
+
+    pdf.sub('5.4 Fase de Ataque')
     pdf.txt(
-        'Boton "Atacar ->" entra en fase de ataque. Aparece lista de tus escuadrones '
-        'con tipo y daño. Clic en un escuadron para atacar.\n\n'
-        'El defensor recibe un POP-UP preguntando que escuadron usar para bloquear. '
-        'Puede elegir "Sin defensor" para recibir el daño directo.\n\n'
-        'Cada escuadron ataca una vez por turno. "Finalizar ataque" termina la fase.'
+        'Boton "Atacar ->" entra en fase de ataque. Clic en uno de tus escuadrones y elige '
+        'objetivo (grimorio o nodo enemigo).\n\n'
+        'En 2 jugadores, el defensor recibe un POP-UP para elegir escuadron defensor '
+        '(o "Sin defensor" para recibir el daño directo). Cada escuadron ataca una vez por turno.'
     )
-    
-    pdf.sub('4.5 Fin del Turno')
+
+    pdf.sub('5.5 Fin del Turno')
     pdf.txt(
-        '"Fin Turno" salta a la fase de salida y empieza el siguiente turno.\n'
-        '"Finalizar ataque" solo termina la fase de ataque y pasa al oponente.'
+        '"Fin Turno" ejecuta la fase de salida (purga de nodos aislados, habilidades de cierre, '
+        'descarte) y cede el turno. "Finalizar ataque" solo termina la fase de ataque.'
     )
-    
-    pdf.sec('5. Pantalla de Victoria')
+
+    pdf.sec('6. Pantalla de Victoria')
     pdf.txt(
-        'Al reducir los sellos enemigos a 0 o menos, aparece overlay con:\n'
-        '- Jugador ganador\n- Sellos finales de ambos\n- Turnos jugados\n'
-        '- Boton "Nueva partida"'
+        'Al reducir los sellos enemigos a 0, aparece un overlay con el jugador ganador, '
+        'los sellos finales y la opcion de nueva partida.'
     )
-    
-    pdf.sec('6. Referencia de Controles')
+
+    pdf.sec('7. Referencia de Controles')
     pdf.tbl(
         ['Boton', 'Fase', 'Accion'],
         [
-            ['Jugar carta', 'Acciones', 'Coloca carta de la mano en el tablero'],
+            ['Jugar carta', 'Acciones', 'Coloca una carta de la mano en el tablero'],
             ['Vincular', 'Acciones', 'Enlaza dos cartas seleccionadas'],
             ['Ascender', 'Acciones', 'Sube 1 layer la carta seleccionada'],
             ['Atacar ->', 'Acciones', 'Entra en fase de ataque'],
             ['Finalizar ataque', 'Ataque', 'Sale de fase de ataque'],
-            ['Fin Turno', 'Ambas', 'Termina el turno actual'],
-            ['Refresh', 'Ambas', 'Refresca estado del juego'],
-            ['Flip', 'Ambas', 'Invierte orientacion del tablero'],
+            ['Fin Turno', 'Ambas', 'Termina el turno (fase de salida)'],
+            ['Rendirse', 'Ambas', 'Abandona la partida'],
+            ['Refresh', 'Ambas', 'Recarga el estado del juego'],
+            ['Flip', 'Ambas', 'Invierte la orientacion del tablero'],
+            ['Reglas', 'Ambas', 'Abre el manual de reglas (PDF)'],
+            ['Decks', 'Ambas', 'Muestra los 8 mazos'],
         ],
-        [35, 35, 110]
+        [32, 28, 120]
     )
-    
+
     out = os.path.join(PROJECT, 'ui-guide.pdf')
     pdf.output(out)
     print(f'  ui-guide.pdf')
