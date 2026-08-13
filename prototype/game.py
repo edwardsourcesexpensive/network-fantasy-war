@@ -480,15 +480,16 @@ class GameState:
         b_on_frontier = card_b.position and card_b.position[0] == -1
         
         if not bypass_distance and not (a_on_frontier and b_on_frontier):
-            # Frontier ↔ enemy L3: special case, cost = 4
-            is_frontier_l3 = False
-            if a_on_frontier and not b_on_frontier and card_b.owner != player:
-                is_frontier_l3 = True
-            elif b_on_frontier and not a_on_frontier and card_a.owner != player:
-                is_frontier_l3 = True
-            
-            if is_frontier_l3:
-                cost = 4
+            # Logistron always costs 1 — prevails over frontier and distance rules (§4.3)
+            if card_a.definition.is_logistron or card_b.definition.is_logistron:
+                cost = 1
+            elif a_on_frontier or b_on_frontier:
+                # Frontier ↔ non-frontier: only L3 is legal, cost 4 (§4.3 "cualquier carta en L3")
+                other = card_b if a_on_frontier else card_a
+                if other.position and other.position[1] == 3:
+                    cost = 4
+                else:
+                    return "Distancia espacial inválida para vínculo."
             else:
                 dist = self.board.spatial_distance(card_a.position, card_b.position)
                 if dist is None:
@@ -496,10 +497,6 @@ class GameState:
                 cost = {"corta": 1, "media": 1, "larga": 3}.get(dist, 999)
                 if dist == "media" and card_a.definition.color != card_b.definition.color:
                     cost = 2
-            
-            # Logistron always costs 1 (prevails over frontier-L3 and all others)
-            if card_a.definition.is_logistron or card_b.definition.is_logistron:
-                cost = 1
             
             if self.actions_remaining < cost:
                 return f"Necesitas {cost} acciones (tienes {self.actions_remaining})."
@@ -531,14 +528,8 @@ class GameState:
         if bypass_distance or (a_on_frontier and b_on_frontier):
             cost = 1
         else:
-            # Frontier ↔ enemy L3: cost = 4
-            is_frontier_l3 = False
-            if a_on_frontier and not b_on_frontier and card_b.owner != player:
-                is_frontier_l3 = True
-            elif b_on_frontier and not a_on_frontier and card_a.owner != player:
-                is_frontier_l3 = True
-            
-            if is_frontier_l3:
+            if a_on_frontier or b_on_frontier:
+                # Frontier ↔ non-frontier: only L3 is legal, cost 4 (can_link rejects L1/L2)
                 cost = 4
             else:
                 dist = self.board.spatial_distance(card_a.position, card_b.position)
