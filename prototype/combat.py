@@ -163,7 +163,26 @@ class CombatEngine:
             if mod.effect_type == "ignore_armor":
                 ignore_armor_total = max(ignore_armor_total, mod.params.get("amount", 1))
             elif mod.effect_type == "double_damage":
-                double_damage = True
+                cond_ok = True
+                fl = mod.params.get("from_layer")
+                if fl and (not source_card.position or source_card.position[1] != fl):
+                    cond_ok = False
+                tl = mod.params.get("target_layers")
+                if tl and cond_ok:
+                    if target != "card" or not target_card_id:
+                        cond_ok = False
+                    else:
+                        target_card = game.all_cards.get(target_card_id)
+                        if not target_card or not target_card.position:
+                            cond_ok = False
+                        elif target_card.position[1] not in tl:
+                            cond_ok = False
+                if cond_ok:
+                    double_damage = True
+            elif mod.effect_type == "double_base_damage":
+                # "Al atacar un nodo enemigo: daño base duplicado" — only vs a node
+                if target == "card" and target_card_id:
+                    total_damage += base
             elif mod.effect_type == "double_self_d":
                 req = mod.params.get("requires_action", 0)
                 if req:

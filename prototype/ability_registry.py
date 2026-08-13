@@ -1197,11 +1197,25 @@ class AbilityRegistry:
                     params={"amount": amount})]
         self._add("on_attack: ignore_armor", _oa_ignore_armor)
 
-        def _oa_double_damage(desc, ability, cid):
+        def _oa_double_base_damage(desc, ability, cid):
+            if ability.trigger != "on_attack": return None
+            if "daño base duplicado" not in desc: return None
+            return [Modifier(source_card_id=cid, hook="on_attack", effect_type="double_base_damage", layer="self")]
+        self._add("on_attack: double_base_damage (daño base duplicado)", _oa_double_base_damage)
+
+        def _oa_double_squad_damage(desc, ability, cid):
             if ability.trigger != "on_attack": return None
             if "duplicado" not in desc or "daño" not in desc: return None
-            return [Modifier(source_card_id=cid, hook="on_attack", effect_type="double_damage", layer="self")]
-        self._add("on_attack: double_damage", _oa_double_damage)
+            if "daño base" in desc: return None  # handled by double_base_damage
+            params = {}
+            m = re.search(r'desde\s+l(\d)', desc)
+            if m: params["from_layer"] = int(m.group(1))
+            if "corta" in desc and "media" in desc:
+                # "objetivo a distancia corta/media" → target depth: L3 = corta, L2 = media
+                params["target_layers"] = [3, 2]
+            return [Modifier(source_card_id=cid, hook="on_attack", effect_type="double_damage", layer="self",
+                             params=params)]
+        self._add("on_attack: double_squad_damage (daño del escuadrón duplicado)", _oa_double_squad_damage)
 
         def _oa_double_self_d(desc, ability, cid):
             if ability.trigger != "on_attack": return None
