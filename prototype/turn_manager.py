@@ -117,11 +117,20 @@ def exit_phase(game: GameState) -> None:
                 game._destroy_card(card)
                 game._log(f"  Purga: {card.definition.name} aislado, destruido.")
 
-    squads = game.get_player_squads(player)
-
     game.modifiers.dispatch_squad_hook("end_of_turn", game)
 
-    # Faction effects
+    # ─── 3. Discard to 5 (per §5.5 step 3) ───
+    while len(game.hands[player]) > 5:
+        discarded = game.hands[player].pop()
+        game.discard_piles[player].append(discarded)
+        game.seals[player] -= 1
+        game._log(f"  Descarte: {discarded.definition.name}. -1 sello ({game.seals[player]})")
+        if game.seals[player] <= 0:
+            _end_game(game, 1 - player)
+            return
+
+    # ─── 4. Squad faction effects (per §5.5 step 4) ───
+    squads = game.get_player_squads(player)
     for squad in squads:
         dom = squad.get_dominant_color(game.modifiers.get_color_overrides(game))
         if dom == Color.SELLADOR:
@@ -145,16 +154,6 @@ def exit_phase(game: GameState) -> None:
 
         elif dom == Color.MONSTRUO:
             game._log(f"  Escuadrón Monstruo: puedes remover 1 nodo enemigo (grado < {squad.base_damage})")
-
-    # Discard to 5
-    while len(game.hands[player]) > 5:
-        discarded = game.hands[player].pop()
-        game.discard_piles[player].append(discarded)
-        game.seals[player] -= 1
-        game._log(f"  Descarte: {discarded.definition.name}. -1 sello ({game.seals[player]})")
-        if game.seals[player] <= 0:
-            _end_game(game, 1 - player)
-            return
 
     game._log(f"  Fin del turno. Sellos J{player+1}: {game.seals[player]}")
 
