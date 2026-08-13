@@ -31,7 +31,7 @@ def start_turn(game: GameState) -> None:
 def entry_phase(game: GameState) -> None:
     """Entry phase: trigger start-of-turn abilities + draw 2."""
     player = game.active_player
-    squads = game.network.find_squads(game.all_cards)
+    squads = game.get_player_squads(player)
 
     game.modifiers.dispatch_squad_hook("start_of_turn", game)
 
@@ -43,9 +43,8 @@ def entry_phase(game: GameState) -> None:
                 if card and card.owner == player and card.position:
                     _, layer, _ = card.position
                     if layer < 3 and card.position[0] != -1:
-                        err = game.ascend(player, card)
+                        err = game.ascend(player, card, free=True)
                         if not err:
-                            game.actions_remaining += 1
                             game._log(f"  Militar: ascenso gratis de {card.definition.name}")
                             break
 
@@ -106,7 +105,6 @@ def exit_phase(game: GameState) -> None:
     """Exit phase: purge isolated nodes, end-of-turn effects, discard, switch player."""
     player = game.active_player
     game.phase = Phase.EXIT
-    squads = game.network.find_squads(game.all_cards)
 
     # ─── 1. Purge isolated enemy nodes IN YOUR TERRITORY ───
     enemy = 1 - player
@@ -119,7 +117,7 @@ def exit_phase(game: GameState) -> None:
                 game._destroy_card(card)
                 game._log(f"  Purga: {card.definition.name} aislado, destruido.")
 
-    squads = game.network.find_squads(game.all_cards)
+    squads = game.get_player_squads(player)
 
     game.modifiers.dispatch_squad_hook("end_of_turn", game)
 
