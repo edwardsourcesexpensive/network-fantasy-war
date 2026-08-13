@@ -62,7 +62,7 @@ class ModifierEngine:
         """Parse a card's abilities into Modifier objects and register them."""
         for ability in card.definition.abilities:
             if ability.trigger not in ("permanent", "on_enter", "start_of_turn",
-                                        "end_of_turn", "on_kill"):
+                                        "end_of_turn", "on_kill", "on_attack"):
                 continue
             modifiers = get_registry().parse(ability, card)
             for mod in modifiers:

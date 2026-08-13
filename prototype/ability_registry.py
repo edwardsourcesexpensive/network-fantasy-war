@@ -1203,6 +1203,16 @@ class AbilityRegistry:
             return [Modifier(source_card_id=cid, hook="on_attack", effect_type="double_damage", layer="self")]
         self._add("on_attack: double_damage", _oa_double_damage)
 
+        def _oa_double_self_d(desc, ability, cid):
+            if ability.trigger != "on_attack": return None
+            if "duplicar su d" not in desc: return None
+            req = 1
+            m = re.search(r'gasta\s+(\d+)\s+acción', desc)
+            if m: req = int(m.group(1))
+            return [Modifier(source_card_id=cid, hook="on_attack", effect_type="double_self_d",
+                             layer="self", params={"requires_action": req})]
+        self._add("on_attack: double_self_d (duplicar su D)", _oa_double_self_d)
+
         def _oa_bonus_vs_nodes(desc, ability, cid):
             if ability.trigger != "on_attack": return None
             if "nodo" not in desc or not any(w in desc for w in ["+", "extra", "adicional"]): return None

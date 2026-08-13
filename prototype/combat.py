@@ -164,6 +164,14 @@ class CombatEngine:
                 ignore_armor_total = max(ignore_armor_total, mod.params.get("amount", 1))
             elif mod.effect_type == "double_damage":
                 double_damage = True
+            elif mod.effect_type == "double_self_d":
+                req = mod.params.get("requires_action", 0)
+                if req:
+                    if game.actions_remaining < req:
+                        continue
+                    game.actions_remaining -= req
+                    game._log(f"  ⚡ {source_card.definition.name}: -{req} acción extra → D duplicado")
+                total_damage += source_card.definition.damage_bonus
             elif mod.effect_type == "bonus_vs_nodes":
                 if target == "card" and target_card_id:
                     target_card = game.all_cards.get(target_card_id)
