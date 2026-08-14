@@ -53,11 +53,6 @@ def entry_phase(game: GameState) -> None:
     for squad in squads:
         if squad.get_dominant_color(game.modifiers.get_color_overrides(game)) == Color.SABIO:
             extra_draws += 1
-            for cid in squad.members:
-                card = game.all_cards.get(cid)
-                if card and card.owner == player and "Archivera" in card.definition.name:
-                    extra_draws += 1
-                    break
 
     # Draw 2 + extras
     total_draws = 2 + extra_draws
@@ -134,23 +129,11 @@ def exit_phase(game: GameState) -> None:
     for squad in squads:
         dom = squad.get_dominant_color(game.modifiers.get_color_overrides(game))
         if dom == Color.SELLADOR:
-            bonus = 10
-            for cid in squad.members:
-                card = game.all_cards.get(cid)
-                if card and card.owner == player and "Abadesa" in card.definition.name:
-                    bonus += 5
-                    break
-            game.seals[player] += bonus
-            game._log(f"  Escuadrón Sellador: +{bonus} sellos ({game.seals[player]} total)")
+            game.seals[player] += 10
+            game._log(f"  Escuadrón Sellador: +10 sellos ({game.seals[player]} total)")
 
         elif dom == Color.SABOTEADOR:
-            break_count = 2
-            for cid in squad.members:
-                card = game.all_cards.get(cid)
-                if card and card.owner == player and "Agente del Silencio" in card.definition.name:
-                    break_count += 1
-                    break
-            game._log(f"  Escuadrón Saboteador: puedes romper {break_count} vínculos enemigos")
+            game._log(f"  Escuadrón Saboteador: puedes romper 2 vínculos enemigos")
 
         elif dom == Color.MONSTRUO:
             game._log(f"  Escuadrón Monstruo: puedes remover 1 nodo enemigo (grado < {squad.base_damage})")
