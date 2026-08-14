@@ -144,7 +144,7 @@ def _deck_colegio() -> list[CardDef]:
         *_get("Alquimista de Guerra", 2),
         *_get("Alquimista de Campo", 2),
         *_get("Aprendiz de Alquimia", 2),
-        *_get("Archivera del Conocimiento Perdido", 3),
+        *_get("Archivera del Conocimiento Perdido", 2),
         *_get("Bibliotecaria de los Ecos", 2),
         *_get("Oráculo del Nexo", 1),
         *_get("Cartógrafa de la Red", 2),
@@ -152,8 +152,8 @@ def _deck_colegio() -> list[CardDef]:
         *_get("Visionaria del Nexo", 2),
         *_get("Estudiante Aplicado", 2),
         *_get("Aprendiz de Biblioteca", 2),
-        *_get("Guardián del Bosque de Raíces", 3),
-        *_get("Enredadera Vincular", 3),
+        *_get("Guardián del Bosque de Raíces", 2),
+        *_get("Enredadera Vincular", 2),
         *_get("Árbol Primigenio", 2),
         *_get("Espora Expansiva", 2),
         *_get("Raíz Madre", 2),
@@ -173,11 +173,11 @@ def _deck_asamblea() -> list[CardDef]:
     """Mazo 5: Asamblea Popular v4 (Políticos ofensivos + Incoloros)"""
     return [
         # Políticos ofensivos (Wave 8)
-        *_get("Alcalde de Guerra", 3),
+        *_get("Alcalde de Guerra", 2),
         *_get("Recaudador de Impuestos", 2),
         *_get("Señor de la Guerra Civil", 2),
         *_get("Alcaldesa del Pueblo", 2),
-        *_get("Comisario Político", 3),
+        *_get("Comisario Político", 2),
         *_get("Diputado Belicoso", 2),
         *_get("Canciller de Guerra", 2),
         # Políticos clásicos
@@ -208,8 +208,8 @@ def _deck_legion() -> list[CardDef]:
     """Mazo 6: Legión de Acero v3 (Militar ascenso + Guerrero daño)"""
     return [
         # Militares (ascensos y sinergia)
-        *_get("Sargento de la Escala de Hierro", 3),
-        *_get("Recluta de la Escala", 3),
+        *_get("Sargento de la Escala de Hierro", 2),
+        *_get("Recluta de la Escala", 2),
         *_get("General de la Escala de Hierro", 1),
         *_get("Instructor de Reclutas", 2),
         *_get("Comandante de Teatro", 2),
@@ -218,9 +218,9 @@ def _deck_legion() -> list[CardDef]:
         *_get("Coronel", 2),
         *_get("Mariscal Supremo", 1),
         *_get("Almirante Supremo", 1),
-        *_get("Soldado Raso", 3),
+        *_get("Soldado Raso", 2),
         # Guerreros (daño puro)
-        *_get("Campeón del Filo Carmesí", 3),
+        *_get("Campeón del Filo Carmesí", 2),
         *_get("Berserker del Filo", 2),
         *_get("Estandarte Carmesí", 2),
         *_get("Lancero de Vanguardia", 2),
@@ -232,7 +232,7 @@ def _deck_legion() -> list[CardDef]:
         *_get("Plataforma de Asedio", 2),
         *_get("Conducto de Energía", 2),
         *_get("Núcleo de Enlace", 2),
-        *_get("Microenlace", 2),
+        *_get("Microenlace", 1),
         # Incoloro
         *_get("Coloso de Guerra", 2),
         *_get("Señor de la Guerra", 1),
@@ -246,10 +246,10 @@ def _deck_legion() -> list[CardDef]:
 def _deck_jardin() -> list[CardDef]:
     """Mazo 7: Jardín Salvaje (Naturaleza + Monstruo)"""
     return [
-        *_get("Guardián del Bosque de Raíces", 3),
-        *_get("Enredadera Vincular", 3),
+        *_get("Guardián del Bosque de Raíces", 2),
+        *_get("Enredadera Vincular", 2),
         *_get("Árbol Primigenio", 2),
-        *_get("Espora Expansiva", 3),
+        *_get("Espora Expansiva", 2),
         *_get("Bosque Andante", 2),
         *_get("Raíz Madre", 2),
         *_get("Enredadera Estranguladora", 2),
