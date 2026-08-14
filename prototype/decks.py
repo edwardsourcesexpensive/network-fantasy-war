@@ -102,13 +102,13 @@ def _deck_filo() -> list[CardDef]:
 def _deck_sombras() -> list[CardDef]:
     """Mazo 3: Red de Sombras (Saboteador + Espía + Monstruo)"""
     return [
-        *_get("Agente del Silencio", 3),
-        *_get("Sabueso del Nexo", 3),
+        *_get("Agente del Silencio", 2),
+        *_get("Sabueso del Nexo", 2),
         *_get("Anuladora de Enlaces", 2),
         *_get("Saboteadora de Capas", 2),
         *_get("Zapador de Trincheras", 2),
         *_get("Virus de Red", 1),
-        *_get("Saboteador Novato", 3),
+        *_get("Saboteador Novato", 2),
         *_get("Cortacircuitos", 2),
         *_get("Saboteadora de Formaciones", 2),
         *_get("Incendiaria de Archivos", 2),
@@ -118,8 +118,8 @@ def _deck_sombras() -> list[CardDef]:
         *_get("Cazador de Secretos", 2),
         *_get("Doble Agente", 1),
         *_get("Topo Paciente", 1),
-        *_get("Merodeador", 2),
-        *_get("Observador", 2),
+        *_get("Merodeador", 1),
+        *_get("Observador", 1),
         *_get("Engendro del Vacío", 2),
         *_get("Acechador de las Sombras", 2),
         *_get("Cría Voraz", 2),
@@ -326,6 +326,13 @@ for name, fn in [
     # Pad to 50 with extra logistrones
     while len(deck) < 50:
         deck.append(_CARD_BY_NAME["Núcleo de Enlace"])
+    if len(deck) > 50:
+        # Never silently drop cards — surface the overflow loudly (deck lists
+        # are authored as exactly 50; a >50 list means new cards were appended
+        # without rebalancing and would otherwise be lost to the slice below).
+        dropped = deck[50:]
+        print(f"WARNING: deck '{name}' has {len(deck)} cards, truncating to 50 — DROPPED: "
+              f"{[c.name for c in dropped]}")
     DECKS[name] = deck[:50]
 
 DECK_NAMES: dict[str, str] = {
