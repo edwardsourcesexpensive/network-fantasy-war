@@ -492,6 +492,41 @@ async function showCartas() {
     content.innerHTML = '<span style="color:#e94560">Error al cargar cartas: ' + e.message + '</span>';
   }
 }
+
+// ═══ Fullscreen toggle (desktop) ═══
+(function() {
+  const btn = document.createElement('button');
+  btn.id = 'fullscreen-btn';
+  btn.title = 'Pantalla completa';
+  btn.textContent = '⛶';
+  btn.style.cssText = 'position:fixed;top:8px;right:8px;z-index:300;width:36px;height:36px;font-size:18px;background:#16213e;color:#4fc3f7;border:1px solid #4fc3f7;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1';
+  btn.addEventListener('click', function() {
+    const d = document;
+    const fsEl = d.fullscreenElement || d.webkitFullscreenElement;
+    if (fsEl) {
+      const ex = d.exitFullscreen || d.webkitExitFullscreen;
+      if (ex) ex.call(d);
+    } else {
+      const el = d.documentElement;
+      const rq = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+      if (rq) {
+        const p = rq.call(el);
+        if (p && p.catch) p.catch(function() {});
+      }
+    }
+  });
+  function updateBtn() {
+    const fs = document.fullscreenElement || document.webkitFullscreenElement;
+    btn.title = fs ? 'Salir de pantalla completa' : 'Pantalla completa';
+    btn.style.background = fs ? '#e94560' : '#16213e';
+    btn.style.color = fs ? '#fff' : '#4fc3f7';
+    btn.style.borderColor = fs ? '#e94560' : '#4fc3f7';
+  }
+  document.addEventListener('fullscreenchange', updateBtn);
+  document.addEventListener('webkitfullscreenchange', updateBtn);
+  document.body.appendChild(btn);
+  updateBtn();
+})();
 </script>
 </body>
 </html>
