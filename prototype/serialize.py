@@ -179,10 +179,75 @@ def serialize_state(game: 'GameState', player_id: Optional[int] = None,
         "log": game.log[-10:] if game.log else [],
     }
 
+
+    # ─── Pending faction-effect choices (audit #7) ───
+    pending_faction_choice = None
+    pending_politico_swap = None
+    pfc = getattr(game, "pending_faction_choices", None)
+    pps = getattr(game, "pending_politico_swap", None)
+    if pfc and (player_id is None or player_id == game.active_player):
+        sab = pfc.get("saboteador") or {}
+        mon = pfc.get("monstruo") or {}
+        pending_faction_choice = {
+            "saboteador": {
+                "max": sab.get("max", 0),
+                "links": [
+                    {"a": _card_brief(game, cid), "b": _card_brief(game, nid)}
+                    for cid, nid in (sab.get("links") or [])
+                ],
+            },
+            "monstruo": {
+                "max": mon.get("max", 0),
+                "damage": mon.get("damage", 0),
+                "nodes": [_card_brief(game, cid) for cid in (mon.get("nodes") or [])],
+            },
+        }
+    if pps and (player_id is None or player_id == game.active_player):
+        pairs = pps.get("pairs") or []
+        seen_cards = {}
+        for a_id, b_id in pairs:
+            for cid in (a_id, b_id):
+                card = game.all_cards.get(cid)
+                if card and cid not in seen_cards:
+                    seen_cards[cid] = card
+        pending_politico_swap = {
+            "max": pps.get("max", 0),
+            "cards": [{
+                "id": cid,
+                "name": card.definition.name,
+                "color": card.definition.color.value,
+                "grado": card.definition.grado,
+                "layer": card.position[1] if card.position else None,
+                "meridian": card.position[2] if card.position else None,
+            } for cid, card in sorted(seen_cards.items())],
+            "pairs": [[a_id, b_id] for a_id, b_id in pairs],
+        }
+
     if player_id is not None:
         state["hand"] = hand
         state["opponent_hand_size"] = opponent_hand_size
         state["player_id"] = player_id
         state["pending_attack"] = pending_attack
+        state["pending_faction_choice"] = pending_faction_choice
+        state["pending_politico_swap"] = pending_politico_swap
+
+    else:
+        state["pending_faction_choice"] = pending_faction_choice
+        state["pending_politico_swap"] = pending_politico_swap
 
     return state
+
+
+def _card_brief(game, cid):
+    """Minimal card info for choice pickers (audit #7)."""
+    card = game.all_cards.get(cid)
+    if not card:
+        return {"id": cid, "name": "?", "grado": 0}
+    return {
+        "id": cid,
+        "name": card.definition.name,
+        "grado": card.definition.grado,
+        "color": card.definition.color.value,
+        "layer": card.position[1] if card.position else None,
+        "meridian": card.position[2] if card.position else None,
+    }

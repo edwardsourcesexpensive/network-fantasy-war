@@ -99,10 +99,9 @@ def entry_phase(game: GameState, auto_resolve: bool = True) -> None:
         if auto_resolve:
             resolve_politico_auto(game, player, politico_squads)
         else:
-            game.pending_politico_swap = {
-                "max": politico_squads,
-                "pairs": politico_candidates(game, player),
-            }
+            pairs = politico_candidates(game, player)
+            if pairs:
+                game.pending_politico_swap = {"max": politico_squads, "pairs": pairs}
 
 
 def start_attack_phase(game: GameState) -> None:
@@ -165,8 +164,14 @@ def exit_phase(game: GameState, auto_resolve: bool = True) -> None:
         _finish_exit_phase(game)
     else:
         # Host renders pickers from the candidates, then calls
-        # apply_faction_choices() + _finish_exit_phase().
-        game.pending_faction_choices = _collect_faction_choices(game, player)
+        # apply_faction_choices() + _finish_exit_phase(). Only pauses the
+        # phase when there is something real to choose; otherwise complete
+        # the exit normally (turn must still switch).
+        choices = _collect_faction_choices(game, player)
+        if choices["saboteador"]["links"] or choices["monstruo"]["nodes"]:
+            game.pending_faction_choices = choices
+        else:
+            _finish_exit_phase(game)
 
 
 def _finish_exit_phase(game: GameState) -> None:
@@ -369,12 +374,17 @@ def apply_faction_choices(game: GameState, player: int,
 def _swap_valid(game: GameState, a: CardInstance, b: CardInstance) -> bool:
     """A swap is valid when every link incident to a or b stays at a valid
     spatial distance (frontier links evaluate None → swap rejected, matching
-    the move_card precedent of dissolving None-distance links)."""
+    the move_card precedent of dissolving None-distance links).
+
+    The a-b link itself is exempt: after the swap its endpoints occupy each
+    other's positions, so its distance is unchanged (still valid)."""
     if a.card_id == b.card_id:
         return False
 
-    def _ok(card: CardInstance, new_pos) -> bool:
+    def _ok(card: CardInstance, new_pos, partner: CardInstance) -> bool:
         for nid in game.network.get_links(card):
+            if nid == partner.card_id:
+                continue  # a-b distance is unchanged by the swap
             nb = game.all_cards.get(nid)
             if not nb or not nb.position:
                 return False
@@ -382,7 +392,7 @@ def _swap_valid(game: GameState, a: CardInstance, b: CardInstance) -> bool:
                 return False
         return True
 
-    return _ok(a, b.position) and _ok(b, a.position)
+    return _ok(a, b.position, b) and _ok(b, a.position, a)
 
 
 def politico_candidates(game: GameState, player: int) -> list:
@@ -451,3 +461,16 @@ def resolve_politico_auto(game: GameState, player: int, budget: int = 1) -> None
         if best_pair is None:
             break
         apply_politico_swap(game, player, best_pair[0], best_pair[1])
+
+
+def refresh_pending_politico(game: GameState) -> None:
+    """Decrement the Político swap budget after an applied swap; recompute pairs
+    against the new board (called by hosts between picker submissions)."""
+    pending = getattr(game, "pending_politico_swap", None)
+    if not pending:
+        return
+    pending["max"] -= 1
+    if pending["max"] <= 0:
+        game.pending_politico_swap = None
+    else:
+        pending["pairs"] = politico_candidates(game, game.active_player)

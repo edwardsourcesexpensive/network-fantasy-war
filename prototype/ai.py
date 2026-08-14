@@ -481,11 +481,14 @@ class BotPlayer:
     # ═══════════════════════════════════════════════════════════════
 
     @staticmethod
-    def end_turn(game: GameState, player: int) -> bool:
+    def end_turn(game: GameState, player: int, auto_resolve: bool = True) -> bool:
         """End the bot's turn: exit_phase → start_turn → entry_phase.
 
         The host calls this after all attacks are resolved and the attack
-        queue is empty. Returns True if game continues, False if game over.
+        queue is empty. `auto_resolve` controls the NEXT player's entry phase
+        (False when the next player is human — lets their Político picker
+        pause; the bot's own exit always auto-resolves). Returns True if game
+        continues, False if game over.
         """
         game.phase = Phase.ATTACK
         game.active_player = player
@@ -493,5 +496,5 @@ class BotPlayer:
         if game.game_over:
             return False
         game.start_turn()
-        game.entry_phase()
+        game.entry_phase(auto_resolve=auto_resolve)
         return True

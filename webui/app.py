@@ -10,6 +10,7 @@ from prototype.game import GameState
 from prototype.enums import Phase
 from prototype.decks import DECKS, DECK_NAMES
 from prototype.ai import BotPlayer
+from prototype import turn_manager as tm
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('NFW_SECRET_KEY') or os.urandom(32)
@@ -124,7 +125,7 @@ def api_new_game():
 
     game = GameState(DECKS[deck1][:], DECKS[deck2][:])
     game.start_turn()
-    game.entry_phase()
+    game.entry_phase(auto_resolve=False)  # P0 is human — Político picker
     games[sid] = game
 
     return jsonify({"game_id": sid, "state": game_state(game)})
@@ -151,6 +152,12 @@ def api_action():
     player = game.active_player
 
     result = {"ok": False, "error": None}
+
+    # Pending faction/politico choices must be resolved first (audit #7)
+    if getattr(game, "pending_faction_choices", None) or getattr(game, "pending_politico_swap", None):
+        result["error"] = "Resuelve los efectos de escuadrón pendientes primero."
+        result["state"] = game_state(game)
+        return jsonify(result)
     
     if action == 'play':
         idx = args.get('hand_index')
@@ -247,21 +254,21 @@ def api_action():
             game.start_attack_phase()
             result["ok"] = True
         elif game.phase == Phase.ATTACK:
-            game.exit_phase()
-            if not game.game_over:
+            game.exit_phase(auto_resolve=False)  # human's exit — faction pickers
+            if not game.game_over and not game.pending_faction_choices:
                 game.start_turn()
-                game.entry_phase()
-            else:
+                game.entry_phase(auto_resolve=(game.active_player != 0))
+            elif game.game_over:
                 _cleanup_sid(sid)
             result["ok"] = True
 
     elif action == 'end_turn':
         game.phase = Phase.ATTACK
-        game.exit_phase()
-        if not game.game_over:
+        game.exit_phase(auto_resolve=False)  # human's exit — faction pickers
+        if not game.game_over and not game.pending_faction_choices:
             game.start_turn()
-            game.entry_phase()
-        else:
+            game.entry_phase(auto_resolve=(game.active_player != 0))
+        elif game.game_over:
             _cleanup_sid(sid)
         result["ok"] = True
     
@@ -321,8 +328,8 @@ def api_action():
             result["state"] = game_state(game)
             return jsonify(result)
         
-        # No attacks — end turn immediately
-        bot.end_turn(game, player)
+        # No attacks — end turn immediately (next entry is P0 human → politico picker)
+        bot.end_turn(game, player, auto_resolve=False)
         if game.game_over:
             _cleanup_sid(sid)
         result["ok"] = True
@@ -350,6 +357,44 @@ def api_action():
     
     result["state"] = game_state(game)
     return jsonify(result)
+
+
+@app.route('/api/faction_choice', methods=['POST'])
+def api_faction_choice():
+    """Apply the human's Saboteador/Monstruo picks (audit #7)."""
+    game = get_game()
+    if not game:
+        return jsonify({"error": "No hay partida activa."}), 400
+    if not game.pending_faction_choices:
+        return jsonify({"error": "No hay efectos de escuadrón pendientes."}), 400
+    data = request.get_json() or {}
+    tm.apply_faction_choices(game, 0, data.get('links') or [], data.get('nodes') or [])
+    tm._finish_exit_phase(game)
+    if game.game_over:
+        _cleanup_sid(session.get('game_id'))
+    else:
+        game.start_turn()
+        game.entry_phase(auto_resolve=(game.active_player != 0))
+    return jsonify({"ok": True, "state": game_state(game)})
+
+
+@app.route('/api/politico_swap', methods=['POST'])
+def api_politico_swap():
+    """Apply (or skip) the human's Político position swap (audit #7)."""
+    game = get_game()
+    if not game:
+        return jsonify({"error": "No hay partida activa."}), 400
+    if not game.pending_politico_swap:
+        return jsonify({"error": "No hay intercambio pendiente."}), 400
+    data = request.get_json() or {}
+    a, b = data.get('a'), data.get('b')
+    if a is None:
+        game.pending_politico_swap = None  # skip
+    elif not tm.apply_politico_swap(game, 0, a, b):
+        return jsonify({"error": "Intercambio inválido: los vínculos de las cartas no sobrevivirían."}), 400
+    else:
+        tm.refresh_pending_politico(game)
+    return jsonify({"ok": True, "state": game_state(game)})
 
 
 def game_state(game):

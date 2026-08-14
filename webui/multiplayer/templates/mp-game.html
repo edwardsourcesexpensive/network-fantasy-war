@@ -594,6 +594,123 @@ function loadState(s) {
     document.getElementById('victory-stats').innerHTML = 'Sellos finales — J1: ' + s.seals[0] + ' | J2: ' + s.seals[1];
     document.getElementById('victory-overlay').style.display = 'flex';
   }
+
+  renderFactionChoice(s);
+  renderPoliticoSwap(s);
+}
+
+// ═══ Faction effects pickers (audit #7: Saboteador/Monstruo/Político) ═══
+function renderFactionChoice(s) {
+  const pfc = s.pending_faction_choice;
+  const overlay = document.getElementById('faction-overlay');
+  if (!pfc || (pfc.saboteador.max === 0 && pfc.monstruo.max === 0)) {
+    if (overlay) overlay.remove();
+    return;
+  }
+  if (overlay) return; // keep user's selections while open
+  const div = document.createElement('div');
+  div.id = 'faction-overlay';
+  div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:160';
+  let h = '<div style="background:#16213e;padding:20px;border-radius:8px;border:2px solid #e94560;max-width:560px;width:90%;max-height:80vh;overflow-y:auto">';
+  h += '<h3 style="color:#e94560;margin-bottom:12px">⚔️ Efectos de escuadrón (fin de turno)</h3>';
+  if (pfc.saboteador.max > 0) {
+    h += '<p style="color:#4fc3f7;font-weight:bold;margin-bottom:6px">Saboteador — romper hasta ' + pfc.saboteador.max + ' vínculo(s) corto(s) enemigo(s):</p>';
+    pfc.saboteador.links.forEach(function(lk, i) {
+      h += '<label style="display:block;padding:4px 0;color:#ddd;cursor:pointer"><input type="checkbox" class="sab-link" value="' + i + '"> ' + lk.a.name + ' ↔ ' + lk.b.name + '</label>';
+    });
+  }
+  if (pfc.monstruo.max > 0) {
+    h += '<p style="color:#4fc3f7;font-weight:bold;margin:10px 0 6px">Monstruo — destruir hasta ' + pfc.monstruo.max + ' nodo(s) enemigo(s) (G &lt; ' + pfc.monstruo.damage + '):</p>';
+    pfc.monstruo.nodes.forEach(function(nd, i) {
+      h += '<label style="display:block;padding:4px 0;color:#ddd;cursor:pointer"><input type="checkbox" class="mon-node" value="' + i + '"> ' + nd.name + ' (G ' + nd.grado + ')</label>';
+    });
+  }
+  h += '<div style="margin-top:14px;display:flex;gap:10px">';
+  h += '<button id="faction-confirm" style="background:#e94560;color:#fff;border:none;padding:8px 18px;border-radius:4px;cursor:pointer">Confirmar</button>';
+  h += '<button id="faction-skip" style="background:#333;color:#ccc;border:1px solid #555;padding:8px 18px;border-radius:4px;cursor:pointer">Ninguno</button>';
+  h += '</div></div>';
+  div.innerHTML = h;
+  document.body.appendChild(div);
+
+  function cap(cls, max) {
+    div.querySelectorAll(cls).forEach(function(bx) {
+      bx.addEventListener('change', function() {
+        if (div.querySelectorAll(cls + ':checked').length > max) bx.checked = false;
+      });
+    });
+  }
+  if (pfc.saboteador.max > 0) cap('.sab-link', pfc.saboteador.max);
+  if (pfc.monstruo.max > 0) cap('.mon-node', pfc.monstruo.max);
+
+  div.querySelector('#faction-confirm').onclick = function() {
+    const boxes = div.querySelectorAll('.sab-link');
+    const links = pfc.saboteador.links.filter(function(_, i) { return boxes[i] && boxes[i].checked; })
+      .map(function(lk) { return [lk.a.id, lk.b.id]; });
+    const nboxes = div.querySelectorAll('.mon-node');
+    const nodes = pfc.monstruo.nodes.filter(function(_, i) { return nboxes[i] && nboxes[i].checked; })
+      .map(function(nd) { return nd.id; });
+    submitFactionChoice(links, nodes);
+  };
+  div.querySelector('#faction-skip').onclick = function() { submitFactionChoice([], []); };
+}
+
+function submitFactionChoice(links, nodes) {
+  socket.emit('faction_choice', {links: links, nodes: nodes});
+}
+
+function renderPoliticoSwap(s) {
+  const pps = s.pending_politico_swap;
+  const overlay = document.getElementById('politico-overlay');
+  if (!pps) {
+    if (overlay) overlay.remove();
+    return;
+  }
+  if (overlay) return; // keep selections while open
+  const div = document.createElement('div');
+  div.id = 'politico-overlay';
+  div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:160';
+  let h = '<div style="background:#16213e;padding:20px;border-radius:8px;border:2px solid #f9a825;max-width:560px;width:90%;max-height:80vh;overflow-y:auto">';
+  h += '<h3 style="color:#f9a825;margin-bottom:8px">🏛️ Intercambio político (inicio de turno)</h3>';
+  h += '<p style="color:#aaa;font-size:12px">Selecciona 2 cartas propias para intercambiar posiciones. Quedan ' + pps.max + ' intercambio(s).</p>';
+  h += '<div id="politico-chips" style="display:flex;flex-wrap:wrap;gap:8px;margin:10px 0">';
+  pps.cards.forEach(function(c) {
+    h += '<div class="politico-chip" data-id="' + c.id + '" style="padding:8px 12px;background:#1a1a2e;border:2px solid #555;border-radius:6px;cursor:pointer;color:#ddd;font-size:12px">' + c.name + ' <span style="color:#888">(L' + c.layer + ' M' + c.meridian + ')</span></div>';
+  });
+  h += '</div>';
+  h += '<div id="politico-msg" style="color:#e94560;font-size:12px;min-height:16px"></div>';
+  h += '<div style="margin-top:10px">';
+  h += '<button id="politico-skip" style="background:#333;color:#ccc;border:1px solid #555;padding:8px 18px;border-radius:4px;cursor:pointer">Saltar</button>';
+  h += '</div></div>';
+  div.innerHTML = h;
+  document.body.appendChild(div);
+
+  const pairs = pps.pairs.map(function(p) { return p.slice().sort().join(','); });
+  let sel = null;
+  div.querySelectorAll('.politico-chip').forEach(function(chip) {
+    chip.onclick = function() {
+      const id = parseInt(chip.dataset.id);
+      if (sel === null) {
+        sel = id;
+        div.querySelectorAll('.politico-chip').forEach(function(c) { c.style.borderColor = '#555'; });
+        chip.style.borderColor = '#f9a825';
+      } else if (sel === id) {
+        sel = null;
+        chip.style.borderColor = '#555';
+      } else {
+        const key = [sel, id].sort().join(',');
+        if (pairs.indexOf(key) >= 0) {
+          submitPoliticoSwap(sel, id);
+        } else {
+          div.querySelector('#politico-msg').textContent = 'Ese intercambio rompería vínculos — elige otra carta.';
+        }
+      }
+    };
+  });
+  div.querySelector('#politico-skip').onclick = function() { submitPoliticoSwap(null, null); };
+}
+
+function submitPoliticoSwap(a, b) {
+  socket.emit('politico_swap', {a: a, b: b});
 }
 
 // ═══ Selection ═══

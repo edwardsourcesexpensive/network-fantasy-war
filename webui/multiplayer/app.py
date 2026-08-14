@@ -13,6 +13,7 @@ from prototype.game import GameState
 from prototype.enums import Phase
 from prototype.decks import DECKS, DECK_NAMES
 from prototype.ai import BotPlayer
+from prototype import turn_manager as tm
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24).hex()
@@ -220,7 +221,7 @@ def on_create_solo(data):
     deck2 = DECKS[ai_deck_key][:]
     game = GameState(deck1, deck2)
     game.start_turn()
-    game.entry_phase()
+    game.entry_phase(auto_resolve=False)  # P0 human — Político picker
     room["game"] = game
     
     s = filtered_state(game, 0)
@@ -266,7 +267,7 @@ def on_join(data):
 
     game = GameState(deck1, deck2)
     game.start_turn()
-    game.entry_phase()
+    game.entry_phase(auto_resolve=False)  # P0 human — Político picker
     room["game"] = game
 
     # Send filtered state to each player
@@ -347,6 +348,13 @@ def on_action(data):
 
     action = data.get('action')
     args = data.get('args', {})
+
+    # Pending faction/politico choices must be resolved first (audit #7)
+    if action != 'surrender' and (
+            getattr(game, "pending_faction_choices", None)
+            or getattr(game, "pending_politico_swap", None)):
+        emit('error', {"message": "Resuelve los efectos de escuadrón pendientes primero."})
+        return
 
     # Allow defend and surrender regardless of whose turn it is
     if action not in ('defend', 'surrender') and game.active_player != player_id:
@@ -514,11 +522,11 @@ def on_action(data):
         else:
             print(f"[Room {code}] end_turn by player {player_id}")
             game.phase = Phase.ATTACK
-            game.exit_phase()
+            game.exit_phase(auto_resolve=False)  # human's exit — faction pickers
             print(f"[Room {code}] after exit_phase: active_player={game.active_player}")
-            if not game.game_over:
+            if not game.game_over and not game.pending_faction_choices:
                 game.start_turn()
-                game.entry_phase()
+                game.entry_phase(auto_resolve=(room.get("solo") and game.active_player == 1))
 
     elif action == 'surrender':
         game._end_game(1 - player_id)
@@ -572,7 +580,7 @@ def on_action(data):
     if room.get("solo") and action == 'defend' and game.active_player == 1:
         print(f"[Room {code}] Bot turn ended, human's turn")
         bot = BotPlayer()
-        game_over = not bot.end_turn(game, 1)
+        game_over = not bot.end_turn(game, 1, auto_resolve=False)  # next is P0 human
         for sid, pinfo in room["players"].items():
             s = filtered_state(game, pinfo["player_id"])
             emit('state_update', s, to=sid)
@@ -580,82 +588,165 @@ def on_action(data):
             emit('game_over', {"winner": game.winner, "seals": [game.seals[0], game.seals[1]]}, to=code)
         return
     # Solo mode: auto-play bot turn
-    if room.get("solo") and game.active_player == 1:
-        print(f"[Room {code}] Bot turn triggered, active_player={game.active_player}")
-        try:
-            bot = BotPlayer()
+    _solo_bot_turn(room, code)
 
-            def emit_bot_state(logs):
-                for sid, pinfo in room["players"].items():
-                    s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
-                    s["log"] = logs[-10:] if logs else []
-                    emit('state_update', s, to=sid)
 
-            all_logs = []
+def _solo_bot_turn(room, code):
+    """Run the bot's turn in solo mode (called after the human's turn ends and
+    after faction choices resolve)."""
+    game = room["game"]
+    if not room.get("solo") or game.active_player != 1:
+        return
+    print(f"[Room {code}] Bot turn triggered, active_player={game.active_player}")
+    try:
+        bot = BotPlayer()
 
-            def on_log(msg):
-                all_logs.append(msg)
-                emit_bot_state(all_logs)
-                socketio.sleep(0.3)
+        def emit_bot_state(logs):
+            for sid, pinfo in room["players"].items():
+                s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
+                s["log"] = logs[-10:] if logs else []
+                emit('state_update', s, to=sid)
 
-            result = bot.take_turn(game, 1, on_log=on_log)
+        all_logs = []
 
-            if result.attacks:
-                # Build attack queue from AttackIntent objects
-                bot_attacks = []
-                for attack in result.attacks:
-                    bot_attacks.append({
-                        'attacker': 1,
-                        'squad_idx': 0,
-                        'members_ids': attack.members_ids,
-                        'target': attack.target,
-                        'target_id': attack.target_id,
-                        'squad_type': attack.squad_type,
-                        'squad_damage': attack.squad_damage,
-                        'squad_color': attack.squad_color,
-                        'members': attack.members_names,
-                    })
-
-                room['bot_attacks'] = bot_attacks
-
-                # Pop first attack as pending
-                first_attack = room['bot_attacks'].pop(0)
-                room['pending_attack'] = first_attack
-                target_str = f"a {first_attack['target']}" + (f" ({first_attack['target_id']})" if first_attack.get('target_id') else "")
-                all_logs.append(f"IA prepara ataque con {first_attack['squad_type']} {target_str} — ¡defiéndete!")
-                print(f"[Room {code}] Bot attacks: {first_attack['squad_type']} dmg={first_attack['squad_damage']}, queue={len(room.get('bot_attacks',[]))} more")
-
-                # Broadcast with pending_attack
-                for sid, pinfo in room["players"].items():
-                    s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
-                    s["log"] = all_logs[-10:]
-                    emit('state_update', s, to=sid)
-                return  # Wait for human to defend
-
-            # No squads — end turn immediately
-            print(f"[Room {code}] Bot: NO squads, ending turn silently")
-            bot.end_turn(game, 1)
-            all_logs = []
+        def on_log(msg):
+            all_logs.append(msg)
             emit_bot_state(all_logs)
+            socketio.sleep(0.3)
 
-            if game.game_over:
-                emit('game_over', {"winner": game.winner, "seals": [game.seals[0], game.seals[1]]}, to=code)
+        result = bot.take_turn(game, 1, on_log=on_log)
 
-        except Exception as e:
-            print(f"[Room {code}] Bot error: {e}")
-            import traceback; traceback.print_exc()
-            # Recovery: transition back to human player
-            try:
-                game.active_player = 0
-                game.phase = Phase.ACTIONS
-                game.start_turn()
-                game.entry_phase()
-                for sid, pinfo in room["players"].items():
-                    s = filtered_state(game, pinfo["player_id"])
-                    s["log"] = ["⚠️ Error en IA, turno pasado."]
-                    emit("state_update", s, to=sid)
-            except:
-                pass
+        if result.attacks:
+            # Build attack queue from AttackIntent objects
+            bot_attacks = []
+            for attack in result.attacks:
+                bot_attacks.append({
+                    'attacker': 1,
+                    'squad_idx': 0,
+                    'members_ids': attack.members_ids,
+                    'target': attack.target,
+                    'target_id': attack.target_id,
+                    'squad_type': attack.squad_type,
+                    'squad_damage': attack.squad_damage,
+                    'squad_color': attack.squad_color,
+                    'members': attack.members_names,
+                })
+
+            room['bot_attacks'] = bot_attacks
+
+            # Pop first attack as pending
+            first_attack = room['bot_attacks'].pop(0)
+            room['pending_attack'] = first_attack
+            target_str = f"a {first_attack['target']}" + (f" ({first_attack['target_id']})" if first_attack.get('target_id') else "")
+            all_logs.append(f"IA prepara ataque con {first_attack['squad_type']} {target_str} — ¡defiéndete!")
+            print(f"[Room {code}] Bot attacks: {first_attack['squad_type']} dmg={first_attack['squad_damage']}, queue={len(room.get('bot_attacks',[]))} more")
+
+            # Broadcast with pending_attack
+            for sid, pinfo in room["players"].items():
+                s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
+                s["log"] = all_logs[-10:]
+                emit('state_update', s, to=sid)
+            return  # Wait for human to defend
+
+        # No squads — end turn immediately
+        print(f"[Room {code}] Bot: NO squads, ending turn silently")
+        bot.end_turn(game, 1, auto_resolve=False)  # next is P0 human
+        all_logs = []
+        emit_bot_state(all_logs)
+
+        if game.game_over:
+            emit('game_over', {"winner": game.winner, "seals": [game.seals[0], game.seals[1]]}, to=code)
+
+    except Exception as e:
+        print(f"[Room {code}] Bot error: {e}")
+        import traceback; traceback.print_exc()
+        # Recovery: transition back to human player
+        try:
+            game.active_player = 0
+            game.phase = Phase.ACTIONS
+            game.start_turn()
+            game.entry_phase()
+            for sid, pinfo in room["players"].items():
+                s = filtered_state(game, pinfo["player_id"])
+                s["log"] = ["⚠️ Error en IA, turno pasado."]
+                emit("state_update", s, to=sid)
+        except:
+            pass
+
+
+@socketio.on('faction_choice')
+def on_faction_choice(data):
+    """Apply the active player's Saboteador/Monstruo picks (audit #7)."""
+    code = None
+    for c, room in rooms.items():
+        if request.sid in room["players"]:
+            code = c
+            break
+    if code is None:
+        emit('error', {"message": "No estas en ninguna sala."})
+        return
+    room = rooms[code]
+    game = room["game"]
+    if not game:
+        emit('error', {"message": "El juego no ha empezado."})
+        return
+    player_id = room["players"][request.sid]["player_id"]
+    if player_id != game.active_player:
+        emit('error', {"message": "No es tu turno."})
+        return
+    if not game.pending_faction_choices:
+        emit('error', {"message": "No hay efectos de escuadrón pendientes."})
+        return
+    tm.apply_faction_choices(game, player_id, data.get('links') or [], data.get('nodes') or [])
+    tm._finish_exit_phase(game)
+    if not game.game_over:
+        game.start_turn()
+        game.entry_phase(auto_resolve=(room.get("solo") and game.active_player == 1))
+    for sid, pinfo in room["players"].items():
+        s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
+        emit('state_update', s, to=sid)
+    if game.game_over:
+        emit('game_over', {"winner": game.winner, "seals": [game.seals[0], game.seals[1]]}, to=code)
+        return
+    _solo_bot_turn(room, code)
+
+
+@socketio.on('politico_swap')
+def on_politico_swap(data):
+    """Apply (or skip) the active player's Político position swap (audit #7)."""
+    code = None
+    for c, room in rooms.items():
+        if request.sid in room["players"]:
+            code = c
+            break
+    if code is None:
+        emit('error', {"message": "No estas en ninguna sala."})
+        return
+    room = rooms[code]
+    game = room["game"]
+    if not game:
+        emit('error', {"message": "El juego no ha empezado."})
+        return
+    player_id = room["players"][request.sid]["player_id"]
+    if player_id != game.active_player:
+        emit('error', {"message": "No es tu turno."})
+        return
+    if not game.pending_politico_swap:
+        emit('error', {"message": "No hay intercambio pendiente."})
+        return
+    a, b = data.get('a'), data.get('b')
+    if a is None:
+        game.pending_politico_swap = None  # skip
+    elif not tm.apply_politico_swap(game, player_id, a, b):
+        emit('error', {"message": "Intercambio inválido: los vínculos de las cartas no sobrevivirían."})
+        return
+    else:
+        tm.refresh_pending_politico(game)
+    for sid, pinfo in room["players"].items():
+        s = filtered_state(game, pinfo["player_id"], room.get('pending_attack'))
+        emit('state_update', s, to=sid)
+
+
 @socketio.on('disconnect')
 def on_disconnect():
     for code, room in list(rooms.items()):
