@@ -18,11 +18,13 @@ app.secret_key = os.environ.get('NFW_SECRET_KEY') or os.urandom(32)
 # Store game state per session
 games = {}
 pending_attacks = {}  # sid -> {attacker, squad_idx, target, members_ids, squad_type, ...}
+bot_turn_active = {}  # sid -> True while the bot's turn is mid-flight (queue draining)
 
 def _cleanup_sid(sid):
     """Drop all server-side state for a session id (prevents unbounded leaks)."""
     games.pop(sid, None)
     pending_attacks.pop(sid, None)
+    bot_turn_active.pop(sid, None)
 
 def get_game():
     """Get or create game for current session."""
@@ -296,7 +298,26 @@ def api_action():
             result["ok"] = True
             result["state"] = game_state(game)
             return jsonify(result)
-        
+
+        # Bot turn already in flight (attacks were queued and the last one was
+        # just defended) — the queue is empty, so END the bot's turn instead of
+        # running take_turn again (that double-burst let the bot chain action
+        # bursts within the same turn).
+        if bot_turn_active.get(sid):
+            if pending_attacks.get(sid):
+                result["error"] = "Resuelve el ataque pendiente del IA primero."
+                result["state"] = game_state(game)
+                return jsonify(result)
+            bot_turn_active.pop(sid, None)
+            bot = BotPlayer()
+            bot.end_turn(game, player, auto_resolve=False)
+            if game.game_over:
+                _cleanup_sid(sid)
+            result["ok"] = True
+            result["log"].append("AI termina turno")
+            result["state"] = game_state(game)
+            return jsonify(result)
+
         # Full bot turn
         bot = BotPlayer()
         bot_result = bot.take_turn(game, player, on_log=lambda msg: result["log"].append(msg))
@@ -318,6 +339,7 @@ def api_action():
             
             first_attack = attack_queue.pop(0)
             pending_attacks[sid] = first_attack
+            bot_turn_active[sid] = True  # bot's turn in flight until queue drains
             
             if attack_queue:
                 pending_attacks[queue_key] = attack_queue
