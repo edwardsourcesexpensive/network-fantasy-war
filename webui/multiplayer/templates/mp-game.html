@@ -884,8 +884,11 @@ function cancelAttack() {
 }
 
 function applyAttackTargeting() {
-  // Remove all existing target classes
-  document.querySelectorAll('.cell.attack-target').forEach(el => el.classList.remove('attack-target'));
+  // Remove all existing target classes + restore normal click
+  document.querySelectorAll('.cell.attack-target').forEach(el => {
+    el.classList.remove('attack-target');
+    el.onclick = null;
+  });
   // Apply target class to enemy cells if in attack mode
   if (window._attackSquad === undefined) return;
   const enemy = 1 - MY_ID;
@@ -893,7 +896,10 @@ function applyAttackTargeting() {
     el.classList.add('attack-target');
     el.onclick = function(e) {
       e.stopPropagation();
-      attackCard(this.getAttribute('data-cid'));
+      // data-cid is "p,layer,meridian"; resolve the actual card id
+      const pos = this.getAttribute('data-cid').split(',');
+      const cell = state.board['p' + pos[0]][parseInt(pos[1], 10)][parseInt(pos[2], 10)];
+      if (cell && cell.owner === enemy) attackCard(cell.id);
     };
   });
 }

@@ -31,6 +31,8 @@ body.p1-turn{background:#1a2e1a}
 .cell.foreign{background:#3d1620;border-color:#602030}
 .cell.selected{border:2px solid #e94560!important;box-shadow:0 0 8px #e94560}
 .cell.play-target{border:2px dashed #4fc3f7!important;box-shadow:0 0 6px #4fc3f7;background:#0a2a4a}
+.cell.attack-target{border:2px dashed #e94560;cursor:crosshair}
+.cell.attack-target:hover{background:#3a1010;border-color:#ff4444}
 .cell.linked-selected{border:1px dashed #ffd700}
 .cell .hp{position:absolute;bottom:1px;right:2px;font-size:7px;color:#888}
 .cell .vused{position:absolute;top:1px;right:2px;font-size:7px;color:#4fc3f7}
@@ -574,6 +576,7 @@ function renderBoard(s) {
       if (el) el.classList.add('linked-selected');
     });
   }
+  applyAttackTargeting();
 }
 
 function territoryHtml(player, seals, s) {
@@ -908,10 +911,16 @@ function renderSquads(s) {
   if (s.phase === 'attack') {
     div.style.display = 'block';
     const squads = s.squads['p' + p];
-    div.innerHTML = '<strong>⚔️ Tus escuadrones:</strong>';
+    div.innerHTML = '<strong>⚔️ Tus escuadrones (click para atacar):</strong>';
     squads.forEach(function(sq, i) {
-      div.innerHTML += '<div class="squad-entry" onclick="attackSquad(' + i + ')"><span class="type">[' + i + '] ' + sq.type + '</span> | daño:' + sq.damage + ' | ' + sq.members.map(function(m){return m.name.substring(0,12)}).join(', ') + '</div>';
+      div.innerHTML += '<div class="squad-entry" onclick="startAttackTargeting(' + i + ')"><span class="type">[' + i + '] ' + sq.type + '</span> | daño:' + sq.damage + ' | ' + sq.members.map(function(m){return m.name.substring(0,12)}).join(', ') + '</div>';
     });
+    if (window._attackSquad !== undefined) {
+      div.innerHTML += '<div style="margin-top:6px;display:flex;gap:4px">' +
+           '<button onclick="doAttackGrimoire()" style="flex:1;padding:6px;background:#e94560;color:#fff;border:none;border-radius:3px;cursor:pointer;font-weight:bold">⚔️ Atacar Grimorio</button>' +
+           '<button onclick="cancelAttack()" style="padding:6px 12px;background:#333;color:#888;border:none;border-radius:3px;cursor:pointer">Cancelar</button>' +
+           '</div>';
+    }
     return;
   }
   
@@ -936,7 +945,51 @@ function defend(idx) {
   action('defend', {defender_squad_index: idx});
 }
 
-function attackSquad(idx) { action('attack', {squad_index: idx, target: 'grimoire'}); }
+// ═══ Attack targeting (node or grimoire) ═══
+function startAttackTargeting(squadIndex) {
+  window._attackSquad = squadIndex;
+  renderSquads(state);  // shows grimoire + cancel buttons
+  applyAttackTargeting();
+}
+
+function cancelAttack() {
+  delete window._attackSquad;
+  renderSquads(state);
+  applyAttackTargeting();
+}
+
+function applyAttackTargeting() {
+  // Remove existing target classes + restore normal click
+  document.querySelectorAll('.cell.attack-target').forEach(el => {
+    el.classList.remove('attack-target');
+    el.onclick = null;
+  });
+  // Apply target class to enemy occupied cells if in attack mode
+  if (window._attackSquad === undefined || !state) return;
+  const enemy = 1 - state.active_player;
+  const rows = state.board['p' + enemy] || [];
+  for (let li = 0; li < rows.length; li++) {
+    (rows[li] || []).forEach(function(cell) {
+      if (!cell || cell.id === undefined || cell.owner !== enemy) return;
+      const el = document.querySelector('[data-cid="' + cell.id + '"]');
+      if (!el) return;
+      el.classList.add('attack-target');
+      el.onclick = function(e) { e.stopPropagation(); attackCard(cell.id); };
+    });
+  }
+}
+
+function attackCard(cid) {
+  const idx = window._attackSquad;
+  delete window._attackSquad;
+  action('attack', {squad_index: idx, target: 'card', target_id: cid});
+}
+
+function doAttackGrimoire() {
+  const idx = window._attackSquad;
+  delete window._attackSquad;
+  action('attack', {squad_index: idx, target: 'grimoire'});
+}
 
 async function activateAbility(cardId, abilityIndex) {
   const r = await api('/api/action', {action: 'use_ability', args: {card_id: cardId, ability_index: abilityIndex, targets: {}}});

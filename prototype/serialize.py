@@ -47,6 +47,7 @@ def serialize_state(game: 'GameState', player_id: Optional[int] = None,
                     card = game.all_cards[cid]
                     row.append({
                         "id": cid,
+                        "owner": card.owner,
                         "name": card.definition.name,
                         "short": card.definition.name[:4],
                         "hp": card.current_hp,
