@@ -48,6 +48,10 @@ class GameState:
         self.game_over: bool = False
         self.winner: Optional[int] = None
 
+        # Pending faction-effect choices (audit #7; hosts drive the pause in B2)
+        self.pending_faction_choices = None
+        self.pending_politico_swap = None
+
         # Spy state
         self.spies_infiltrated: dict[int, list[int]] = {0: [], 1: []}  # player -> [card_ids in enemy territory]
 
@@ -602,17 +606,17 @@ class GameState:
     def start_turn(self):
         turn_manager.start_turn(self)
 
-    def entry_phase(self):
+    def entry_phase(self, auto_resolve: bool = True):
         """Entry phase: trigger start-of-turn abilities + draw 2."""
-        turn_manager.entry_phase(self)
+        turn_manager.entry_phase(self, auto_resolve=auto_resolve)
 
     def start_attack_phase(self):
         turn_manager.start_attack_phase(self)
 
-    def exit_phase(self):
+    def exit_phase(self, auto_resolve: bool = True):
         # P3: Check spy turn effects before cleanup
         self.modifiers.check_spy_turn_effects(self, self.active_player)
-        turn_manager.exit_phase(self)
+        turn_manager.exit_phase(self, auto_resolve=auto_resolve)
 
     # ═══════════════════════════════════════════════════════════════
     # Combat
