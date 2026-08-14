@@ -48,6 +48,20 @@ def _link(gs, a, b):
     gs.network.add_link(a, b)
 
 
+def _logistron_name():
+    for c in ALL_CARDS:
+        if c.is_logistron:
+            return c.name
+    raise ValueError("no logistrón card")
+
+
+def _incoloro_name():
+    for c in ALL_CARDS:
+        if c.color.name == "INCOLORO" and not c.is_spy and not c.is_logistron and c.link_capacity >= 2:
+            return c.name
+    raise ValueError("no incoloro card")
+
+
 def _linked(gs, a, b):
     return b.card_id in gs.network.get_links(a)
 
@@ -160,6 +174,32 @@ class TestMonstruo:
 
         removed = sum(1 for c in (e1, e2, e3) if c.card_id not in gs.all_cards)
         assert removed == 1, f"expected exactly 1 removed, got {removed}"
+
+    def test_attack_includes_potenciamiento(self, gs):
+        """Monstruo attack = base damage + potenciamiento (logistrón bridge)."""
+        m1 = _make_card(gs, 0, "Dragón Ancestral", 1, 0)
+        m2 = _make_card(gs, 0, "Devorador de Capas", 1, 2)
+        m3 = _make_card(gs, 0, "Kraken del Abismo", 2, 1)
+        _link(gs, m1, m2)
+        _link(gs, m2, m3)
+        _link(gs, m1, m3)  # triangle, base damage 2
+
+        # logistrón bridge to an INCOLORO line (donor empowerment 1) → pot +1
+        lg = _make_card(gs, 0, _logistron_name(), 2, 3)
+        _link(gs, m3, lg)
+        n1 = _make_card(gs, 0, _incoloro_name(), 1, 4)
+        n2 = _make_card(gs, 0, _incoloro_name(), 1, 6)
+        _link(gs, lg, n1)
+        _link(gs, n1, n2)  # line {n1,n2}
+
+        tri = next(s for s in gs.get_player_squads(0) if s.squad_type == "triangle")
+        assert tm._squad_attack(gs, tri) == 3, \
+            f"expected base 2 + pot 1, got {tm._squad_attack(gs, tri)}"
+
+        # A G2 enemy node (not removable at base 2) is now removable
+        e1 = _make_card(gs, 1, "Desestabilizador", 1, 8)  # G2
+        gs.exit_phase()
+        assert e1.card_id not in gs.all_cards, "G2 node must fall to attack 3"
 
 
 # ═══════════════════════════════════════════════════════════════

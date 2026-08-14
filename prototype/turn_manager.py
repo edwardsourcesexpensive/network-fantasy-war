@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from .game import GameState
 from .enums import Phase
 from .card import Color, CardInstance
+from .network import calculate_potenciamiento
 
 
 def start_turn(game: GameState) -> None:
@@ -157,7 +158,7 @@ def exit_phase(game: GameState, auto_resolve: bool = True) -> None:
             game._log(f"  Escuadrón Saboteador: hasta 2 vínculos cortos enemigos por escuadrón")
 
         elif dom == Color.MONSTRUO:
-            game._log(f"  Escuadrón Monstruo: puede remover 1 nodo enemigo (G < {squad.base_damage})")
+            game._log(f"  Escuadrón Monstruo: puede remover 1 nodo enemigo (G < {_squad_attack(game, squad)})")
 
     if auto_resolve:
         resolve_faction_choices_auto(game, player)
@@ -248,13 +249,21 @@ def _card_degree(game: GameState, cid: int) -> int:
     return len(game.network.get_links(card)) if card else 0
 
 
+def _squad_attack(game: GameState, squad) -> int:
+    """Efective attack of a squad: base damage + potenciamiento (mirrors combat.calculate_attack)."""
+    all_squads = game.network.find_squads(game.all_cards)
+    pot = calculate_potenciamiento(squad, all_squads, game.network, game.all_cards)
+    return squad.base_damage + pot
+
+
 def _monstruo_candidates(game: GameState, player: int, squad) -> list:
-    """Enemy placed nodes with Grado < the squad's base damage."""
+    """Enemy placed nodes with Grado < the squad's effective attack."""
     enemy = 1 - player
+    attack = _squad_attack(game, squad)
     return [
         c.card_id for c in game.all_cards.values()
         if c.owner == enemy and c.position is not None
-        and c.definition.grado < squad.base_damage
+        and c.definition.grado < attack
     ]
 
 
@@ -304,7 +313,7 @@ def _collect_faction_choices(game: GameState, player: int) -> dict:
     squads = game.get_player_squads(player)
     saboteador_squads = [s for s in squads if _dom_color(game, s) == Color.SABOTEADOR]
     monstruo_squads = [s for s in squads if _dom_color(game, s) == Color.MONSTRUO]
-    mon_damage = max((s.base_damage for s in monstruo_squads), default=0)
+    mon_damage = max((_squad_attack(game, s) for s in monstruo_squads), default=0)
     nodes = sorted({
         c.card_id for c in game.all_cards.values()
         if c.owner == 1 - player and c.position is not None
@@ -333,7 +342,7 @@ def apply_faction_choices(game: GameState, player: int,
     monstruo_squads = [s for s in squads if _dom_color(game, s) == Color.MONSTRUO]
     sab_budget = 2 * len(saboteador_squads)
     mon_budget = len(monstruo_squads)
-    mon_damage = max((s.base_damage for s in monstruo_squads), default=0)
+    mon_damage = max((_squad_attack(game, s) for s in monstruo_squads), default=0)
     enemy = 1 - player
 
     applied = 0
