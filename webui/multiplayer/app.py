@@ -164,6 +164,16 @@ def serve_rules():
     return _send_file(rules_path, mimetype='application/pdf')
 
 
+@app.route('/tutorial')
+def serve_tutorial():
+    """Serve the guided tutorial HTML from the project root."""
+    import os as _os
+    from flask import send_file as _send_file
+    tutorial_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))), 
+                                  'tutorial-network-fantasy-war.html')
+    return _send_file(tutorial_path, mimetype='text/html')
+
+
 # ─── Socket Events ─────────────────────────────────────────
 @socketio.on('create_room')
 def on_create(data):

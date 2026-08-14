@@ -1,0 +1,2576 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Network Fantasy War — Partida guiada</title>
+
+  <style>
+    :root {
+      --bg: #10151d;
+      --panel: #18212d;
+      --panel2: #111923;
+      --line: #3b4a5d;
+      --text: #eef5fb;
+      --muted: #abb9c7;
+      --garden: #54ae72;
+      --garden-dark: #1f5b35;
+      --shadow: #9d82ad;
+      --shadow-dark: #42334b;
+      --spy: #c99c38;
+      --logistron: #8da1b5;
+      --danger: #d45d5d;
+      --gold: #e0bd58;
+      --enemy-link: #e88b83;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, #263a50 0%, transparent 38rem),
+        radial-gradient(circle at top right, #38223b 0%, transparent 35rem),
+        var(--bg);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    header {
+      max-width: 1450px;
+      margin: auto;
+      padding: 28px 22px 15px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.7rem, 4vw, 2.7rem);
+      letter-spacing: -.04em;
+    }
+
+    header p {
+      max-width: 1000px;
+      margin: 10px 0 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .app {
+      max-width: 1450px;
+      margin: auto;
+      padding: 10px 22px 42px;
+      display: grid;
+      grid-template-columns: minmax(650px, 1.65fr) minmax(320px, .78fr);
+      gap: 18px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(24, 33, 45, .94);
+      box-shadow: 0 14px 32px rgba(0, 0, 0, .28);
+    }
+
+    .board-panel {
+      overflow: hidden;
+    }
+
+    .scoreboard {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(0, 0, 0, .18);
+    }
+
+    .player-score:last-child {
+      text-align: right;
+    }
+
+    .deck-name {
+      font-size: .75rem;
+      font-weight: 900;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    .deck-name.shadow {
+      color: #ddcbe7;
+    }
+
+    .deck-name.garden {
+      color: #8edda5;
+    }
+
+    .seals {
+      margin-top: 3px;
+      color: var(--gold);
+      font-size: 1.45rem;
+      font-weight: 900;
+    }
+
+    .seals small {
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 700;
+    }
+
+    .vs {
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 900;
+      letter-spacing: .13em;
+    }
+
+    .board-wrap {
+      position: relative;
+      min-height: 645px;
+      padding: 14px;
+      overflow: auto;
+    }
+
+    .board {
+      position: relative;
+      min-width: 800px;
+      display: grid;
+      grid-template-rows: repeat(3, 88px) 42px repeat(3, 88px);
+      gap: 4px;
+    }
+
+    .layer {
+      position: relative;
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr);
+      overflow: hidden;
+      border: 1px solid rgba(161, 180, 200, .24);
+      border-radius: 9px;
+      background: rgba(255, 255, 255, .018);
+    }
+
+    /*
+      Los meridianos empiezan después de la columna de etiqueta.
+      Por tanto, se alinean exactamente con las 9 columnas jugables.
+    */
+    .layer::after {
+      content: "";
+      position: absolute;
+      z-index: 1;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 52px;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          transparent 0,
+          transparent calc(11.111% - 1px),
+          rgba(190, 215, 238, .22) calc(11.111% - 1px),
+          rgba(190, 215, 238, .22) 11.111%
+        );
+    }
+
+    .layer--shadow {
+      background:
+        linear-gradient(90deg, rgba(142, 89, 155, .12), transparent 43%),
+        rgba(255, 255, 255, .018);
+    }
+
+    .layer--garden {
+      background:
+        linear-gradient(270deg, rgba(67, 145, 87, .12), transparent 43%),
+        rgba(255, 255, 255, .018);
+    }
+
+    .layer-label {
+      position: relative;
+      z-index: 4;
+      display: grid;
+      place-items: center;
+      border-right: 1px solid rgba(161, 180, 200, .28);
+      color: var(--muted);
+      background: rgba(0, 0, 0, .28);
+      font-size: .72rem;
+      font-weight: 900;
+      text-align: center;
+    }
+
+    .slots {
+      position: relative;
+      z-index: 3;
+      display: grid;
+      grid-template-columns: repeat(9, minmax(0, 1fr));
+      min-width: 0;
+    }
+
+    .frontier {
+      position: relative;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      isolation: isolate;
+      color: #f1d581;
+      border-top: 1px solid rgba(226, 186, 84, .5);
+      border-bottom: 1px solid rgba(226, 186, 84, .5);
+      background: linear-gradient(90deg, transparent, rgba(174, 131, 38, .18), transparent);
+      font-size: .72rem;
+      font-weight: 900;
+      letter-spacing: .16em;
+    }
+
+    .frontier::after {
+      content: "";
+      position: absolute;
+      z-index: 0;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 52px;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          transparent 0,
+          transparent calc(11.111% - 1px),
+          rgba(241, 213, 129, .24) calc(11.111% - 1px),
+          rgba(241, 213, 129, .24) 11.111%
+        );
+    }
+
+    .frontier-label {
+      position: relative;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .frontier-slots {
+      position: absolute;
+      z-index: 3;
+      inset: 0;
+      display: grid;
+      grid-template-columns: 52px repeat(9, minmax(0, 1fr));
+      pointer-events: none;
+    }
+
+    .node {
+      position: relative;
+      z-index: 6;
+      align-self: center;
+      justify-self: center;
+      width: min(92%, 118px);
+      min-height: 58px;
+      padding: 7px 6px;
+      color: white;
+      border: 2px solid;
+      border-radius: 10px;
+      box-shadow: 0 4px 11px rgba(0,0,0,.32);
+      font: inherit;
+      font-size: .64rem;
+      font-weight: 900;
+      line-height: 1.13;
+      text-align: center;
+      cursor: pointer;
+      transition: transform .16s ease, filter .16s ease;
+      pointer-events: auto;
+    }
+
+    .node:hover,
+    .node.selected {
+      transform: translateY(-3px) scale(1.035);
+      filter: brightness(1.14);
+    }
+
+    .node small {
+      display: block;
+      margin-top: 4px;
+      color: rgba(255,255,255,.79);
+      font-size: .53rem;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .node em {
+      display: block;
+      margin-top: 4px;
+      color: #ffb4ae;
+      font-size: .51rem;
+      font-style: normal;
+      font-weight: 900;
+    }
+
+    .node.garden {
+      border-color: #83dc9d;
+      background: linear-gradient(145deg, #367849, #173d25);
+    }
+
+    .node.shadow {
+      border-color: #dac9e4;
+      background: linear-gradient(145deg, #69526f, #30263a);
+    }
+
+    .node.spy {
+      border-color: #f2d06b;
+      background: linear-gradient(145deg, #80682d, #382d18);
+    }
+
+    .node.logistron {
+      border-color: #d9e5f0;
+      background: linear-gradient(145deg, #718391, #303b46);
+    }
+
+    #links {
+      position: absolute;
+      z-index: 4;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .link {
+      fill: none;
+      stroke: #d9e5ef;
+      stroke-width: 4;
+      stroke-linecap: round;
+      opacity: .86;
+      filter: drop-shadow(0 1px 2px #000);
+    }
+
+    .link.enemy {
+      stroke: var(--enemy-link);
+      stroke-dasharray: 8 5;
+    }
+
+    .link-label {
+      fill: white;
+      stroke: #111;
+      stroke-width: 3px;
+      paint-order: stroke;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      padding: 13px 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .8rem;
+    }
+
+    .legend i {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      margin-right: 5px;
+      border-radius: 50%;
+      vertical-align: -1px;
+    }
+
+    .legend .g { background: var(--garden); }
+    .legend .s { background: var(--shadow); }
+    .legend .e { background: var(--spy); }
+    .legend .l { background: var(--logistron); }
+
+    aside {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .tutorial-panel {
+      padding: 20px;
+    }
+
+    .eyebrow {
+      margin-bottom: 8px;
+      color: #8ecff4;
+      font-size: .73rem;
+      font-weight: 900;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    #stepTitle {
+      margin: 0;
+      font-size: 1.28rem;
+      letter-spacing: -.025em;
+    }
+
+    #stepText {
+      margin: 12px 0 0;
+      color: #d6e0e9;
+      font-size: .94rem;
+      line-height: 1.56;
+    }
+
+    .action-counter {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin-top: 17px;
+    }
+
+    .counter {
+      padding: 11px;
+      border: 1px solid #43566d;
+      border-radius: 10px;
+      background: var(--panel2);
+      text-align: center;
+    }
+
+    .counter span {
+      display: block;
+      color: var(--muted);
+      font-size: .68rem;
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .counter b {
+      display: block;
+      margin-top: 3px;
+      font-size: 1.3rem;
+    }
+
+    .counter.used b {
+      color: #efb0a8;
+    }
+
+    .counter.left b {
+      color: #92dea7;
+    }
+
+    .event-box {
+      margin-top: 16px;
+      padding: 13px;
+      border: 1px solid #465a71;
+      border-radius: 10px;
+      background: rgba(9, 14, 21, .35);
+    }
+
+    .event-box strong {
+      display: block;
+      color: #efd47c;
+      font-size: .74rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    #eventCost {
+      margin-top: 6px;
+      color: #96d7aa;
+      font-size: .83rem;
+      font-weight: 800;
+    }
+
+    .event-box ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: #c9d5df;
+      font-size: .86rem;
+      line-height: 1.52;
+    }
+
+    .card-info {
+      min-height: 72px;
+      margin-top: 15px;
+      padding: 12px;
+      color: var(--muted);
+      border: 1px dashed #4b6480;
+      border-radius: 10px;
+      background: rgba(8, 12, 18, .25);
+      font-size: .82rem;
+      line-height: 1.46;
+    }
+
+    .card-info b {
+      color: white;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 9px;
+      margin-top: 16px;
+    }
+
+    button.control {
+      padding: 11px 9px;
+      color: white;
+      border: 1px solid #4c6079;
+      border-radius: 9px;
+      background: #26364a;
+      font: inherit;
+      font-size: .78rem;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    button.control:hover:not(:disabled) {
+      background: #344d69;
+    }
+
+    button.control:disabled {
+      opacity: .38;
+      cursor: not-allowed;
+    }
+
+    #autoBtn {
+      grid-column: 1 / -1;
+      border-color: #7d6630;
+      background: #4b3d1f;
+    }
+
+    #autoBtn:hover {
+      background: #604e27;
+    }
+
+    .progress {
+      height: 8px;
+      margin-top: 16px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #0c1118;
+    }
+
+    #progressBar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #86d79b, #e8c85f);
+      transition: width .25s ease;
+    }
+
+    .rules {
+      padding: 18px 20px;
+    }
+
+    .rules h3 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+    }
+
+    details {
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .86rem;
+      line-height: 1.5;
+    }
+
+    summary {
+      color: #e2edf5;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    details p {
+      margin: 8px 0 0;
+    }
+
+    .card-modal[hidden] {
+      display: none;
+    }
+
+    .card-modal {
+      position: fixed;
+      z-index: 100;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(3, 7, 12, .72);
+      backdrop-filter: blur(5px);
+    }
+
+    .card-modal__window {
+      position: relative;
+      width: min(100%, 560px);
+      max-height: min(800px, calc(100vh - 36px));
+      padding: 25px;
+      overflow-y: auto;
+      border: 1px solid #607895;
+      border-radius: 16px;
+      background:
+        radial-gradient(circle at top right, rgba(107, 150, 187, .18), transparent 15rem),
+        #172230;
+      box-shadow: 0 25px 65px rgba(0, 0, 0, .55);
+    }
+
+    .card-modal__window h3 {
+      margin: 0 42px 14px 0;
+      font-size: 1.25rem;
+    }
+
+    .card-modal__content {
+      color: #d4e0ea;
+      font-size: .92rem;
+      line-height: 1.62;
+    }
+
+    .card-modal__content b {
+      color: #fff;
+    }
+
+    .card-modal__content hr {
+      margin: 18px 0 13px;
+      border: 0;
+      border-top: 1px solid rgba(143, 177, 207, .35);
+    }
+
+    .card-modal__close {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      width: 34px;
+      height: 34px;
+      color: white;
+      border: 1px solid #607895;
+      border-radius: 8px;
+      background: #283b50;
+      font: inherit;
+      font-size: 1.25rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .card-modal__close:hover {
+      background: #3a5875;
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      header,
+      .app {
+        padding-left: 12px;
+        padding-right: 12px;
+      }
+
+      .board-wrap {
+        padding: 9px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Network Fantasy War — partida guiada completa</h1>
+    <p>
+      Cada paso resuelve una sola cosa: comenzar turno, robar, jugar una carta,
+      ascender, crear o romper un vínculo, activar una habilidad, declarar un ataque
+      o resolver un efecto. Haz clic sobre una carta para ver toda su información.
+    </p>
+  </header>
+
+  <main class="app">
+    <section class="panel board-panel">
+      <div class="scoreboard">
+        <div>
+          <div class="deck-name shadow">Red de Sombras</div>
+          <div class="seals">✦ <span id="shadowSeals">30</span> <small>sellos</small></div>
+        </div>
+
+        <div class="vs">VS</div>
+
+        <div>
+          <div class="deck-name garden">Jardín Salvaje</div>
+          <div class="seals">✦ <span id="gardenSeals">30</span> <small>sellos</small></div>
+        </div>
+      </div>
+
+      <div class="board-wrap" id="boardWrap">
+        <div class="board" id="board">
+          <svg id="links" aria-hidden="true"></svg>
+
+          <div class="layer layer--shadow" data-row="S-L1">
+            <div class="layer-label">Sombras<br>L1</div>
+            <div class="slots"></div>
+          </div>
+
+          <div class="layer layer--shadow" data-row="S-L2">
+            <div class="layer-label">Sombras<br>L2</div>
+            <div class="slots"></div>
+          </div>
+
+          <div class="layer layer--shadow" data-row="S-L3">
+            <div class="layer-label">Sombras<br>L3</div>
+            <div class="slots"></div>
+          </div>
+
+          <div class="frontier">
+            <div class="frontier-label">FRONTERA</div>
+            <div class="frontier-slots" data-row="F"></div>
+          </div>
+
+          <div class="layer layer--garden" data-row="J-L3">
+            <div class="layer-label">Jardín<br>L3</div>
+            <div class="slots"></div>
+          </div>
+
+          <div class="layer layer--garden" data-row="J-L2">
+            <div class="layer-label">Jardín<br>L2</div>
+            <div class="slots"></div>
+          </div>
+
+          <div class="layer layer--garden" data-row="J-L1">
+            <div class="layer-label">Jardín<br>L1</div>
+            <div class="slots"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span><i class="s"></i>Red de Sombras</span>
+        <span><i class="g"></i>Jardín Salvaje</span>
+        <span><i class="e"></i>Espía</span>
+        <span><i class="l"></i>Logistrón</span>
+        <span>— vínculo aliado</span>
+        <span>– – vínculo enemigo / espionaje</span>
+      </div>
+    </section>
+
+    <aside>
+      <section class="panel tutorial-panel">
+        <div class="eyebrow" id="stepCounter"></div>
+        <h2 id="stepTitle"></h2>
+        <p id="stepText"></p>
+
+        <div class="action-counter">
+          <div class="counter used">
+            <span>Acciones usadas</span>
+            <b id="usedActions">0 / 4</b>
+          </div>
+
+          <div class="counter left">
+            <span>Acciones restantes</span>
+            <b id="remainingActions">0</b>
+          </div>
+        </div>
+
+        <div class="event-box">
+          <strong>Resolución actual</strong>
+          <div id="eventCost"></div>
+          <ul id="eventList"></ul>
+        </div>
+
+        <div class="card-info" id="cardInfo">
+          <b>Ficha de carta:</b><br>
+          Haz clic en una carta del tablero para abrir su contenido completo y el comentario estratégico.
+        </div>
+
+        <div class="controls">
+          <button class="control" id="prevBtn">← Anterior</button>
+          <button class="control" id="nextBtn">Siguiente →</button>
+          <button class="control" id="resetBtn">Reiniciar</button>
+          <button class="control" id="autoBtn">▶ Reproducir paso a paso</button>
+        </div>
+
+        <div class="progress">
+          <div id="progressBar"></div>
+        </div>
+      </section>
+
+      <section class="panel rules">
+        <h3>Reglas aplicadas en esta partida</h3>
+
+        <details>
+          <summary>Vínculos, distancia y acciones</summary>
+          <p>
+            Un vínculo corto, en la misma fila, cuesta 1 acción. Un vínculo medio,
+            a una fila de diferencia, cuesta 1 si las cartas tienen el mismo color
+            impreso o 2 si son de distinto color. Un vínculo que involucra un
+            Logistrón cuesta siempre 1. Enredadera Vincular hace que los vínculos
+            que la involucren cuesten 0 acciones.
+          </p>
+        </details>
+
+        <details>
+          <summary>Triángulos y Líneas</summary>
+          <p>
+            Un Triángulo exige tres nodos y tres vínculos: cada nodo debe estar
+            conectado con los otros dos. Una Línea exige dos nodos y un vínculo.
+            Las cartas solo atacan como parte de un escuadrón.
+          </p>
+        </details>
+
+        <details>
+          <summary>Capacidad de vínculos V</summary>
+          <p>
+            El último número de cada carta es V: su capacidad máxima de vínculos
+            directos. Por ejemplo, Brote Silvestre tiene V=1; por ello no se usa
+            como vértice de un Triángulo, porque necesitaría sostener dos vínculos.
+          </p>
+        </details>
+
+        <details>
+          <summary>Sabotaje e infiltración</summary>
+          <p>
+            Los Saboteadores pueden destruir vínculos para desmontar escuadrones.
+            Los Espías entran por la Frontera, se infiltran mediante una acción y
+            pueden crear vínculos con cartas enemigas.
+          </p>
+        </details>
+      </section>
+    </aside>
+  </main>
+
+  <div class="card-modal" id="cardModal" hidden>
+    <div class="card-modal__window" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <button class="card-modal__close" id="closeCardModal" type="button" aria-label="Cerrar">
+        ×
+      </button>
+
+      <h3 id="modalTitle">Carta</h3>
+      <div class="card-modal__content" id="modalContent"></div>
+    </div>
+  </div>
+
+  <script>
+    /*
+      NOTA DE DISEÑO DE ESTA DEMOSTRACIÓN
+
+      Brote Silvestre posee V=1. Como un Triángulo exige que cada nodo tenga
+      dos vínculos directos, Brote no puede formar parte de ese Triángulo.
+
+      Por eso el primer Triángulo válido se construye con:
+      Enredadera Vincular (V4)
+      Hiedra Trepadora (V2)
+      Polinizadora de Esencias (V3)
+    */
+
+    const cards = {
+      vine: {
+        name: "Enredadera Vincular",
+        faction: "Naturaleza",
+        copies: "×2 en Jardín Salvaje",
+        hp: 2,
+        d: 0,
+        v: 4,
+        g: 2,
+        layers: "L1–L2",
+        polygons: "△ □ ⬠",
+        keywords: "Vanguardia",
+        rulesText: "Vínculos que la involucren cuestan 0 acciones.",
+        linkRules: "Puede sostener hasta V=4 vínculos directos. No tiene Reticencia impresa. Todo vínculo legal que la involucre cuesta 0 acciones.",
+        demoLinks: [
+          "Enredadera Vincular ↔ Hiedra Trepadora.",
+          "Enredadera Vincular ↔ Polinizadora de Esencias.",
+          "Enredadera Vincular ↔ Núcleo de Enlace.",
+          "Segunda Enredadera Vincular ↔ Guardián del Bosque de Raíces.",
+          "Segunda Enredadera Vincular ↔ Núcleo de Enlace."
+        ],
+        comment: "Es el motor de construcción del Jardín: permite pagar vínculos con coste 0 y facilita levantar formaciones grandes sin agotar las cuatro acciones."
+      },
+
+      ivy: {
+        name: "Hiedra Trepadora",
+        faction: "Naturaleza",
+        copies: "×2 en Jardín Salvaje",
+        hp: 2,
+        d: 0,
+        v: 2,
+        g: 2,
+        layers: "L1–L2",
+        polygons: "△ □ ⬠",
+        keywords: "Ninguna",
+        rulesText: "Al entrar: vincula gratis con 1 adyacente (1/2).",
+        linkRules: "Puede sostener hasta V=2 vínculos directos. En esta partida crea gratuitamente su primer vínculo con Enredadera Vincular; después recibe un vínculo pagado con Polinizadora.",
+        demoLinks: [
+          "Hiedra Trepadora ↔ Enredadera Vincular.",
+          "Hiedra Trepadora ↔ Polinizadora de Esencias."
+        ],
+        comment: "Su vínculo gratuito de entrada ahorra una acción. Después puede completar un Triángulo porque tiene V=2."
+      },
+
+      pollen: {
+        name: "Polinizadora de Esencias",
+        faction: "Naturaleza",
+        copies: "×2 en Jardín Salvaje",
+        hp: 1,
+        d: 0,
+        v: 3,
+        g: 2,
+        layers: "L1–L2",
+        polygons: "△ □ ⬠",
+        keywords: "Ninguna",
+        rulesText: "[1]: copia habilidad de aliado adyacente.",
+        linkRules: "Puede sostener hasta V=3 vínculos directos. En la demostración queda vinculada con Hiedra Trepadora y Enredadera Vincular.",
+        demoLinks: [
+          "Polinizadora de Esencias ↔ Hiedra Trepadora.",
+          "Polinizadora de Esencias ↔ Enredadera Vincular."
+        ],
+        comment: "Se usa como tercer vértice válido del Triángulo: V=3 le permite sostener dos vínculos. Su habilidad [1] no se activa en esta demostración."
+      },
+
+      guardian: {
+        name: "Guardián del Bosque de Raíces",
+        faction: "Naturaleza",
+        copies: "×2 en Jardín Salvaje",
+        hp: 3,
+        d: 1,
+        v: 3,
+        g: 2,
+        layers: "L1–L2",
+        polygons: "△ □ ⬠",
+        keywords: "Vanguardia",
+        rulesText: "En △: aliados del escuadrón aportan +2 daño.",
+        linkRules: "Puede sostener hasta V=3 vínculos directos. En esta partida forma una Línea con la segunda Enredadera y recibe un vínculo de espionaje de Sombra Infiltrada.",
+        demoLinks: [
+          "Guardián del Bosque de Raíces ↔ Segunda Enredadera Vincular.",
+          "Sombra Infiltrada ↔ Guardián del Bosque de Raíces."
+        ],
+        comment: "En esta demostración aporta D=1 a una Línea. Su habilidad de Triángulo no se usa porque no integra el Triángulo de Jardín."
+      },
+
+      core: {
+        name: "Núcleo de Enlace",
+        faction: "Logistrón",
+        copies: "×2 en Jardín Salvaje",
+        hp: 2,
+        d: 0,
+        v: 5,
+        g: 3,
+        layers: "No especificadas en la línea de carta suministrada. En esta partida entra en L1.",
+        polygons: "No integra polígonos.",
+        keywords: "Logistrón",
+        rulesText: "Sin habilidades impresas.",
+        linkRules: "Puede sostener hasta V=5 vínculos directos. Todo vínculo que involucre un Logistrón cuesta 1 acción. Conecta escuadrones distintos, pero no cuenta como vértice de Líneas, Triángulos, Cuadriláteros ni Pentágonos.",
+        demoLinks: [
+          "Núcleo de Enlace ↔ Primera Enredadera Vincular.",
+          "Núcleo de Enlace ↔ Segunda Enredadera Vincular."
+        ],
+        comment: "No ataca dentro de una formación. Su función es unir el Triángulo de Jardín con la Línea para que ambos escuadrones compartan potenciamiento."
+      },
+
+      hound: {
+        name: "Sabueso del Nexo",
+        faction: "Saboteador",
+        copies: "×2 en Red de Sombras",
+        hp: 1,
+        d: 0,
+        v: 2,
+        g: 3,
+        layers: "L1–L3",
+        polygons: "△",
+        keywords: "Vanguardia",
+        rulesText: "Al jugarse: rompe 1 vínculo enemigo a distancia corta.",
+        linkRules: "Puede sostener hasta V=2 vínculos directos. En la demostración integra un Triángulo con Saboteadora de Formaciones y Agente del Silencio.",
+        demoLinks: [
+          "Sabueso del Nexo ↔ Saboteadora de Formaciones.",
+          "Sabueso del Nexo ↔ Agente del Silencio.",
+          "Destruye Hiedra Trepadora ↔ Polinizadora de Esencias al entrar."
+        ],
+        comment: "Es el primer golpe de sabotaje: destruye el vínculo corto que cierra el Triángulo de Jardín sin destruir ninguna carta."
+      },
+
+      sabform: {
+        name: "Saboteadora de Formaciones",
+        faction: "Saboteador",
+        copies: "×2 en Red de Sombras",
+        hp: 2,
+        d: 1,
+        v: 2,
+        g: 3,
+        layers: "L1–L3",
+        polygons: "△",
+        keywords: "Ninguna",
+        rulesText: "En △: cada vínculo enemigo roto inflige 1 daño al grimorio.",
+        linkRules: "Puede sostener hasta V=2 vínculos directos. Para que su habilidad esté activa debe pertenecer a un Triángulo.",
+        demoLinks: [
+          "Saboteadora de Formaciones ↔ Sabueso del Nexo.",
+          "Saboteadora de Formaciones ↔ Agente del Silencio."
+        ],
+        comment: "Convierte cada sabotaje en daño directo al grimorio. También aporta D=1 al ataque del Triángulo de Sombras."
+      },
+
+      agent: {
+        name: "Agente del Silencio",
+        faction: "Saboteador",
+        copies: "×2 en Red de Sombras",
+        hp: 2,
+        d: 0,
+        v: 2,
+        g: 3,
+        layers: "L1–L3",
+        polygons: "△",
+        keywords: "Ninguna",
+        rulesText: "En triángulo: +1 vínculo enemigo destruido al final del turno.",
+        linkRules: "Puede sostener hasta V=2 vínculos directos. Su efecto requiere estar dentro de un Triángulo aliado.",
+        demoLinks: [
+          "Agente del Silencio ↔ Sabueso del Nexo.",
+          "Agente del Silencio ↔ Saboteadora de Formaciones.",
+          "Al final del turno destruye Núcleo de Enlace ↔ Primera Enredadera Vincular."
+        ],
+        comment: "Extiende el sabotaje más allá de los dos vínculos cortos de la facción Saboteador. Permite romper un tercer vínculo al final del turno."
+      },
+
+      spy: {
+        name: "Sombra Infiltrada",
+        faction: "Espía",
+        copies: "×2 en Red de Sombras",
+        hp: 1,
+        d: 0,
+        v: 2,
+        g: 3,
+        layers: "Frontera; después puede infiltrarse en territorio enemigo.",
+        polygons: "Forma parte de los polígonos del jugador en cuyo territorio se encuentra, nunca de los de su dueño.",
+        keywords: "Espía",
+        rulesText: "Parasitismo: sabotaje encubierto (1 acción) + inteligencia.",
+        linkRules: "Puede vincularse con unidades enemigas y con otros Espías. Solo puede mantener vínculos con unidades propias mientras está en la Frontera. En esta partida crea un vínculo enemigo con Guardián del Bosque de Raíces.",
+        demoLinks: [
+          "Sombra Infiltrada ↔ Guardián del Bosque de Raíces."
+        ],
+        comment: "Primero entra en la Frontera. Después gasta una acción para infiltrarse y dos acciones para establecer un vínculo medio con una carta de color distinto situada una fila más abajo."
+      },
+
+      cutter: {
+        name: "Cortacircuitos",
+        faction: "Saboteador",
+        copies: "×2 en Red de Sombras",
+        hp: 2,
+        d: 0,
+        v: 2,
+        g: 3,
+        layers: "L1–L3",
+        polygons: "△ □ ⬠",
+        keywords: "Línea de fuego",
+        rulesText: "[1]: todo un escuadrón enemigo pierde 1 HP.",
+        linkRules: "Puede sostener hasta V=2 vínculos directos. No crea vínculos durante esta demostración.",
+        demoLinks: [
+          "No crea vínculos en esta partida."
+        ],
+        comment: "Gracias a Línea de fuego entra directamente en L3. Después gasta una acción para dañar a toda la Línea enemiga."
+      }
+    };
+
+    function createState() {
+      return {
+        turn: "Preparación",
+        phase: "Preparación",
+        used: 0,
+        remaining: 0,
+        seals: {
+          shadow: 30,
+          garden: 30
+        },
+        nodes: {},
+        links: [],
+        statuses: {},
+        activeEffects: []
+      };
+    }
+
+    function add(state, id, cardKey, row, col, type) {
+      const card = cards[cardKey];
+
+      state.nodes[id] = {
+        id,
+        cardKey,
+        name: card.name,
+        row,
+        col,
+        type,
+        stat: `HP ${card.hp} · D ${card.d} · V ${card.v} · G${card.g}`
+      };
+    }
+
+    function move(state, id, row) {
+      if (state.nodes[id]) {
+        state.nodes[id].row = row;
+      }
+    }
+
+    function link(state, a, b, type = "ally") {
+      const exists = state.links.some(item =>
+        (item.a === a && item.b === b) ||
+        (item.a === b && item.b === a)
+      );
+
+      if (!exists && state.nodes[a] && state.nodes[b]) {
+        state.links.push({ a, b, type });
+      }
+    }
+
+    function unlink(state, a, b) {
+      state.links = state.links.filter(item =>
+        !(
+          (item.a === a && item.b === b) ||
+          (item.a === b && item.b === a)
+        )
+      );
+    }
+
+    function damageGrimoire(state, target, amount) {
+      state.seals[target] = Math.max(0, state.seals[target] - amount);
+    }
+
+    function damageNode(state, id, amount) {
+      state.statuses[id] = {
+        damage: (state.statuses[id]?.damage || 0) + amount
+      };
+    }
+
+    function spend(state, amount = 1) {
+      state.used += amount;
+      state.remaining -= amount;
+    }
+
+    function startTurn(state, name) {
+      state.turn = name;
+      state.phase = "Fase de Entrada";
+      state.used = 0;
+      state.remaining = 4;
+    }
+
+    function setPhase(state, phase) {
+      state.phase = phase;
+    }
+
+    function addEffect(state, text) {
+      if (!state.activeEffects.includes(text)) {
+        state.activeEffects.push(text);
+      }
+    }
+
+    function removeEffect(state, text) {
+      state.activeEffects = state.activeEffects.filter(item => item !== text);
+    }
+
+    function samePair(linkItem, a, b) {
+      return (
+        (linkItem.a === a && linkItem.b === b) ||
+        (linkItem.a === b && linkItem.b === a)
+      );
+    }
+
+    /*
+      Cada evento representa una única resolución visible.
+      Una carta, un vínculo, un ataque, un daño o una habilidad
+      no se agrupan con otro hecho distinto.
+    */
+    const events = [
+      {
+        title: "Preparación de la partida",
+        text: "Ambos jugadores colocan su Grimorio con 30 sellos. El tablero empieza vacío. Esta demostración utilizará una línea de juego preparada para enseñar las reglas.",
+        cost: 0,
+        bullets: [
+          "Red de Sombras comienza con 30 sellos.",
+          "Jardín Salvaje comienza con 30 sellos.",
+          "Cada jugador dispone de un mazo de 50 cartas.",
+          "Jardín Salvaje tendrá el primer turno."
+        ]
+      },
+
+      {
+        title: "Turno 1 — Jardín Salvaje comienza",
+        text: "Jardín inicia su turno. Su reserva de acciones se reinicia y puede gastar hasta cuatro acciones durante su Fase de Acciones.",
+        startTurn: "Jardín Salvaje · Turno 1",
+        cost: 0,
+        bullets: [
+          "Acciones disponibles: 4.",
+          "Acciones usadas: 0.",
+          "Fase actual: Entrada."
+        ]
+      },
+
+      {
+        title: "Jardín roba 2 cartas",
+        text: "En la Fase de Entrada, Jardín roba dos cartas de su reserva. Robar no consume acciones.",
+        phase: "Fase de Entrada",
+        cost: 0,
+        bullets: [
+          "Robo normal del turno: 2 cartas.",
+          "Las acciones disponibles siguen siendo 4."
+        ]
+      },
+
+      {
+        title: "Jardín juega Enredadera Vincular",
+        text: "Jardín usa una acción para jugar Enredadera Vincular directamente en L2. Puede entrar allí porque posee Vanguardia.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Enredadera Vincular en Jardín L2, meridiano 2.",
+          "Vanguardia permite entrar directamente en L2.",
+          "Acciones: 4 → 3."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Acciones");
+          spend(state, 1);
+          add(state, "vine1", "vine", "J-L2", 2, "garden");
+        }
+      },
+
+      {
+        title: "Jardín juega Hiedra Trepadora",
+        text: "Jardín juega Hiedra Trepadora en L1. La carta entra debajo de Enredadera Vincular, en una celda verticalmente adyacente.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Hiedra Trepadora en Jardín L1, meridiano 2.",
+          "Acciones: 3 → 2.",
+          "Su habilidad de entrada se resolverá en el siguiente paso."
+        ],
+        do: state => {
+          spend(state, 1);
+          add(state, "ivy", "ivy", "J-L1", 2, "garden");
+        }
+      },
+
+      {
+        title: "Hiedra crea un vínculo gratuito",
+        text: "La habilidad de entrada de Hiedra Trepadora crea un vínculo gratuito con Enredadera Vincular, que está adyacente.",
+        phase: "Fase de Acciones",
+        cost: 0,
+        bullets: [
+          "Crear vínculo: Hiedra Trepadora ↔ Enredadera Vincular.",
+          "Es un efecto de entrada gratuito.",
+          "Acciones restantes: 2."
+        ],
+        do: state => {
+          link(state, "ivy", "vine1");
+        }
+      },
+
+      {
+        title: "Jardín juega Polinizadora de Esencias",
+        text: "Jardín juega Polinizadora de Esencias como tercer nodo de la futura formación.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Polinizadora de Esencias en Jardín L1, meridiano 4.",
+          "No puede ir en el meridiano 3 porque estaría horizontalmente adyacente a Hiedra.",
+          "Acciones: 2 → 1."
+        ],
+        do: state => {
+          spend(state, 1);
+          add(state, "pollen", "pollen", "J-L1", 4, "garden");
+        }
+      },
+
+      {
+        title: "Jardín vincula Hiedra con Polinizadora",
+        text: "Jardín gasta su cuarta acción para conectar Hiedra Trepadora con Polinizadora de Esencias. Es un vínculo corto porque ambas están en L1.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Crear vínculo corto: Hiedra Trepadora ↔ Polinizadora de Esencias.",
+          "Coste: 1 acción.",
+          "Acciones: 1 → 0."
+        ],
+        do: state => {
+          spend(state, 1);
+          link(state, "ivy", "pollen");
+        }
+      },
+
+      {
+        title: "Enredadera vincula a Polinizadora gratuitamente",
+        text: "Enredadera Vincular establece el tercer lado del Triángulo con Polinizadora de Esencias. El vínculo medio costaría normalmente 1 acción por ser del mismo color, pero Enredadera lo reduce a 0.",
+        phase: "Fase de Acciones",
+        cost: 0,
+        bullets: [
+          "Crear vínculo: Enredadera Vincular ↔ Polinizadora de Esencias.",
+          "Vínculo medio: L2 ↔ L1.",
+          "Coste normal: 1 acción por ser del mismo color.",
+          "Coste real: 0 por la habilidad de Enredadera.",
+          "El Triángulo de Jardín queda formado."
+        ],
+        do: state => {
+          link(state, "vine1", "pollen");
+          addEffect(state, "Triángulo de Jardín activo");
+        }
+      },
+
+      {
+        title: "Jardín declara ataque con el Triángulo",
+        text: "En la Fase de Ataque, Jardín declara un ataque del Triángulo formado por Enredadera, Hiedra y Polinizadora contra el Grimorio de Sombras.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Escuadrón atacante: Triángulo de Jardín.",
+          "Objetivo: Grimorio de Red de Sombras.",
+          "Declarar un ataque no consume acciones.",
+          "Sombras no dispone de un escuadrón defensor."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Ataque");
+        }
+      },
+
+      {
+        title: "Se resuelve el ataque del Triángulo de Jardín",
+        text: "El Triángulo tiene fuerza base 2. Como sus tres nodos son de Naturaleza, cada uno aporta +1 al daño del escuadrón.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Daño base del Triángulo: 2.",
+          "Naturaleza: 3 nodos × +1 daño = +3.",
+          "Daño total: 5.",
+          "Sellos de Sombras: 30 → 25."
+        ],
+        do: state => {
+          damageGrimoire(state, "shadow", 5);
+        }
+      },
+
+      {
+        title: "Finaliza el turno de Jardín",
+        text: "La Fase de Salida se completa. No hay nodos enemigos aislados que purgar ni efectos de final de turno relevantes para Jardín.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "El Triángulo de Jardín permanece activo.",
+          "Jardín no descarta cartas en esta demostración.",
+          "La prioridad pasa a Red de Sombras."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Salida");
+        }
+      },
+
+      {
+        title: "Turno 1 — Red de Sombras comienza",
+        text: "Sombras inicia su turno y recibe cuatro acciones. Su plan es romper un vínculo corto para desmontar el Triángulo enemigo.",
+        startTurn: "Red de Sombras · Turno 1",
+        cost: 0,
+        bullets: [
+          "Acciones disponibles: 4.",
+          "Objetivo táctico: destruir un vínculo corto del Triángulo de Jardín."
+        ]
+      },
+
+      {
+        title: "Sombras roba 2 cartas",
+        text: "Red de Sombras roba sus dos cartas normales de la Fase de Entrada.",
+        phase: "Fase de Entrada",
+        cost: 0,
+        bullets: [
+          "Robo normal: 2 cartas.",
+          "Acciones restantes: 4."
+        ]
+      },
+
+      {
+        title: "Sombras juega Sabueso del Nexo",
+        text: "Sombras juega Sabueso del Nexo directamente en L2 gracias a Vanguardia.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Sabueso del Nexo en Sombras L2, meridiano 2.",
+          "Vanguardia permite entrar directamente en L2.",
+          "Acciones: 4 → 3.",
+          "Su habilidad al jugarse se resolverá a continuación."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Acciones");
+          spend(state, 1);
+          add(state, "hound", "hound", "S-L2", 2, "shadow");
+        }
+      },
+
+      {
+        title: "Sabueso rompe el vínculo corto del Triángulo",
+        text: "Al jugarse, Sabueso del Nexo puede romper un vínculo enemigo a distancia corta. Elige el vínculo Hiedra Trepadora ↔ Polinizadora de Esencias.",
+        phase: "Fase de Acciones",
+        cost: 0,
+        bullets: [
+          "Destruir vínculo corto: Hiedra Trepadora ↔ Polinizadora de Esencias.",
+          "El Triángulo de Jardín deja de estar cerrado.",
+          "Ninguna carta es destruida.",
+          "La habilidad de Sabueso no consume una acción adicional."
+        ],
+        do: state => {
+          unlink(state, "ivy", "pollen");
+          removeEffect(state, "Triángulo de Jardín activo");
+        }
+      },
+
+      {
+        title: "Sombras juega Saboteadora de Formaciones",
+        text: "Sombras juega la carta que convertirá futuras rupturas de vínculos en daño al Grimorio, siempre que logre formar un Triángulo.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Saboteadora de Formaciones en Sombras L1, meridiano 2.",
+          "Acciones: 3 → 2."
+        ],
+        do: state => {
+          spend(state, 1);
+          add(state, "sabform", "sabform", "S-L1", 2, "shadow");
+        }
+      },
+
+      {
+        title: "Sombras juega Agente del Silencio",
+        text: "Sombras coloca el tercer nodo que necesitará para construir un Triángulo de Saboteadores en el turno siguiente.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Agente del Silencio en Sombras L1, meridiano 4.",
+          "Acciones: 2 → 1."
+        ],
+        do: state => {
+          spend(state, 1);
+          add(state, "agent", "agent", "S-L1", 4, "shadow");
+        }
+      },
+
+      {
+        title: "Sombras juega Sombra Infiltrada en la Frontera",
+        text: "Los Espías se juegan directamente en la Frontera. Sombra Infiltrada todavía no está dentro del territorio enemigo.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Sombra Infiltrada en la Frontera, meridiano 8.",
+          "Acciones: 1 → 0.",
+          "Para infiltrarse deberá gastar 1 acción en un turno posterior."
+        ],
+        do: state => {
+          spend(state, 1);
+          add(state, "spy", "spy", "F", 8, "spy");
+        }
+      },
+
+      {
+        title: "Sombras no puede declarar ataques",
+        text: "Red de Sombras tiene tres nodos, pero todavía no existen vínculos entre sus Saboteadores. Sin escuadrón no puede declarar ataques.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "No hay Líneas ni Triángulos de Sombras.",
+          "Las cartas no atacan individualmente."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Ataque");
+        }
+      },
+
+      {
+        title: "Finaliza el turno de Sombras",
+        text: "La Fase de Salida termina. Sombra Infiltrada permanece en la Frontera y puede mantener su posición hasta el próximo turno.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Sombras no tiene escuadrón de Saboteadores todavía.",
+          "No se resuelven efectos de sabotaje al final del turno.",
+          "La prioridad vuelve a Jardín."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Salida");
+        }
+      },
+
+      {
+        title: "Turno 2 — Jardín Salvaje comienza",
+        text: "Jardín recupera cuatro acciones. Primero debe reparar el vínculo destruido para recuperar su Triángulo.",
+        startTurn: "Jardín Salvaje · Turno 2",
+        cost: 0,
+        bullets: [
+          "Acciones disponibles: 4.",
+          "El vínculo Hiedra ↔ Polinizadora sigue destruido."
+        ]
+      },
+
+      {
+        title: "Jardín roba 2 cartas",
+        text: "Jardín roba sus dos cartas de la Fase de Entrada.",
+        phase: "Fase de Entrada",
+        cost: 0,
+        bullets: [
+          "Robo normal: 2 cartas.",
+          "Acciones restantes: 4."
+        ]
+      },
+
+      {
+        title: "Jardín repara el vínculo Hiedra ↔ Polinizadora",
+        text: "Jardín paga una acción para restaurar el vínculo corto entre Hiedra Trepadora y Polinizadora de Esencias.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Crear vínculo corto: Hiedra Trepadora ↔ Polinizadora de Esencias.",
+          "Coste: 1 acción.",
+          "El Triángulo de Jardín vuelve a estar cerrado.",
+          "Acciones: 4 → 3."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Acciones");
+          spend(state, 1);
+          link(state, "ivy", "pollen");
+          addEffect(state, "Triángulo de Jardín activo");
+        }
+      },
+
+      {
+        title: "Jardín juega Núcleo de Enlace",
+        text: "Jardín juega un Logistrón en L1. No será parte de un polígono, pero podrá conectar escuadrones diferentes.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Núcleo de Enlace en Jardín L1, meridiano 6.",
+          "Acciones: 3 → 2.",
+          "El Logistrón tiene V=5."
+        ],
+        do: state => {
+          spend(state, 1);
+          add(state, "core", "core", "J-L1", 6, "logistron");
+        }
+      },
+
+      {
+        title: "Jardín vincula Núcleo de Enlace con la primera Enredadera",
+        text: "Jardín conecta el Logistrón con Enredadera Vincular. Todo vínculo que involucra un Logistrón cuesta 1 acción.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Crear vínculo: Núcleo de Enlace ↔ Primera Enredadera Vincular.",
+          "Coste: 1 acción por involucrar un Logistrón.",
+          "Acciones: 2 → 1."
+        ],
+        do: state => {
+          spend(state, 1);
+          link(state, "core", "vine1");
+        }
+      },
+
+      {
+        title: "Jardín juega una segunda Enredadera Vincular",
+        text: "Jardín juega una segunda Enredadera directamente en L2 gracias a Vanguardia. Queda preparada para formar una Línea en el siguiente turno.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Segunda Enredadera Vincular en Jardín L2, meridiano 6.",
+          "Vanguardia permite entrar directamente en L2.",
+          "Acciones: 1 → 0."
+        ],
+        do: state => {
+          spend(state, 1);
+          add(state, "vine2", "vine", "J-L2", 6, "garden");
+        }
+      },
+
+      {
+        title: "Jardín declara ataque con su Triángulo reparado",
+        text: "El Triángulo de Jardín vuelve a atacar el Grimorio de Sombras. Aún no hay otra formación conectada que aporte potenciamiento.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Escuadrón atacante: Triángulo de Jardín.",
+          "Objetivo: Grimorio de Sombras.",
+          "No existe un escuadrón defensor de Sombras."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Ataque");
+        }
+      },
+
+      {
+        title: "Se resuelve el segundo ataque de Jardín",
+        text: "El Triángulo conserva el mismo cálculo de daño: fuerza base 2 y +3 de Naturaleza.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Daño total: 2 + 3 = 5.",
+          "Sellos de Sombras: 25 → 20."
+        ],
+        do: state => {
+          damageGrimoire(state, "shadow", 5);
+        }
+      },
+
+      {
+        title: "Finaliza el turno de Jardín",
+        text: "Jardín mantiene su Triángulo y un Logistrón conectado a la primera Enredadera. La segunda Enredadera todavía no integra una Línea.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Triángulo de Jardín: activo.",
+          "Segunda Enredadera: nodo aislado de formación.",
+          "La prioridad pasa a Sombras."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Salida");
+        }
+      },
+
+      {
+        title: "Turno 2 — Red de Sombras comienza",
+        text: "Sombras dispone de cuatro acciones. Puede usar tres para formar su Triángulo de Saboteadores y una para desplegar Cortacircuitos.",
+        startTurn: "Red de Sombras · Turno 2",
+        cost: 0,
+        bullets: [
+          "Acciones disponibles: 4.",
+          "Sabueso, Saboteadora y Agente ya están en el tablero."
+        ]
+      },
+
+      {
+        title: "Sombras roba 2 cartas",
+        text: "Red de Sombras roba dos cartas en la Fase de Entrada.",
+        phase: "Fase de Entrada",
+        cost: 0,
+        bullets: [
+          "Robo normal: 2 cartas.",
+          "Acciones restantes: 4."
+        ]
+      },
+
+      {
+        title: "Sombras vincula Sabueso con Saboteadora",
+        text: "Sombras crea el primer lado de su Triángulo. Las cartas están a una fila de diferencia y son del mismo color, por lo que el vínculo medio cuesta 1 acción.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Crear vínculo medio: Sabueso del Nexo ↔ Saboteadora de Formaciones.",
+          "Coste: 1 acción.",
+          "Acciones: 4 → 3."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Acciones");
+          spend(state, 1);
+          link(state, "hound", "sabform");
+        }
+      },
+
+      {
+        title: "Sombras vincula Sabueso con Agente",
+        text: "Sombras crea el segundo lado del futuro Triángulo.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Crear vínculo medio: Sabueso del Nexo ↔ Agente del Silencio.",
+          "Coste: 1 acción.",
+          "Acciones: 3 → 2."
+        ],
+        do: state => {
+          spend(state, 1);
+          link(state, "hound", "agent");
+        }
+      },
+
+      {
+        title: "Sombras vincula Saboteadora con Agente",
+        text: "Sombras crea el tercer lado: Saboteadora y Agente están en la misma fila, por lo que es un vínculo corto.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Crear vínculo corto: Saboteadora de Formaciones ↔ Agente del Silencio.",
+          "Coste: 1 acción.",
+          "El Triángulo de Sombras queda formado.",
+          "Acciones: 2 → 1."
+        ],
+        do: state => {
+          spend(state, 1);
+          link(state, "sabform", "agent");
+          addEffect(state, "Triángulo de Sombras activo");
+        }
+      },
+
+      {
+        title: "Sombras juega Cortacircuitos en L3",
+        text: "Cortacircuitos posee Línea de fuego y puede entrar directamente en L3 sin ascender desde L1.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Cortacircuitos en Sombras L3, meridiano 8.",
+          "Línea de fuego permite entrar en L3.",
+          "Acciones: 1 → 0."
+        ],
+        do: state => {
+          spend(state, 1);
+          add(state, "cutter", "cutter", "S-L3", 8, "shadow");
+        }
+      },
+
+      {
+        title: "Sombras declara ataque con su Triángulo",
+        text: "El Triángulo de Sombras ataca directamente al Grimorio de Jardín.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Escuadrón atacante: Triángulo de Sombras.",
+          "Objetivo: Grimorio de Jardín.",
+          "Jardín no tiene escuadrón defensor conectado."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Ataque");
+        }
+      },
+
+      {
+        title: "Se resuelve el ataque del Triángulo de Sombras",
+        text: "El Triángulo tiene fuerza base 2. Saboteadora de Formaciones tiene D=1, por lo que añade un punto de daño extra.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Daño base del Triángulo: 2.",
+          "D de Saboteadora de Formaciones: +1.",
+          "Daño total: 3.",
+          "Sellos de Jardín: 30 → 27."
+        ],
+        do: state => {
+          damageGrimoire(state, "garden", 3);
+        }
+      },
+
+      {
+        title: "Saboteadores destruyen un vínculo corto al final del turno",
+        text: "El efecto de facción Saboteadores permite deshacer hasta dos vínculos cortos enemigos por escuadrón. Sombras elige el vínculo Hiedra ↔ Polinizadora.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Destruir vínculo corto: Hiedra Trepadora ↔ Polinizadora de Esencias.",
+          "El Triángulo de Jardín deja de estar cerrado.",
+          "Queda disponible una segunda destrucción de vínculo propia de Agente del Silencio."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Salida");
+          unlink(state, "ivy", "pollen");
+          removeEffect(state, "Triángulo de Jardín activo");
+        }
+      },
+
+      {
+        title: "Saboteadora inflige daño por el vínculo roto",
+        text: "Saboteadora de Formaciones está dentro de un Triángulo aliado. Por eso, cada vínculo enemigo destruido inflige 1 daño adicional al Grimorio de Jardín.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Habilidad activada: Saboteadora de Formaciones.",
+          "Daño adicional al Grimorio de Jardín: 1.",
+          "Sellos de Jardín: 27 → 26."
+        ],
+        do: state => {
+          damageGrimoire(state, "garden", 1);
+        }
+      },
+
+      {
+        title: "Agente del Silencio destruye un segundo vínculo",
+        text: "Por estar dentro del Triángulo de Sombras, Agente del Silencio añade una destrucción de vínculo enemigo al final del turno. Rompe la conexión entre Núcleo de Enlace y la primera Enredadera.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Destruir vínculo: Núcleo de Enlace ↔ Primera Enredadera Vincular.",
+          "El Logistrón deja de estar conectado al Triángulo de Jardín.",
+          "La destrucción vuelve a activar a Saboteadora de Formaciones."
+        ],
+        do: state => {
+          unlink(state, "core", "vine1");
+        }
+      },
+
+      {
+        title: "Saboteadora inflige daño por el segundo vínculo roto",
+        text: "La segunda ruptura de vínculo también activa la habilidad de Saboteadora de Formaciones.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Habilidad activada: Saboteadora de Formaciones.",
+          "Daño adicional al Grimorio de Jardín: 1.",
+          "Sellos de Jardín: 26 → 25."
+        ],
+        do: state => {
+          damageGrimoire(state, "garden", 1);
+        }
+      },
+
+      {
+        title: "Finaliza el turno de Sombras",
+        text: "Sombras termina con un Triángulo de Saboteadores, Cortacircuitos en L3 y Sombra Infiltrada esperando en la Frontera.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Triángulo de Sombras: activo.",
+          "Triángulo de Jardín: roto.",
+          "La prioridad vuelve a Jardín."
+        ]
+      },
+
+      {
+        title: "Turno 3 — Jardín Salvaje comienza",
+        text: "Jardín recibe cuatro acciones. Debe reparar sus dos vínculos rotos y construir una Línea conectada al Núcleo.",
+        startTurn: "Jardín Salvaje · Turno 3",
+        cost: 0,
+        bullets: [
+          "Acciones disponibles: 4.",
+          "Faltan los vínculos Hiedra ↔ Polinizadora y Núcleo ↔ Primera Enredadera."
+        ]
+      },
+
+      {
+        title: "Jardín roba 2 cartas",
+        text: "Jardín roba sus dos cartas de la Fase de Entrada.",
+        phase: "Fase de Entrada",
+        cost: 0,
+        bullets: [
+          "Robo normal: 2 cartas.",
+          "Acciones restantes: 4."
+        ]
+      },
+
+      {
+        title: "Jardín repara Hiedra ↔ Polinizadora",
+        text: "Jardín usa una acción para cerrar nuevamente el lado corto del Triángulo.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Crear vínculo corto: Hiedra Trepadora ↔ Polinizadora de Esencias.",
+          "El Triángulo de Jardín vuelve a estar formado.",
+          "Acciones: 4 → 3."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Acciones");
+          spend(state, 1);
+          link(state, "ivy", "pollen");
+          addEffect(state, "Triángulo de Jardín activo");
+        }
+      },
+
+      {
+        title: "Jardín repara Núcleo ↔ Primera Enredadera",
+        text: "Jardín vuelve a conectar el Núcleo de Enlace con la primera Enredadera Vincular.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Crear vínculo: Núcleo de Enlace ↔ Primera Enredadera Vincular.",
+          "Coste: 1 acción por involucrar un Logistrón.",
+          "Acciones: 3 → 2."
+        ],
+        do: state => {
+          spend(state, 1);
+          link(state, "core", "vine1");
+        }
+      },
+
+      {
+        title: "Jardín juega Guardián del Bosque de Raíces",
+        text: "Guardián del Bosque de Raíces entra directamente en L2 gracias a Vanguardia. Se coloca separado horizontalmente de la segunda Enredadera.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Jugar Guardián del Bosque de Raíces en Jardín L2, meridiano 8.",
+          "Vanguardia permite entrar directamente en L2.",
+          "Acciones: 2 → 1."
+        ],
+        do: state => {
+          spend(state, 1);
+          add(state, "guardian", "guardian", "J-L2", 8, "garden");
+        }
+      },
+
+      {
+        title: "Segunda Enredadera crea una Línea gratuitamente",
+        text: "La segunda Enredadera Vincular establece un vínculo corto con Guardián del Bosque de Raíces. Como el vínculo la involucra, cuesta 0 acciones.",
+        phase: "Fase de Acciones",
+        cost: 0,
+        bullets: [
+          "Crear vínculo corto: Segunda Enredadera Vincular ↔ Guardián del Bosque de Raíces.",
+          "Coste normal de un vínculo corto: 1 acción.",
+          "Coste real: 0 por Enredadera Vincular.",
+          "Se forma una Línea de Jardín."
+        ],
+        do: state => {
+          link(state, "vine2", "guardian");
+          addEffect(state, "Línea de Jardín activa");
+        }
+      },
+
+      {
+        title: "Jardín conecta Núcleo de Enlace con la segunda Enredadera",
+        text: "Jardín utiliza su última acción para conectar el Núcleo con la segunda Enredadera. El Triángulo y la Línea quedan conectados por el Logistrón.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Crear vínculo: Núcleo de Enlace ↔ Segunda Enredadera Vincular.",
+          "Coste: 1 acción por involucrar un Logistrón.",
+          "Acciones: 1 → 0.",
+          "Triángulo y Línea quedan a distancia de red 2."
+        ],
+        do: state => {
+          spend(state, 1);
+          link(state, "core", "vine2");
+          addEffect(state, "Triángulo y Línea conectados por Logistrón");
+        }
+      },
+
+      {
+        title: "Jardín declara ataque con el Triángulo potenciado",
+        text: "El Triángulo ataca el Grimorio de Sombras. Recibe el potenciamiento de la Línea conectada mediante el Núcleo de Enlace.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Escuadrón atacante: Triángulo de Jardín.",
+          "Objetivo: Grimorio de Sombras.",
+          "La Línea está a distancia de red 2.",
+          "La Línea tiene alcance de potenciamiento 2."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Ataque");
+        }
+      },
+
+      {
+        title: "Se resuelve el ataque del Triángulo potenciado",
+        text: "El Triángulo suma su daño base, Naturaleza y el potenciamiento de la Línea conectada.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Daño base del Triángulo: 2.",
+          "Naturaleza en el Triángulo: 3 nodos × +1 = +3.",
+          "Potenciamiento base de Línea: +1.",
+          "Naturaleza en la Línea: 2 nodos × +1 potenciamiento = +2.",
+          "Daño total: 2 + 3 + 3 = 8.",
+          "Sellos de Sombras: 20 → 12."
+        ],
+        do: state => {
+          damageGrimoire(state, "shadow", 8);
+        }
+      },
+
+      {
+        title: "Jardín declara ataque con la Línea potenciada",
+        text: "La Línea formada por la segunda Enredadera y Guardián del Bosque de Raíces ataca el Grimorio de Sombras. Ahora recibe el potenciamiento del Triángulo.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Escuadrón atacante: Línea de Jardín.",
+          "Objetivo: Grimorio de Sombras.",
+          "El Triángulo está a distancia de red 2."
+        ]
+      },
+
+      {
+        title: "Se resuelve el ataque de la Línea potenciada",
+        text: "La Línea suma su daño base, D=1 de Guardián del Bosque, Naturaleza y el potenciamiento del Triángulo.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Daño base de Línea: 1.",
+          "D de Guardián del Bosque de Raíces: +1.",
+          "Naturaleza en la Línea: 2 nodos × +1 = +2.",
+          "Potenciamiento base del Triángulo: +3.",
+          "Naturaleza en el Triángulo: 3 nodos × +1 potenciamiento = +3.",
+          "Daño total: 1 + 1 + 2 + 6 = 10.",
+          "Sellos de Sombras: 12 → 2."
+        ],
+        do: state => {
+          damageGrimoire(state, "shadow", 10);
+        }
+      },
+
+      {
+        title: "Finaliza el turno de Jardín",
+        text: "Jardín ha construido una red de dos escuadrones conectados por un Logistrón. Sombras tiene solo 2 sellos, pero aún puede intentar desarmar la red.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Triángulo de Jardín: activo.",
+          "Línea de Jardín: activa.",
+          "Logistrón: conectado a ambos escuadrones.",
+          "La prioridad pasa a Sombras."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Salida");
+        }
+      },
+
+      {
+        title: "Turno 3 — Red de Sombras comienza",
+        text: "Sombras obtiene cuatro acciones. Debe infiltrar a su Espía, establecer un vínculo enemigo y activar Cortacircuitos.",
+        startTurn: "Red de Sombras · Turno 3",
+        cost: 0,
+        bullets: [
+          "Acciones disponibles: 4.",
+          "Sombra Infiltrada está en la Frontera.",
+          "Cortacircuitos ya está en Sombras L3."
+        ]
+      },
+
+      {
+        title: "Sombras roba 2 cartas",
+        text: "Red de Sombras roba sus dos cartas normales de la Fase de Entrada.",
+        phase: "Fase de Entrada",
+        cost: 0,
+        bullets: [
+          "Robo normal: 2 cartas.",
+          "Acciones restantes: 4."
+        ]
+      },
+
+      {
+        title: "Sombra Infiltrada se infiltra en Jardín L3",
+        text: "Sombras gasta una acción para mover su Espía desde la Frontera hasta L3 del territorio enemigo.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Mover Sombra Infiltrada: Frontera → Jardín L3, meridiano 8.",
+          "La infiltración cuenta como un ascenso especial.",
+          "Acciones: 4 → 3."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Acciones");
+          spend(state, 1);
+          move(state, "spy", "J-L3");
+        }
+      },
+
+      {
+        title: "Sombra Infiltrada se vincula con Guardián",
+        text: "El Espía establece un vínculo medio con Guardián del Bosque de Raíces. Están a una fila de diferencia y son de colores distintos, por lo que el vínculo cuesta 2 acciones.",
+        phase: "Fase de Acciones",
+        cost: 2,
+        bullets: [
+          "Crear vínculo medio enemigo: Sombra Infiltrada ↔ Guardián del Bosque de Raíces.",
+          "Distancia: Jardín L3 ↔ Jardín L2.",
+          "Colores distintos: Espía y Naturaleza.",
+          "Coste: 2 acciones.",
+          "Acciones: 3 → 1."
+        ],
+        do: state => {
+          spend(state, 2);
+          link(state, "spy", "guardian", "enemy");
+        }
+      },
+
+      {
+        title: "Cortacircuitos activa su habilidad [1]",
+        text: "Sombras usa su última acción para activar Cortacircuitos y elegir la Línea formada por Guardián del Bosque y la segunda Enredadera.",
+        phase: "Fase de Acciones",
+        cost: 1,
+        bullets: [
+          "Activar habilidad [1] de Cortacircuitos.",
+          "Objetivo: Línea de Jardín.",
+          "Acciones: 1 → 0.",
+          "El daño al escuadrón se resolverá en el siguiente paso."
+        ],
+        do: state => {
+          spend(state, 1);
+        }
+      },
+
+      {
+        title: "La Línea de Jardín pierde 1 HP",
+        text: "Se resuelve la habilidad de Cortacircuitos: todo el escuadrón enemigo elegido pierde 1 HP.",
+        phase: "Fase de Acciones",
+        cost: 0,
+        bullets: [
+          "Segunda Enredadera Vincular: HP 2 → 1.",
+          "Guardián del Bosque de Raíces: HP 3 → 2.",
+          "Ninguna de las dos cartas es destruida."
+        ],
+        do: state => {
+          damageNode(state, "vine2", 1);
+          damageNode(state, "guardian", 1);
+        }
+      },
+
+      {
+        title: "Sombras declara ataque con su Triángulo",
+        text: "A pesar de tener solo 2 sellos, Sombras declara otro ataque con su Triángulo de Saboteadores contra el Grimorio de Jardín.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Escuadrón atacante: Triángulo de Sombras.",
+          "Objetivo: Grimorio de Jardín.",
+          "El ataque no consume acciones."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Ataque");
+        }
+      },
+
+      {
+        title: "Se resuelve el tercer ataque de Sombras",
+        text: "El Triángulo de Sombras vuelve a tener fuerza base 2 y +1 D de Saboteadora de Formaciones.",
+        phase: "Fase de Ataque",
+        cost: 0,
+        bullets: [
+          "Daño base: 2.",
+          "D de Saboteadora de Formaciones: +1.",
+          "Daño total: 3.",
+          "Sellos de Jardín: 25 → 22."
+        ],
+        do: state => {
+          damageGrimoire(state, "garden", 3);
+        }
+      },
+
+      {
+        title: "Saboteadores rompen el primer vínculo corto",
+        text: "Durante la Fase de Salida, el escuadrón de Saboteadores puede deshacer hasta dos vínculos cortos. Primero rompe Hiedra ↔ Polinizadora.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Destruir vínculo corto: Hiedra Trepadora ↔ Polinizadora de Esencias.",
+          "El Triángulo de Jardín se rompe.",
+          "La ruptura activará a Saboteadora de Formaciones."
+        ],
+        do: state => {
+          setPhase(state, "Fase de Salida");
+          unlink(state, "ivy", "pollen");
+          removeEffect(state, "Triángulo de Jardín activo");
+        }
+      },
+
+      {
+        title: "Saboteadora inflige daño por la primera ruptura",
+        text: "Saboteadora de Formaciones sigue dentro del Triángulo de Sombras. Por ello, la destrucción del vínculo enemigo causa 1 daño al Grimorio de Jardín.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Daño adicional al Grimorio de Jardín: 1.",
+          "Sellos de Jardín: 22 → 21."
+        ],
+        do: state => {
+          damageGrimoire(state, "garden", 1);
+        }
+      },
+
+      {
+        title: "Saboteadores rompen el segundo vínculo corto",
+        text: "El mismo escuadrón de Saboteadores usa su segunda ruptura permitida para destruir el vínculo de la Línea de Jardín.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Destruir vínculo corto: Segunda Enredadera Vincular ↔ Guardián del Bosque de Raíces.",
+          "La Línea de Jardín deja de existir.",
+          "La ruptura activará otra vez a Saboteadora de Formaciones."
+        ],
+        do: state => {
+          unlink(state, "vine2", "guardian");
+          removeEffect(state, "Línea de Jardín activa");
+        }
+      },
+
+      {
+        title: "Saboteadora inflige daño por la segunda ruptura",
+        text: "La segunda ruptura de vínculo del turno activa nuevamente la habilidad de Saboteadora de Formaciones.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Daño adicional al Grimorio de Jardín: 1.",
+          "Sellos de Jardín: 21 → 20."
+        ],
+        do: state => {
+          damageGrimoire(state, "garden", 1);
+        }
+      },
+
+      {
+        title: "Agente del Silencio rompe un tercer vínculo",
+        text: "Agente del Silencio añade una destrucción adicional al final del turno porque sigue dentro del Triángulo de Sombras. Elige la conexión entre Núcleo de Enlace y la primera Enredadera.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Destruir vínculo: Núcleo de Enlace ↔ Primera Enredadera Vincular.",
+          "El Logistrón deja de unir las redes de Jardín.",
+          "La destrucción activará a Saboteadora de Formaciones."
+        ],
+        do: state => {
+          unlink(state, "core", "vine1");
+          removeEffect(state, "Triángulo y Línea conectados por Logistrón");
+        }
+      },
+
+      {
+        title: "Saboteadora inflige daño por la tercera ruptura",
+        text: "La destrucción adicional provocada por Agente del Silencio también cuenta como un vínculo enemigo roto.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Daño adicional al Grimorio de Jardín: 1.",
+          "Sellos de Jardín: 20 → 19."
+        ],
+        do: state => {
+          damageGrimoire(state, "garden", 1);
+        }
+      },
+
+      {
+        title: "Fin de la demostración",
+        text: "La partida no ha terminado todavía: Sombras conserva 2 sellos y Jardín 19. Sin embargo, el ejemplo ya mostró construcción, ascensos de capa, vínculos, capacidades V, Triángulos, Líneas, Logistrones, potenciamiento, Espías, daño de escuadrón y sabotaje.",
+        phase: "Fase de Salida",
+        cost: 0,
+        bullets: [
+          "Red de Sombras: 2 sellos.",
+          "Jardín Salvaje: 19 sellos.",
+          "La siguiente prioridad sería para Jardín Salvaje.",
+          "El resultado dependería de si Jardín logra atacar antes de que Sombras vuelva a sabotear su red."
+        ]
+      }
+    ];
+
+    let currentStep = 0;
+    let autoplay = null;
+
+    const svg = document.getElementById("links");
+    const boardWrap = document.getElementById("boardWrap");
+    const board = document.getElementById("board");
+
+    const cardModal = document.getElementById("cardModal");
+    const modalTitle = document.getElementById("modalTitle");
+    const modalContent = document.getElementById("modalContent");
+    const closeCardModal = document.getElementById("closeCardModal");
+
+    function stateAt(stepIndex) {
+      const state = createState();
+
+      for (let i = 0; i <= stepIndex; i++) {
+        const event = events[i];
+
+        if (event.startTurn) {
+          startTurn(state, event.startTurn);
+        }
+
+        if (event.phase) {
+          setPhase(state, event.phase);
+        }
+
+        if (event.do) {
+          event.do(state);
+        }
+      }
+
+      return state;
+    }
+
+    function getContainer(row) {
+      if (row === "F") {
+        return document.querySelector('.frontier-slots[data-row="F"]');
+      }
+
+      return document.querySelector(`.layer[data-row="${row}"] .slots`);
+    }
+
+    function clearNodes() {
+      document.querySelectorAll(".node").forEach(node => node.remove());
+    }
+
+    function activeLinksFor(state, nodeId) {
+      return state.links.filter(link => link.a === nodeId || link.b === nodeId);
+    }
+
+    function buildCardModalHtml(card, node, state) {
+      const liveLinks = activeLinksFor(state, node.id);
+
+      const currentLinks = liveLinks.length
+        ? liveLinks.map(link => {
+            const otherId = link.a === node.id ? link.b : link.a;
+            const other = state.nodes[otherId];
+            const linkType = link.type === "enemy"
+              ? "Vínculo enemigo / espionaje"
+              : "Vínculo aliado";
+
+            return `• ${linkType}: ${other.name}.`;
+          }).join("<br>")
+        : "• No tiene vínculos activos en el estado actual.";
+
+      const currentDamage = state.statuses[node.id]?.damage || 0;
+      const currentHp = card.hp - currentDamage;
+
+      return `
+        <b>Color / facción:</b> ${card.faction}.<br>
+        <b>Copias incluidas en el mazo:</b> ${card.copies}.<br><br>
+
+        <b>Estadísticas impresas:</b><br>
+        • HP: ${card.hp}.<br>
+        • D (daño adicional): ${card.d}.<br>
+        • V (capacidad máxima de vínculos directos): ${card.v}.<br>
+        • G (grado): ${card.g}.<br><br>
+
+        <b>Estado actual en esta partida:</b><br>
+        • Ubicación: ${node.row}, meridiano ${node.col}.<br>
+        • HP actual: ${currentHp} / ${card.hp}.<br>
+        • Vínculos directos activos: ${liveLinks.length} / ${card.v}.<br><br>
+
+        <b>Layers permitidos:</b> ${card.layers}.<br>
+        <b>Restricciones de polígono:</b> ${card.polygons}.<br>
+        <b>Keywords:</b> ${card.keywords}.<br><br>
+
+        <b>Texto completo de la carta:</b><br>
+        ${card.rulesText}<br><br>
+
+        <b>Reglas de vínculos posibles:</b><br>
+        ${card.linkRules}<br><br>
+
+        <b>Vínculos mostrados en esta demostración:</b><br>
+        ${card.demoLinks.map(item => `• ${item}`).join("<br>")}<br><br>
+
+        <b>Vínculos activos ahora:</b><br>
+        ${currentLinks}
+
+        <hr>
+
+        <b>Comentario:</b> ${card.comment}
+      `;
+    }
+
+    function openCardModal(node, state) {
+      const card = cards[node.cardKey];
+
+      modalTitle.textContent = card.name;
+      modalContent.innerHTML = buildCardModalHtml(card, node, state);
+      cardModal.hidden = false;
+      closeCardModal.focus();
+    }
+
+    function closeModal() {
+      cardModal.hidden = true;
+    }
+
+    function renderNodes(state) {
+      clearNodes();
+
+      Object.values(state.nodes).forEach(node => {
+        const card = cards[node.cardKey];
+        const button = document.createElement("button");
+
+        button.type = "button";
+        button.className = `node ${node.type}`;
+        button.id = `node-${node.id}`;
+
+        if (node.row === "F") {
+          button.style.gridColumn = node.col + 1;
+        } else {
+          button.style.gridColumn = node.col;
+        }
+
+        const damage = state.statuses[node.id]?.damage || 0;
+        const damageText = damage > 0
+          ? `<em>−${damage} HP</em>`
+          : "";
+
+        button.innerHTML = `
+          ${node.name}
+          <small>${node.stat}<br>${node.row} · m${node.col}</small>
+          ${damageText}
+        `;
+
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".node.selected")
+            .forEach(item => item.classList.remove("selected"));
+
+          button.classList.add("selected");
+
+          cardInfo.innerHTML = `
+            <b>${node.name}</b><br>
+            Se abrió la ficha completa: estadísticas, layers, vínculos,
+            habilidades, texto de carta y comentario.
+          `;
+
+          openCardModal(node, state);
+        });
+
+        getContainer(node.row).appendChild(button);
+      });
+    }
+
+    function drawLinks(state) {
+      svg.innerHTML = "";
+
+      const boardRect = board.getBoundingClientRect();
+      const width = boardRect.width;
+      const height = boardRect.height;
+
+      svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+
+      state.links.forEach(connection => {
+        const from = document.getElementById(`node-${connection.a}`);
+        const to = document.getElementById(`node-${connection.b}`);
+
+        if (!from || !to) return;
+
+        const a = from.getBoundingClientRect();
+        const b = to.getBoundingClientRect();
+
+        const x1 = a.left + a.width / 2 - boardRect.left;
+        const y1 = a.top + a.height / 2 - boardRect.top;
+        const x2 = b.left + b.width / 2 - boardRect.left;
+        const y2 = b.top + b.height / 2 - boardRect.top;
+
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+
+        line.setAttribute("x1", x1);
+        line.setAttribute("y1", y1);
+        line.setAttribute("x2", x2);
+        line.setAttribute("y2", y2);
+        line.setAttribute(
+          "class",
+          connection.type === "enemy" ? "link enemy" : "link"
+        );
+
+        svg.appendChild(line);
+
+        if (connection.type === "enemy") {
+          const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+
+          label.setAttribute("x", (x1 + x2) / 2);
+          label.setAttribute("y", (y1 + y2) / 2 - 8);
+          label.setAttribute("text-anchor", "middle");
+          label.setAttribute("class", "link-label");
+          label.textContent = "espía";
+
+          svg.appendChild(label);
+        }
+      });
+    }
+
+    function render() {
+      const event = events[currentStep];
+      const state = stateAt(currentStep);
+
+      renderNodes(state);
+
+      document.getElementById("shadowSeals").textContent = state.seals.shadow;
+      document.getElementById("gardenSeals").textContent = state.seals.garden;
+
+      document.getElementById("stepCounter").textContent =
+        `Paso ${currentStep + 1} de ${events.length} · ${state.turn} · ${state.phase}`;
+
+      document.getElementById("stepTitle").textContent = event.title;
+      document.getElementById("stepText").textContent = event.text;
+
+      document.getElementById("usedActions").textContent =
+        state.turn === "Preparación"
+          ? "—"
+          : `${state.used} / 4`;
+
+      document.getElementById("remainingActions").textContent =
+        state.turn === "Preparación"
+          ? "—"
+          : state.remaining;
+
+      document.getElementById("eventCost").textContent =
+        event.cost === 0
+          ? "Coste: 0 acciones — preparación, fase, efecto gratuito, ataque o resolución."
+          : `Coste de este paso: ${event.cost} acción${event.cost > 1 ? "es" : ""}.`;
+
+      document.getElementById("eventList").innerHTML =
+        event.bullets.map(item => `<li>${item}</li>`).join("");
+
+      document.getElementById("progressBar").style.width =
+        `${((currentStep + 1) / events.length) * 100}%`;
+
+      document.getElementById("prevBtn").disabled = currentStep === 0;
+      document.getElementById("nextBtn").disabled =
+        currentStep === events.length - 1;
+
+      document.getElementById("nextBtn").textContent =
+        currentStep === events.length - 1
+          ? "Final"
+          : "Siguiente →";
+
+      document.getElementById("cardInfo").innerHTML =
+        `<b>Ficha de carta:</b><br>
+        Haz clic en una carta del tablero para abrir su contenido completo y el comentario estratégico.`;
+
+      const effects = state.activeEffects.length
+        ? state.activeEffects.join(" · ")
+        : "Sin efectos persistentes.";
+
+      requestAnimationFrame(() => drawLinks(state));
+
+      document.querySelector(".legend").setAttribute("data-effects", effects);
+    }
+
+    document.getElementById("prevBtn").addEventListener("click", () => {
+      if (currentStep > 0) {
+        currentStep--;
+        render();
+      }
+    });
+
+    document.getElementById("nextBtn").addEventListener("click", () => {
+      if (currentStep < events.length - 1) {
+        currentStep++;
+        render();
+      }
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      currentStep = 0;
+
+      if (autoplay) {
+        clearInterval(autoplay);
+        autoplay = null;
+        document.getElementById("autoBtn").textContent = "▶ Reproducir paso a paso";
+      }
+
+      closeModal();
+      render();
+    });
+
+    document.getElementById("autoBtn").addEventListener("click", () => {
+      const button = document.getElementById("autoBtn");
+
+      if (autoplay) {
+        clearInterval(autoplay);
+        autoplay = null;
+        button.textContent = "▶ Reproducir paso a paso";
+        return;
+      }
+
+      if (currentStep === events.length - 1) {
+        currentStep = 0;
+        render();
+      }
+
+      button.textContent = "■ Detener reproducción";
+
+      autoplay = setInterval(() => {
+        if (currentStep >= events.length - 1) {
+          clearInterval(autoplay);
+          autoplay = null;
+          button.textContent = "▶ Reproducir paso a paso";
+          return;
+        }
+
+        currentStep++;
+        render();
+      }, 4300);
+    });
+
+    closeCardModal.addEventListener("click", closeModal);
+
+    cardModal.addEventListener("click", event => {
+      if (event.target === cardModal) {
+        closeModal();
+      }
+    });
+
+    window.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !cardModal.hidden) {
+        closeModal();
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      drawLinks(stateAt(currentStep));
+    });
+
+    boardWrap.addEventListener("scroll", () => {
+      drawLinks(stateAt(currentStep));
+    });
+
+    render();
+  </script>
+</body>
+</html>
