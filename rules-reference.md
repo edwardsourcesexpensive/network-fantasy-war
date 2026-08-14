@@ -70,7 +70,7 @@ El territorio puede extenderse horizontalmente añadiendo meridianos si la red c
 
 Aproximadamente el 30% de las cartas con acceso a capas superiores poseen Vanguardia o Línea de fuego. Las cartas sin estas habilidades deben ascender para alcanzar L2 o L3 (ver §5.3).
 
-**Movimiento horizontal**: En cualquier momento de tu turno, puedes desplazar cartas horizontalmente sin costo en acciones. Sin embargo, si un movimiento horizontal deja dos cartas vinculadas a una distancia mayor que la permitida por su varilla de vínculo, ese vínculo se disuelve inmediatamente.
+**Movimiento horizontal**: En cualquier momento de tu turno, puedes desplazar cartas horizontalmente sin costo en acciones. Como la distancia de vínculo depende solo de la fila, el movimiento horizontal no disuelve vínculos.
 
 **Movimiento vertical**: Solo mediante la acción de **ascenso** (ver §5.3).
 
@@ -88,14 +88,13 @@ Cada carta tiene una **capacidad de vínculos (V)**: el número máximo de vínc
 
 ### 4.3 Distancia espacial y costo de vínculos
 
-La distancia entre dos cartas determina el costo en acciones para vincularlas:
+La distancia entre dos cartas depende únicamente de cuántas **filas (layers)** las separan — no de las columnas (meridianos). Determina el costo en acciones para vincularlas:
 
-| Tipo | Distancia | Costo base |
+| Tipo | Diferencia de filas | Costo base |
 |---|---|---|
-| **Próxima (corta)** | 0 filas × 2 columnas, o 1 fila × 0-1 columna | 1 acción |
-| **Media** | 0 filas × 3 columnas, o 1 fila × 2 columnas | 1 acción (mismo color) / 2 acciones (distinto color) |
-| **Distante (larga)** | 2 filas × 0-1 columna, o 1 fila × 3 columnas | 3 acciones |
-| **Inválida** | Cualquier distancia mayor | No se puede vincular |
+| **Corta** | 0 (misma fila) | 1 acción |
+| **Media** | 1 fila | 1 acción (mismo color) / 2 acciones (distinto color) |
+| **Larga** | 2 filas | 3 acciones |
 
 **Excepciones**:
 - Vínculos que involucran **logistrones**: siempre 1 acción, independientemente de la distancia. **Esta excepción prevalece sobre cualquier otra**: si un vínculo involucra un logistrón y además conecta frontera con L3, cuesta 1 acción (no 4).

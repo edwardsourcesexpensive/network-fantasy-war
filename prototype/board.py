@@ -123,32 +123,29 @@ class Board:
         """
         Calculate spatial distance between two positions.
         Returns: 'corta', 'media', 'larga', or None (invalid).
-        
+
+        Layer-based (design simplification): distance depends ONLY on the
+        vertical (layer) difference, not on the horizontal (meridian) column.
+        corta = same layer, media = 1 layer apart, larga = 2 layers apart.
+
         pos = (player, layer, meridian) or (-1, 0, 0) for frontier.
         """
         if pos1[0] == -1 or pos2[0] == -1:
             return None  # Frontier distance rules are special (handled elsewhere)
 
-        p1, l1, m1 = pos1
-        p2, l2, m2 = pos2
+        p1, l1, _m1 = pos1
+        p2, l2, _m2 = pos2
 
         if p1 != p2:
             return None  # Cross-territory (handled by spy rules)
 
         dv = abs(l1 - l2)  # Vertical distance (in layers, L1-L3 = 0-2 apart)
-        dh = abs(m2 - m1)  # Horizontal distance in meridians
 
-        if dv == 0 and dh == 2:
+        if dv == 0:
             return "corta"
-        if dv == 1 and dh <= 1:
-            return "corta"
-        if dv == 0 and dh == 3:
+        if dv == 1:
             return "media"
-        if dv == 1 and dh == 2:
-            return "media"
-        if dv == 2 and dh <= 1:
-            return "larga"
-        if dv == 1 and dh == 3:
+        if dv == 2:
             return "larga"
         return None
 

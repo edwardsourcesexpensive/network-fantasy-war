@@ -419,26 +419,6 @@ def politico_candidates(game: GameState, player: int) -> list:
     return pairs
 
 
-def _swap_score(game: GameState, a_id: int, b_id: int) -> int:
-    """Same-color 'corta' neighbors gained minus lost by swapping a and b."""
-    a = game.all_cards.get(a_id)
-    b = game.all_cards.get(b_id)
-    if not a or not b:
-        return 0
-
-    def _same_color_corta(card: CardInstance, pos) -> int:
-        n = 0
-        for nid in game.network.get_links(card):
-            nb = game.all_cards.get(nid)
-            if (nb and nb.position and nb.position[0] != -1
-                    and nb.definition.color == card.definition.color
-                    and game.board.spatial_distance(pos, nb.position) == "corta"):
-                n += 1
-        return n
-
-    return (_same_color_corta(a, b.position) - _same_color_corta(a, a.position)
-            + _same_color_corta(b, a.position) - _same_color_corta(b, b.position))
-
 
 def apply_politico_swap(game: GameState, player: int, a_id: int, b_id: int) -> bool:
     """Validate and apply a Político position swap. Returns True if applied."""
@@ -456,20 +436,10 @@ def apply_politico_swap(game: GameState, player: int, a_id: int, b_id: int) -> b
 
 
 def resolve_politico_auto(game: GameState, player: int, budget: int = 1) -> None:
-    """Político auto: swap up to `budget` pairs that increase same-color 'corta'
-    adjacency (best first, recomputed after each swap). Skips when none improves."""
-    for _ in range(max(0, budget)):
-        pairs = politico_candidates(game, player)
-        best_pair = None
-        best_score = 0
-        for a_id, b_id in pairs:
-            score = _swap_score(game, a_id, b_id)
-            if score > best_score:
-                best_score = score
-                best_pair = (a_id, b_id)
-        if best_pair is None:
-            break
-        apply_politico_swap(game, player, best_pair[0], best_pair[1])
+    """Político auto: with layer-based distances every swap is safe (links never
+    break) and there is no cheap positional criterion left, so the bot skips.
+    Humans always get the picker."""
+    game._log("  Político: la IA omite el intercambio de posiciones.")
 
 
 def refresh_pending_politico(game: GameState) -> None:

@@ -82,19 +82,17 @@ class TestSaboteador:
     def test_breaks_corta_enemy_links_only(self, gs):
         s1, s2 = _saboteador_squad(gs, 0, 2)
 
-        # Enemy network: corta link (e1-e2), media links (e2-e3, e3-e4)
+        # Enemy network: corta link (same layer), media link (1 layer apart)
         e1 = _make_card(gs, 1, "Desestabilizador", 1, 4)
-        e2 = _make_card(gs, 1, "Desestabilizador", 1, 6)
-        e3 = _make_card(gs, 1, "Desestabilizador", 1, 9)
-        e4 = _make_card(gs, 1, "Desestabilizador", 1, 12)
-        _link(gs, e1, e2)  # corta (dh2)
-        _link(gs, e2, e3)  # media (dh3)
-        _link(gs, e3, e4)  # media (dh3)
+        e2 = _make_card(gs, 1, "Desestabilizador", 1, 6)   # same layer → corta
+        e3 = _make_card(gs, 1, "Desestabilizador", 1, 8)
+        e4 = _make_card(gs, 1, "Desestabilizador", 2, 8)   # 1 layer apart → media
+        _link(gs, e1, e2)  # corta
+        _link(gs, e3, e4)  # media
 
         gs.exit_phase()  # auto_resolve=True
 
         assert not _linked(gs, e1, e2), "corta enemy link must be broken"
-        assert _linked(gs, e2, e3), "media enemy link must stay"
         assert _linked(gs, e3, e4), "media enemy link must stay"
         assert _linked(gs, s1, s2), "own link must stay"
         assert gs.active_player == 1, "turn must switch"
@@ -120,9 +118,9 @@ class TestSaboteador:
     def test_no_candidates_no_effect(self, gs):
         _saboteador_squad(gs, 0, 2)
 
-        # Enemy has only media links
+        # Enemy has only media links (1 layer apart)
         e1 = _make_card(gs, 1, "Desestabilizador", 1, 0)
-        e2 = _make_card(gs, 1, "Desestabilizador", 1, 3)
+        e2 = _make_card(gs, 1, "Desestabilizador", 2, 0)
         _link(gs, e1, e2)
 
         gs.exit_phase()
@@ -203,7 +201,7 @@ class TestMonstruo:
 
 
 # ═══════════════════════════════════════════════════════════════
-# Político: swap positions of 2 own cards (links must survive)
+# Político: swap positions of 2 own cards (any pair; layer-based distances)
 # ═══════════════════════════════════════════════════════════════
 
 class TestPolitico:
@@ -221,56 +219,46 @@ class TestPolitico:
         assert gs.board.cells[0][0][0] == b.card_id
         assert gs.board.cells[0][0][4] == a.card_id
 
-    def test_rejects_link_breaking_swap(self, gs):
+    def test_cross_layer_swap_allowed(self, gs):
+        # Layer-based distances: links never break on a swap within your own
+        # territory, so a cross-layer swap (even with a linked card) succeeds.
         a = _make_card(gs, 0, "Estratega de los Cien Hilos", 1, 0)
         c = _make_card(gs, 0, "Tejedor de Alianzas", 1, 2)
-        _link(gs, a, c)  # corta — moving a far away would break the rod
-        b = _make_card(gs, 0, "Estratega de los Cien Hilos", 1, 10)
+        _link(gs, a, c)  # same-layer link
+        b = _make_card(gs, 0, "Estratega de los Cien Hilos", 2, 0)
 
-        assert not tm.apply_politico_swap(gs, 0, a.card_id, b.card_id)
-        assert (a.card_id, b.card_id) not in tm.politico_candidates(gs, 0)
-        assert a.position == (0, 1, 0), "positions must be unchanged"
+        assert (a.card_id, b.card_id) in tm.politico_candidates(gs, 0)
+        assert tm.apply_politico_swap(gs, 0, a.card_id, b.card_id)
+        assert a.position == (0, 2, 0)
+        assert b.position == (0, 1, 0)
+        assert _linked(gs, a, c), "link survives the swap"
 
-    def test_auto_swaps_when_beneficial(self, gs):
-        # x1-x2 same color at MEDIA distance; z sits at m5 → swap x1↔z
-        # brings x1 to 'corta' of x2 (+1 same-color corta).
-        x1 = _make_card(gs, 0, "Agente del Silencio", 1, 0)
-        x2 = _make_card(gs, 0, "Sabueso del Nexo", 1, 3)
-        _link(gs, x1, x2)  # media (dh3)
-        z = _make_card(gs, 0, "Estratega de los Cien Hilos", 1, 5)
-
-        tm.resolve_politico_auto(gs, 0, budget=1)
-
-        assert x1.position == (0, 1, 5), f"x1 should swap with z, got {x1.position}"
-        assert z.position == (0, 1, 0)
-        assert _linked(gs, x1, x2), "link must survive the swap"
-
-    def test_auto_skips_without_benefit(self, gs):
+    def test_auto_skips(self, gs):
+        # Layer-based distances leave no cheap positional criterion for the
+        # bot, so resolve_politico_auto skips (human always gets the picker).
         x1 = _make_card(gs, 0, "Agente del Silencio", 1, 0)
         x2 = _make_card(gs, 0, "Sabueso del Nexo", 1, 2)
-        _link(gs, x1, x2)  # already corta + same color → nothing to gain
-        z = _make_card(gs, 0, "Estratega de los Cien Hilos", 1, 4)
+        _link(gs, x1, x2)
+        z = _make_card(gs, 0, "Estratega de los Cien Hilos", 2, 0)
 
         tm.resolve_politico_auto(gs, 0, budget=1)
 
         assert x1.position == (0, 1, 0)
         assert x2.position == (0, 1, 2)
-        assert z.position == (0, 1, 4)
+        assert z.position == (0, 2, 0)
 
-    def test_entry_phase_auto_swap_with_politico_squad(self, gs):
+    def test_entry_phase_politico_auto_skips(self, gs):
         p1 = _make_card(gs, 0, "Estratega de los Cien Hilos", 1, 0)
         p2 = _make_card(gs, 0, "Tejedor de Alianzas", 1, 2)
         _link(gs, p1, p2)  # line squad, dominant Político
 
         x1 = _make_card(gs, 0, "Agente del Silencio", 1, 6)
-        x2 = _make_card(gs, 0, "Sabueso del Nexo", 1, 9)
-        _link(gs, x1, x2)  # media
-        z = _make_card(gs, 0, "Desestabilizador", 1, 11)
+        z = _make_card(gs, 0, "Desestabilizador", 2, 0)
 
-        gs.entry_phase()  # auto → politico squad → beneficial swap
+        gs.entry_phase()  # auto → politico squad → bot skips the swap
 
-        assert x1.position == (0, 1, 11), f"x1 should swap with z, got {x1.position}"
-        assert z.position == (0, 1, 6)
+        assert x1.position == (0, 1, 6)
+        assert z.position == (0, 2, 0)
 
 
 # ═══════════════════════════════════════════════════════════════
