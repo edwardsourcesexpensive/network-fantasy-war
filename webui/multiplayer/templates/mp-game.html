@@ -523,12 +523,28 @@ function renderSquads(s) {
       h += '<div class="squad-entry" onclick="startAttackTargeting(' + i + ')">' +
            '<span class="type">[' + (sq.color || '?') + '] ' + sq.type + '</span> | daño:' + sq.damage + ' | pot:' + sq.potenciamiento + '</div>';
     });
-    // Grimoire attack button + cancel
+    // Grimoire attack button + cancel + enemy-card (node) targets
     if (window._attackSquad !== undefined) {
       h += '<div style="margin-top:6px;display:flex;gap:4px">' +
            '<button onclick="doAttackGrimoire()" style="flex:1;padding:6px;background:#e94560;color:#fff;border:none;border-radius:3px;cursor:pointer;font-weight:bold">⚔️ Atacar Grimorio</button>' +
            '<button onclick="cancelAttack()" style="padding:6px 12px;background:#333;color:#888;border:none;border-radius:3px;cursor:pointer">Cancelar</button>' +
            '</div>';
+      // Attackable enemy cards as tappable buttons — no board tap needed (mobile)
+      const enemy = 1 - MY_ID;
+      const targets = [];
+      (s.board['p' + enemy] || []).forEach(row => {
+        (row || []).forEach(cell => {
+          if (cell && cell.owner === enemy) targets.push(cell);
+        });
+      });
+      if (targets.length) {
+        h += '<div style="color:#4fc3f7;font-size:10px;margin:4px 0 2px">🎯 Atacar carta enemiga:</div>';
+        targets.forEach(cell => {
+          h += '<button onclick="attackCard(' + cell.id + ')" style="display:block;width:100%;margin:2px 0;padding:6px;background:#3a1010;color:#ff8a9a;border:1px solid #e94560;border-radius:3px;cursor:pointer;font-family:monospace;font-size:10px;text-align:left">🎯 ' + cell.name + ' — HP:' + cell.hp + '/' + cell.max_hp + '</button>';
+        });
+      } else {
+        h += '<div style="color:#888;font-size:10px;margin:4px 0 2px">No hay cartas enemigas que atacar.</div>';
+      }
     }
   }
   if (oppSquads.length) {
