@@ -1,0 +1,2145 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Network Fantasy War — Partida guiada</title>
+
+<style>
+:root{
+  --bg:#09111b;
+  --panel:#101c2a;
+  --panel-2:#142438;
+  --line:#38536d;
+  --text:#eef6ff;
+  --muted:#a8bfd3;
+
+  --sombras:#9870ff;
+  --jardin:#5fd391;
+  --espia:#f1c55b;
+  --logistron:#c7d4df;
+
+  --attack:#ffd166;
+  --defense:#74b8ff;
+  --target:#ff7181;
+  --redirect:#eaa4ff;
+  --spent:#9caaba;
+}
+
+*{box-sizing:border-box}
+
+body{
+  margin:0;
+  background:
+    radial-gradient(circle at 50% -20%,#294866 0%,transparent 38%),
+    linear-gradient(180deg,#081019 0%,#0b1420 100%);
+  color:var(--text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+
+main{
+  width:min(1460px,100%);
+  margin:auto;
+  padding:22px 18px 34px;
+}
+
+header{text-align:center}
+
+h1{
+  margin:0;
+  font-size:clamp(27px,4vw,42px);
+  letter-spacing:.02em;
+}
+
+header h2{
+  margin:3px 0 7px;
+  color:#c7d8e8;
+  font-size:16px;
+  font-weight:650;
+}
+
+header p{
+  max-width:870px;
+  margin:0 auto;
+  color:var(--muted);
+  font-size:14px;
+}
+
+.scoreboard{
+  display:grid;
+  grid-template-columns:1fr 70px 1fr;
+  gap:14px;
+  align-items:center;
+  width:min(840px,100%);
+  margin:20px auto;
+}
+
+.grimoire{
+  position:relative;
+  min-height:93px;
+  padding:13px 18px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:linear-gradient(145deg,#142439,#0e1724);
+  box-shadow:0 13px 28px #0008;
+  transition:outline .2s,box-shadow .2s;
+}
+
+.grimoire.sombras{border-color:#7f5bd2}
+.grimoire.jardin{border-color:#4db27b}
+
+.grimoire-name{
+  display:block;
+  font-size:15px;
+  font-weight:850;
+}
+
+.grimoire-subtitle{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.seal-number{
+  display:block;
+  margin-top:3px;
+  font-size:31px;
+  font-weight:950;
+  line-height:1;
+}
+
+.seal-label{
+  color:var(--muted);
+  font-size:12px;
+}
+
+.grimoire.targeted{
+  outline:3px solid var(--target);
+  box-shadow:0 0 26px #ff7181b8;
+}
+
+.grimoire.targeted::after{
+  content:"OBJETIVO";
+  position:absolute;
+  top:-12px;
+  right:13px;
+  padding:2px 7px;
+  border-radius:4px;
+  background:var(--target);
+  color:white;
+  font-size:9px;
+  font-weight:950;
+  letter-spacing:.09em;
+}
+
+.vs{
+  color:var(--espia);
+  text-align:center;
+  font-size:22px;
+  font-weight:950;
+}
+
+.app{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 320px;
+  gap:15px;
+}
+
+.board-panel,
+.side-panel,
+.rules{
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:15px;
+  background:linear-gradient(180deg,#111d2b,#0c1723);
+  box-shadow:0 14px 30px #0006;
+}
+
+.board-title{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  min-height:49px;
+  padding:11px 15px;
+  border-bottom:1px solid var(--line);
+  background:#152538;
+}
+
+.board-title strong{font-size:16px}
+
+.board-title span{
+  color:var(--attack);
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.1em;
+}
+
+.combat-summary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  padding:9px 12px;
+  border-bottom:1px solid var(--line);
+  background:#0d1927;
+}
+
+.combat-chip{
+  padding:4px 7px;
+  border:1px solid #3e5873;
+  border-radius:6px;
+  color:#dcecff;
+  background:#142438;
+  font-size:11px;
+  font-weight:750;
+}
+
+.combat-chip.attack{
+  border-color:#cba445;
+  color:#ffe4a0;
+}
+
+.combat-chip.defense{
+  border-color:#5798d8;
+  color:#cde7ff;
+}
+
+.combat-chip.target{
+  border-color:#d85d70;
+  color:#ffc0c8;
+}
+
+.board{
+  min-height:610px;
+  overflow:auto;
+  background:#0c1723;
+}
+
+.board-canvas{
+  position:relative;
+  min-width:1080px;
+  min-height:610px;
+  padding:10px;
+}
+
+.links{
+  position:absolute;
+  z-index:3;
+  inset:10px;
+  width:calc(100% - 20px);
+  height:calc(100% - 20px);
+  overflow:visible;
+  pointer-events:none;
+}
+
+.layer{
+  position:relative;
+  display:grid;
+  grid-template-columns:repeat(15,minmax(0,1fr));
+  align-items:center;
+  width:100%;
+  height:82px;
+  border-bottom:1px solid #2d4359;
+  background:
+    linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px) 0 0/6.666% 100%,
+    linear-gradient(180deg,#132333,#101c29);
+}
+
+.layer.s1,
+.layer.s2,
+.layer.s3{
+  background:
+    linear-gradient(90deg,rgba(154,112,255,.08) 1px,transparent 1px) 0 0/6.666% 100%,
+    linear-gradient(180deg,#1b1731,#101a29);
+}
+
+.layer.j1,
+.layer.j2,
+.layer.j3{
+  background:
+    linear-gradient(90deg,rgba(95,211,145,.08) 1px,transparent 1px) 0 0/6.666% 100%,
+    linear-gradient(180deg,#123227,#10221e);
+}
+
+.layer.frontier{
+  height:44px;
+  border-top:1px solid #bf9a43;
+  border-bottom:1px solid #bf9a43;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(241,197,91,.16) 0 13px,
+      rgba(30,29,22,.55) 13px 26px
+    );
+}
+
+.layer:last-child{border-bottom:0}
+
+.layer-label{
+  position:absolute;
+  z-index:7;
+  top:5px;
+  left:7px;
+  padding:2px 6px;
+  border-radius:4px;
+  background:#08111dcc;
+  color:#d8e7f4;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.09em;
+}
+
+.card{
+  position:relative;
+  z-index:5;
+  width:82px;
+  min-height:66px;
+  justify-self:center;
+  padding:5px 6px;
+  border:1px solid #617a96;
+  border-radius:8px;
+  background:linear-gradient(145deg,#21364c,#152537);
+  color:#f6fbff;
+  box-shadow:0 5px 12px #0009;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+  transition:transform .15s,filter .15s,outline .15s;
+}
+
+.card:hover{
+  transform:translateY(-3px);
+  filter:brightness(1.14);
+}
+
+.card.sombras{
+  border-color:#8867d7;
+  background:linear-gradient(145deg,#39245c,#19253b);
+}
+
+.card.jardin{
+  border-color:#50b57b;
+  background:linear-gradient(145deg,#174a37,#17313a);
+}
+
+.card.espia{
+  border-color:#e6bc50;
+  background:linear-gradient(145deg,#5a4417,#29263a);
+}
+
+.card.logistron{
+  border-color:#b7c8d9;
+  background:linear-gradient(145deg,#3a4a5c,#213040);
+}
+
+.card.attacker{
+  outline:3px solid var(--attack);
+  box-shadow:0 0 20px #ffd166bb;
+}
+
+.card.defender{
+  outline:3px solid var(--defense);
+  box-shadow:0 0 20px #73b7ffbb;
+}
+
+.card.target{
+  outline:3px solid var(--target);
+  box-shadow:0 0 20px #ff7181bb;
+}
+
+.card.invalid{
+  outline:3px dashed #ff8793;
+  filter:grayscale(.6);
+}
+
+.card.redirected{
+  outline:3px solid var(--redirect);
+  box-shadow:0 0 20px #eaa4ffbb;
+}
+
+.card.spent{
+  filter:grayscale(.72);
+  opacity:.64;
+}
+
+.card-name{
+  max-width:66px;
+  padding-bottom:12px;
+  font-size:9px;
+  font-weight:900;
+  line-height:1.08;
+}
+
+.card-stats{
+  margin-top:4px;
+  color:#d3e3ef;
+  font-size:9px;
+  line-height:1.05;
+}
+
+.card-badge{
+  position:absolute;
+  top:4px;
+  right:4px;
+  padding:1px 4px;
+  border-radius:4px;
+  background:#07101acc;
+  color:white;
+  font-size:8px;
+  font-weight:900;
+}
+
+.card-role{
+  position:absolute;
+  bottom:4px;
+  left:5px;
+  padding:1px 4px;
+  border-radius:3px;
+  color:#08111b;
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.06em;
+}
+
+.card.attacker .card-role{background:var(--attack)}
+.card.defender .card-role{background:var(--defense)}
+.card.target .card-role{background:var(--target);color:white}
+.card.invalid .card-role{background:#ff8793;color:white}
+.card.redirected .card-role{background:var(--redirect);color:#20132a}
+.card.spent .card-role{background:var(--spent);color:#17212e}
+
+.link{
+  fill:none;
+  stroke:#b2c5d5;
+  stroke-width:3;
+  stroke-linecap:round;
+}
+
+.link.enemy{
+  stroke:var(--espia);
+  stroke-dasharray:8 6;
+}
+
+.link.support{
+  stroke:#76ddac;
+  stroke-width:3.5;
+}
+
+.link.attacking-link{
+  stroke:var(--attack);
+  stroke-width:6;
+  filter:drop-shadow(0 0 4px #ffd166);
+}
+
+.link.defending-link{
+  stroke:var(--defense);
+  stroke-width:6;
+  filter:drop-shadow(0 0 4px #73b7ff);
+}
+
+.attack-arrow{
+  fill:none;
+  stroke:var(--attack);
+  stroke-width:3.5;
+  stroke-dasharray:10 7;
+  marker-end:url(#attack-arrowhead);
+  filter:drop-shadow(0 0 4px #ffd166);
+}
+
+.attack-arrow.invalid-arrow{
+  stroke:var(--target);
+  marker-end:url(#invalid-arrowhead);
+  filter:drop-shadow(0 0 4px #ff7181);
+}
+
+.redirect-arrow{
+  fill:none;
+  stroke:var(--redirect);
+  stroke-width:3;
+  stroke-dasharray:5 5;
+  marker-end:url(#redirect-arrowhead);
+  filter:drop-shadow(0 0 4px #eaa4ff);
+}
+
+.legend{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 13px;
+  padding:10px 13px 12px;
+  border-top:1px solid var(--line);
+  color:var(--muted);
+  font-size:12px;
+}
+
+.legend span{white-space:nowrap}
+
+.legend-dot{
+  display:inline-block;
+  width:10px;
+  height:10px;
+  margin-right:4px;
+  border-radius:50%;
+  vertical-align:-1px;
+}
+
+.legend-line{
+  display:inline-block;
+  width:22px;
+  margin-right:4px;
+  border-top:3px solid #b2c5d5;
+  vertical-align:middle;
+}
+
+.legend-line.enemy{
+  border-top-color:var(--espia);
+  border-top-style:dashed;
+}
+
+.side-panel{padding:15px}
+
+.side-panel h3{
+  margin:0;
+  font-size:17px;
+}
+
+.metrics{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin:11px 0 14px;
+}
+
+.metric{
+  padding:9px;
+  border:1px solid #334c65;
+  border-radius:9px;
+  background:#132338;
+}
+
+.metric small{
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+}
+
+.metric strong{
+  display:block;
+  margin-top:3px;
+  font-size:21px;
+}
+
+.resolution{
+  min-height:263px;
+  padding:11px;
+  border:1px solid #334c65;
+  border-radius:9px;
+  background:#0d1927;
+}
+
+.step-counter{
+  color:var(--espia);
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.08em;
+}
+
+.step-title{
+  margin:4px 0 7px;
+  font-size:17px;
+  line-height:1.2;
+}
+
+.step-body{
+  margin:0;
+  color:#d7e5f2;
+  font-size:14px;
+}
+
+.calculation{
+  margin-top:11px;
+  padding:8px 10px;
+  border-left:3px solid var(--attack);
+  border-radius:0 7px 7px 0;
+  background:#191b22;
+  color:#ffe7a1;
+  white-space:pre-line;
+  font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+
+.card-sheet{
+  margin-top:13px;
+  padding:10px;
+  border:1px solid #334c65;
+  border-radius:9px;
+  background:#132338;
+}
+
+.card-sheet b{
+  display:block;
+  margin-bottom:4px;
+}
+
+.card-sheet p{
+  margin:0;
+  color:var(--muted);
+  font-size:12px;
+}
+
+.controls{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-top:13px;
+}
+
+.controls button{
+  min-height:38px;
+  border:1px solid #46627f;
+  border-radius:8px;
+  background:#1a2b3e;
+  color:#f5fbff;
+  font:inherit;
+  font-size:13px;
+  font-weight:850;
+  cursor:pointer;
+}
+
+.controls button:hover{background:#28415b}
+
+.controls .next{
+  border-color:#d5ad51;
+  background:#4a3816;
+  color:#ffe7a5;
+}
+
+.rules{
+  margin-top:16px;
+  padding:17px;
+}
+
+.rules h2{
+  margin:0 0 13px;
+  font-size:19px;
+}
+
+.rules-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
+
+.rule{
+  padding:12px;
+  border:1px solid #36516a;
+  border-radius:10px;
+  background:#111f2e;
+}
+
+.rule h3{
+  margin:0 0 6px;
+  color:#e6f2ff;
+  font-size:15px;
+}
+
+.rule p{
+  margin:0;
+  color:#bdd0e1;
+  font-size:13px;
+}
+
+.rule-note{
+  display:block;
+  margin-top:7px;
+  color:#f2d78d;
+  font-size:12px;
+}
+
+.modal{
+  position:fixed;
+  z-index:20;
+  inset:0;
+  display:none;
+  place-items:center;
+  padding:18px;
+  background:#000a;
+}
+
+.modal.open{display:grid}
+
+.modal-sheet{
+  width:min(520px,100%);
+  padding:19px;
+  border:1px solid #6b84a0;
+  border-radius:14px;
+  background:#122036;
+  box-shadow:0 24px 70px #000;
+}
+
+.modal-close{
+  float:right;
+  border:0;
+  background:transparent;
+  color:white;
+  font-size:25px;
+  cursor:pointer;
+}
+
+.modal-sheet h2{
+  margin:0;
+  font-size:22px;
+}
+
+.modal-meta{
+  margin:4px 0 13px;
+  color:#aac4d8;
+}
+
+.modal-sheet hr{
+  border:0;
+  border-top:1px solid #36516a;
+}
+
+.modal-sheet p{line-height:1.5}
+
+.modal-comment{
+  color:#f3daa0;
+  font-size:13px;
+}
+
+@media(max-width:1050px){
+  .app{grid-template-columns:1fr}
+  .side-panel{order:-1}
+}
+
+@media(max-width:610px){
+  main{padding:14px 10px 28px}
+  .scoreboard{
+    grid-template-columns:1fr 42px 1fr;
+    gap:7px;
+  }
+  .grimoire{padding:11px}
+  .seal-number{font-size:26px}
+  .rules-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+
+<body>
+<main>
+  <header>
+    <h1>Network Fantasy War — Partida guiada</h1>
+    <h2>Fase de Ataque — partida guiada completa</h2>
+    <p>
+      Cada paso resuelve una sola cosa: comenzar la Fase de Ataque, asignar
+      escuadrones, declarar un ataque, elegir objetivo, bloquear, calcular daño
+      o resolver un efecto. Haz clic sobre una carta para ver toda su información.
+    </p>
+  </header>
+
+  <section class="scoreboard">
+    <div class="grimoire sombras" id="sombras-grimoire">
+      <span class="grimoire-name">Red de Sombras</span>
+      <span class="grimoire-subtitle">✦ grimorio</span>
+      <span class="seal-number" id="sombras-seals">30</span>
+      <span class="seal-label">sellos</span>
+    </div>
+
+    <div class="vs">VS</div>
+
+    <div class="grimoire jardin" id="jardin-grimoire">
+      <span class="grimoire-name">Jardín Salvaje</span>
+      <span class="grimoire-subtitle">✦ grimorio</span>
+      <span class="seal-number" id="jardin-seals">30</span>
+      <span class="seal-label">sellos</span>
+    </div>
+  </section>
+
+  <section class="app">
+    <section class="board-panel">
+      <div class="board-title">
+        <strong>Red de Sombras</strong>
+        <span>FASE DE ATAQUE</span>
+        <strong>Jardín Salvaje</strong>
+      </div>
+
+      <div class="combat-summary" id="combat-summary"></div>
+
+      <div class="board" id="board">
+        <div class="board-canvas" id="board-canvas"></div>
+      </div>
+
+      <div class="legend">
+        <span><i class="legend-dot" style="background:#9870ff"></i>Red de Sombras</span>
+        <span><i class="legend-dot" style="background:#5fd391"></i>Jardín Salvaje</span>
+        <span><i class="legend-dot" style="background:#f1c55b"></i>Espía</span>
+        <span><i class="legend-dot" style="background:#c7d4df"></i>Logistrón</span>
+        <span><i class="legend-line"></i>vínculo aliado</span>
+        <span><i class="legend-line enemy"></i>vínculo enemigo / espionaje</span>
+        <span><i class="legend-line" style="border-top-color:#ffd166"></i>escuadrón atacante</span>
+        <span><i class="legend-line" style="border-top-color:#74b8ff"></i>escuadrón defensor</span>
+        <span><i class="legend-dot" style="background:#ff7181"></i>objetivo</span>
+      </div>
+    </section>
+
+    <aside class="side-panel">
+      <h3>Acciones</h3>
+
+      <div class="metrics">
+        <div class="metric">
+          <small>Acciones usadas</small>
+          <strong id="actions-used">4 / 4</strong>
+        </div>
+
+        <div class="metric">
+          <small>Acciones restantes</small>
+          <strong id="actions-left">0</strong>
+        </div>
+      </div>
+
+      <h3>Resolución actual</h3>
+
+      <section class="resolution">
+        <div class="step-counter" id="step-counter"></div>
+        <h4 class="step-title" id="step-title"></h4>
+        <p class="step-body" id="step-body"></p>
+        <div class="calculation" id="calculation"></div>
+      </section>
+
+      <section class="card-sheet">
+        <b>Ficha de carta:</b>
+        <p>
+          Haz clic en una carta del tablero para abrir su contenido completo
+          y el comentario estratégico.
+        </p>
+      </section>
+
+      <div class="controls">
+        <button id="previous">← Anterior</button>
+        <button class="next" id="next">Siguiente →</button>
+        <button id="restart">Reiniciar</button>
+        <button id="play">▶ Reproducir paso a paso</button>
+      </div>
+    </aside>
+  </section>
+
+  <section class="rules">
+    <h2>Reglas aplicadas en esta partida</h2>
+
+    <div class="rules-grid">
+      <article class="rule">
+        <h3>Escuadrones, ataque y objetivos</h3>
+        <p>
+          Las cartas no atacan solas: sólo atacan Líneas, Triángulos,
+          Cuadriláteros o Pentágonos válidos. Cada escuadrón atacante puede
+          declarar un único ataque durante la Fase de Ataque, contra un grimorio
+          o contra un nodo enemigo.
+        </p>
+      </article>
+
+      <article class="rule">
+        <h3>Daño, bloqueo y destrución</h3>
+        <p>
+          Daño atacante = daño base + potenciamiento + D adicional. El defensor
+          puede elegir un escuadrón para bloquear cada ataque. Si el daño neto
+          es 0 o menor, queda absorbido. Un nodo con 0 HP se destruye y disuelve
+          todos sus vínculos.
+        </p>
+      </article>
+
+      <article class="rule">
+        <h3>Objetivos especiales</h3>
+        <p>
+          Sigilo impide ser elegido por un ataque normal. Contraespionaje permite
+          atacar directamente a un espía infiltrado. Guardaespaldas puede
+          redirigir el daño neto de una carta atacada a un nodo vinculado
+          directamente con ella.
+        </p>
+      </article>
+
+      <article class="rule">
+        <h3>Potenciamiento y formaciones</h3>
+        <p>
+          Se muestran Línea, Triángulo, Cuadrilátero básico y ampliado,
+          Pentágono básico y ampliado. Los Logistrones conectan escuadrones sin
+          formar parte de sus polígonos. El Pentágono tiene alcance de
+          potenciamiento ilimitado.
+        </p>
+        <span class="rule-note">
+          Guerreros y Festivos son variantes del reglamento, pero ninguno de
+          estos dos mazos incluye esas facciones; por eso no se inventan cartas
+          para mostrar su bono ofensivo o su armadura.
+        </span>
+      </article>
+    </div>
+  </section>
+</main>
+
+<div class="modal" id="modal">
+  <section class="modal-sheet">
+    <button class="modal-close" id="modal-close">×</button>
+    <h2 id="modal-name"></h2>
+    <div class="modal-meta" id="modal-meta"></div>
+    <hr>
+    <p id="modal-ability"></p>
+    <p class="modal-comment" id="modal-comment"></p>
+  </section>
+</div>
+
+<script>
+const CARDS = {
+  hiedra:{
+    name:"Hiedra Trepadora",
+    side:"jardin",
+    faction:"Naturaleza",
+    hp:2,d:0,v:2,
+    extra:"G2 · L1–2 · △ □ ⬠",
+    ability:"Al entrar: vincula gratis con 1 adyacente.",
+    comment:"Tiene V=2: puede sostener una Línea y, en otros ejemplos, ser vértice de un polígono."
+  },
+  vid:{
+    name:"Vid Espinosa",
+    side:"jardin",
+    faction:"Naturaleza",
+    hp:2,d:0,v:2,
+    extra:"G2 · L1–2 · △ □ ⬠",
+    ability:"Atacantes contra su escuadrón reciben 1 daño.",
+    comment:"Su habilidad castiga a atacantes del escuadrón, pero no altera el cálculo inicial del daño neto mostrado."
+  },
+  enredadera:{
+    name:"Enredadera Vincular",
+    side:"jardin",
+    faction:"Naturaleza",
+    hp:2,d:0,v:4,
+    extra:"G2 · L1–2 · △ □ ⬠",
+    ability:"Los vínculos que la involucren cuestan 0 acciones. Vanguardia.",
+    comment:"V=4 la convierte en un nodo excelente para conectar un polígono con un Logistrón."
+  },
+  guardian:{
+    name:"Guardián del Bosque de Raíces",
+    side:"jardin",
+    faction:"Naturaleza",
+    hp:3,d:1,v:3,
+    extra:"G2 · L1–2 · △ □ ⬠",
+    ability:"En △: aliados del escuadrón aportan +2 daño. Vanguardia.",
+    comment:"Siempre aporta D=1 al atacar. Su habilidad adicional sólo se activa si integra un Triángulo."
+  },
+  polinizadora:{
+    name:"Polinizadora de Esencias",
+    side:"jardin",
+    faction:"Naturaleza",
+    hp:1,d:0,v:3,
+    extra:"G2 · L1–2 · △ □ ⬠",
+    ability:"[1]: copia habilidad de aliado adyacente.",
+    comment:"Puede ser vértice de un Pentágono y sostener un vínculo adicional gracias a V=3."
+  },
+  estranguladora:{
+    name:"Enredadera Estranguladora",
+    side:"jardin",
+    faction:"Naturaleza",
+    hp:2,d:0,v:2,
+    extra:"G2 · L1–2 · △ □ ⬠",
+    ability:"Enemigos vinculados no pueden atacar.",
+    comment:"Ilustra una forma de impedir que una amenaza enemiga pueda declarar ataque."
+  },
+  brote:{
+    name:"Brote Silvestre",
+    side:"jardin",
+    faction:"Naturaleza",
+    hp:1,d:0,v:1,
+    extra:"G1 · L1 · △ □ ⬠",
+    ability:"Al entrar: +1 HP a un aliado.",
+    comment:"Con V=1 puede integrar una Línea, pero no puede sostener los dos vínculos necesarios para ser vértice de un Triángulo."
+  },
+  raiz:{
+    name:"Raíz Madre",
+    side:"jardin",
+    faction:"Naturaleza",
+    hp:3,d:0,v:4,
+    extra:"G1 · L1 · △ □ ⬠",
+    ability:"Naturaleza vinculadas +1 HP permanente. En ⬠: +1 V permanente.",
+    comment:"En los ejemplos ampliados funciona como nodo interno conectado a tres nodos del perímetro."
+  },
+  arbol:{
+    name:"Árbol Primigenio",
+    side:"jardin",
+    faction:"Naturaleza",
+    hp:4,d:0,v:3,
+    extra:"G1 · L1 · △ □ ⬠",
+    ability:"Guardaespaldas. Recupera 2 HP al final del turno.",
+    comment:"Guardaespaldas sólo se activa cuando este Árbol es atacado y redirige a un nodo directamente vinculado."
+  },
+  nucleoJ:{
+    name:"Núcleo de Enlace",
+    side:"logistron",
+    faction:"Logistrón",
+    hp:2,d:0,v:5,
+    extra:"G3",
+    ability:"Sin habilidades.",
+    comment:"Conecta escuadrones distintos. No integra polígonos, pero cuenta para la distancia de red."
+  },
+  gigante:{
+    name:"Gigante de Piedra",
+    side:"jardin",
+    faction:"Monstruo",
+    hp:7,d:2,v:1,
+    extra:"G1",
+    ability:"No asciende ni se mueve.",
+    comment:"Es un objetivo resistente de L1. Sus 7 HP permiten mostrar un ataque de Pentágono."
+  },
+
+  agente:{
+    name:"Agente del Silencio",
+    side:"sombras",
+    faction:"Saboteador",
+    hp:2,d:0,v:2,
+    extra:"G3 · L1–3 · △",
+    ability:"En triángulo: +1 vínculo enemigo destruido al final del turno.",
+    comment:"Puede integrar Triángulos de Saboteadores. Su efecto se resolvería más tarde, durante la Fase de Salida."
+  },
+  sabueso:{
+    name:"Sabueso del Nexo",
+    side:"sombras",
+    faction:"Saboteador",
+    hp:1,d:0,v:2,
+    extra:"G3 · L1–3 · △",
+    ability:"Al jugarse: rompe 1 vínculo enemigo a distancia corta. Vanguardia.",
+    comment:"Es una pieza útil para Líneas y Triángulos. Su habilidad de entrada pertenece a la Fase de Acciones."
+  },
+  anuladora:{
+    name:"Anuladora de Enlaces",
+    side:"sombras",
+    faction:"Saboteador",
+    hp:2,d:1,v:2,
+    extra:"G2 · L1–2 · △ □ ⬠",
+    ability:"Reticencia a Festivos/Selladores. En □: +1 vínculo roto por nodo enemigo a distancia de red 1.",
+    comment:"Aporta D=1 al daño de su escuadrón atacante."
+  },
+  formaciones:{
+    name:"Saboteadora de Formaciones",
+    side:"sombras",
+    faction:"Saboteador",
+    hp:2,d:1,v:2,
+    extra:"G3 · L1–3 · △",
+    ability:"En △: cada vínculo enemigo roto inflige 1 daño al grimorio.",
+    comment:"Aporta D=1. Su habilidad de Triángulo no se activa al atacar: requiere romper vínculos enemigos."
+  },
+  cortacircuitos:{
+    name:"Cortacircuitos",
+    side:"sombras",
+    faction:"Saboteador",
+    hp:2,d:0,v:2,
+    extra:"G3 · L1–3 · △ □ ⬠",
+    ability:"[1]: todo un escuadrón enemigo pierde 1 HP. Línea de fuego.",
+    comment:"Su habilidad activada consume acciones antes de la Fase de Ataque."
+  },
+  virus:{
+    name:"Virus de Red",
+    side:"sombras",
+    faction:"Saboteador",
+    hp:1,d:0,v:3,
+    extra:"G3 · L1–3 · △ □ ⬠",
+    ability:"[1]: rompe todos los vínculos de un escuadrón. Autofobia sin vínculos.",
+    comment:"Tiene V=3: en este tutorial permite que un Logistrón conecte una Línea defensora a un Triángulo de apoyo."
+  },
+  cazador:{
+    name:"Cazador de Nodos",
+    side:"sombras",
+    faction:"Saboteador",
+    hp:3,d:2,v:1,
+    extra:"G2 · L1–2 · △",
+    ability:"Al atacar nodo L1/L2: ignora vínculos defensivos.",
+    comment:"Su V=1 limita sus conexiones. En esta guía aparece como objetivo de varios ataques de Jardín."
+  },
+  acechador:{
+    name:"Acechador de las Sombras",
+    side:"sombras",
+    faction:"Monstruo",
+    hp:3,d:1,v:1,
+    extra:"G3",
+    ability:"Sigilo absoluto. Al destruir nodo: su dueño pierde 2 sellos extra. Vanguardia.",
+    comment:"Sigilo absoluto impide que sea objetivo de un ataque normal. Si destruye un nodo, su dueño pierde 2 sellos adicionales."
+  },
+  cria:{
+    name:"Cría Voraz",
+    side:"sombras",
+    faction:"Monstruo",
+    hp:1,d:1,v:1,
+    extra:"G1",
+    ability:"Al destruir nodo: +2 HP y +1 D.",
+    comment:"Aporta D=1 a la Línea de Monstruos. Si destruye un nodo, mejora permanentemente."
+  },
+  sombra:{
+    name:"Sombra Infiltrada",
+    side:"espia",
+    faction:"Espía",
+    hp:1,d:0,v:2,
+    extra:"G3 · Frontera / infiltración",
+    ability:"Parasitismo: sabotaje encubierto (1 acción) + inteligencia.",
+    comment:"En territorio enemigo integra sus polígonos. Cuando ese escuadrón ataca, el dueño del espía mira una carta al azar de la mano atacante."
+  },
+  nucleoS:{
+    name:"Núcleo de Enlace",
+    side:"logistron",
+    faction:"Logistrón",
+    hp:2,d:0,v:5,
+    extra:"G3",
+    ability:"Sin habilidades.",
+    comment:"Un Logistrón conecta escuadrones, pero no cuenta para la forma de ninguno."
+  }
+};
+
+const N = (id,card,zone,col,hp=null,badge="") => ({id,card,zone,col,hp,badge});
+const L = (a,b,type="ally") => ({a,b,type});
+
+const STATES = {
+  line:{
+    nodes:[
+      N("lineA","hiedra","j1",4,null,"LÍNEA"),
+      N("lineB","vid","j1",10,null,"LÍNEA")
+    ],
+    links:[L("lineA","lineB")]
+  },
+
+  monster:{
+    nodes:[
+      N("monsterA","acechador","s2",4,null,"LÍNEA"),
+      N("monsterB","cria","s2",10,null,"LÍNEA"),
+      N("monsterTarget","brote","j1",7,1,"NODO")
+    ],
+    links:[L("monsterA","monsterB")]
+  },
+
+  monsterAfter:{
+    nodes:[
+      N("monsterA","acechador","s2",4,null,"LÍNEA"),
+      N("monsterB","cria","s2",10,null,"LÍNEA")
+    ],
+    links:[L("monsterA","monsterB")]
+  },
+
+  counter:{
+    nodes:[
+      N("counterA","hiedra","j2",3,null,"LÍNEA"),
+      N("counterB","vid","j2",11,null,"LÍNEA"),
+      N("spyCounter","sombra","j1",7,1,"ESPÍA"),
+      N("spyHost","brote","j1",14,1,"LÍNEA")
+    ],
+    links:[
+      L("counterA","counterB"),
+      L("spyCounter","spyHost","enemy")
+    ]
+  },
+
+  counterAfter:{
+    nodes:[
+      N("counterA","hiedra","j2",3,null,"LÍNEA"),
+      N("counterB","vid","j2",11,null,"LÍNEA"),
+      N("spyHost","brote","j1",14,1)
+    ],
+    links:[L("counterA","counterB")]
+  },
+
+  intelligence:{
+    nodes:[
+      N("intelA","enredadera","j1",3,null,"△"),
+      N("intelB","vid","j1",11,null,"△"),
+      N("intelSpy","sombra","j2",7,1,"ESPÍA"),
+      N("stealth","acechador","s2",3,null,"SIGILO"),
+      N("intelTarget","cazador","s2",11,3,"NODO"),
+      N("intelPartner","sabueso","s2",15,1)
+    ],
+    links:[
+      L("intelA","intelB"),
+      L("intelB","intelSpy","enemy"),
+      L("intelSpy","intelA","enemy"),
+      L("intelTarget","intelPartner")
+    ]
+  },
+
+  intelligenceAfter:{
+    nodes:[
+      N("intelA","enredadera","j1",3,null,"△"),
+      N("intelB","vid","j1",11,null,"△"),
+      N("intelSpy","sombra","j2",7,1,"ESPÍA"),
+      N("stealth","acechador","s2",3,null,"SIGILO"),
+      N("intelPartner","sabueso","s2",15,1)
+    ],
+    links:[
+      L("intelA","intelB"),
+      L("intelB","intelSpy","enemy"),
+      L("intelSpy","intelA","enemy")
+    ]
+  },
+
+  quad:{
+    nodes:[
+      N("q1","enredadera","j1",3,null,"□"),
+      N("q2","vid","j1",11,null,"□"),
+      N("q3","guardian","j2",3,null,"□"),
+      N("q4","hiedra","j2",11,null,"□"),
+      N("qCore","nucleoJ","j1",15,null,"PUENTE"),
+      N("qt1","polinizadora","j3",15,null,"△"),
+      N("qt2","enredadera","j3",7,null,"△"),
+      N("qt3","vid","j2",15,null,"△"),
+
+      N("d1","anuladora","s2",3,null,"LÍNEA"),
+      N("d2","cortacircuitos","s2",11,null,"LÍNEA"),
+      N("dCore","nucleoS","s1",15,null,"PUENTE"),
+      N("dt1","agente","s3",7,null,"△"),
+      N("dt2","sabueso","s3",15,null,"△"),
+      N("dt3","virus","s2",15,null,"△")
+    ],
+    links:[
+      L("q1","q2"),
+      L("q2","q4"),
+      L("q4","q3"),
+      L("q3","q1"),
+
+      L("q1","qCore","support"),
+      L("qCore","qt1","support"),
+      L("qt1","qt2"),
+      L("qt2","qt3"),
+      L("qt3","qt1"),
+
+      L("d1","d2"),
+      L("d2","dCore","support"),
+      L("dCore","dt3","support"),
+      L("dt1","dt2"),
+      L("dt2","dt3"),
+      L("dt3","dt1")
+    ]
+  },
+
+  absorb:{
+    nodes:[
+      N("absA","agente","s1",4,null,"LÍNEA"),
+      N("absB","sabueso","s1",10,null,"LÍNEA"),
+
+      N("absD1","hiedra","j1",3,null,"LÍNEA"),
+      N("absD2","vid","j1",11,null,"LÍNEA"),
+      N("absCore","nucleoJ","j2",15,null,"PUENTE"),
+      N("absSup1","brote","j3",7,null,"LÍNEA"),
+      N("absSup2","enredadera","j3",15,null,"LÍNEA")
+    ],
+    links:[
+      L("absA","absB"),
+      L("absD1","absD2"),
+      L("absD2","absCore","support"),
+      L("absCore","absSup2","support"),
+      L("absSup1","absSup2")
+    ]
+  },
+
+  guard:{
+    nodes:[
+      N("guardA","anuladora","s2",3,null,"△"),
+      N("guardB","formaciones","s1",9,null,"△"),
+      N("guardC","sabueso","s2",15,null,"△"),
+      N("tree","arbol","j1",5,4,"GUARDA"),
+      N("guardCore","nucleoJ","j1",13,2,"DESTINO")
+    ],
+    links:[
+      L("guardA","guardB"),
+      L("guardB","guardC"),
+      L("guardC","guardA"),
+      L("tree","guardCore")
+    ]
+  },
+
+  guardAfter:{
+    nodes:[
+      N("guardA","anuladora","s2",3,null,"△"),
+      N("guardB","formaciones","s1",9,null,"△"),
+      N("guardC","sabueso","s2",15,null,"△"),
+      N("tree","arbol","j1",5,4,"GUARDA")
+    ],
+    links:[
+      L("guardA","guardB"),
+      L("guardB","guardC"),
+      L("guardC","guardA")
+    ]
+  },
+
+  quadExpanded:{
+    nodes:[
+      N("x1","enredadera","j1",3,null,"□+"),
+      N("x2","vid","j1",11,null,"□+"),
+      N("x3","guardian","j2",3,null,"□+"),
+      N("x4","hiedra","j2",11,null,"□+"),
+      N("inside","raiz","j2",7,null,"INTERIOR"),
+      N("quadTarget","cazador","s2",8,3,"NODO")
+    ],
+    links:[
+      L("x1","x2"),
+      L("x2","x4"),
+      L("x4","x3"),
+      L("x3","x1"),
+      L("inside","x1"),
+      L("inside","x3"),
+      L("inside","x4")
+    ]
+  },
+
+  quadExpandedAfter:{
+    nodes:[
+      N("x1","enredadera","j1",3,null,"□+"),
+      N("x2","vid","j1",11,null,"□+"),
+      N("x3","guardian","j2",3,null,"□+"),
+      N("x4","hiedra","j2",11,null,"□+"),
+      N("inside","raiz","j2",7,null,"INTERIOR")
+    ],
+    links:[
+      L("x1","x2"),
+      L("x2","x4"),
+      L("x4","x3"),
+      L("x3","x1"),
+      L("inside","x1"),
+      L("inside","x3"),
+      L("inside","x4")
+    ]
+  },
+
+  penta:{
+    nodes:[
+      N("p1","enredadera","j1",3,null,"⬠"),
+      N("p2","guardian","j2",3,null,"⬠"),
+      N("p3","vid","j3",9,null,"⬠"),
+      N("p4","hiedra","j2",15,null,"⬠"),
+      N("p5","polinizadora","j1",13,null,"⬠"),
+
+      N("pCoreA","nucleoJ","j1",15,null,"PUENTE"),
+      N("pCoreB","nucleoJ","j2",11,null,"PUENTE"),
+      N("pLineA","hiedra","j1",7,null,"LÍNEA"),
+      N("pLineB","vid","j1",9,null,"LÍNEA"),
+
+      N("giant","gigante","s1",7,7,"NODO"),
+      N("pTarget","cazador","s2",13,3,"NODO")
+    ],
+    links:[
+      L("p1","p2"),
+      L("p2","p3"),
+      L("p3","p4"),
+      L("p4","p5"),
+      L("p5","p1"),
+
+      L("p1","pCoreA","support"),
+      L("pCoreA","pCoreB","support"),
+      L("pCoreB","pLineB","support"),
+      L("pLineA","pLineB")
+    ]
+  },
+
+  pentaAfterFirst:{
+    nodes:[
+      N("p1","enredadera","j1",3,null,"⬠"),
+      N("p2","guardian","j2",3,null,"⬠"),
+      N("p3","vid","j3",9,null,"⬠"),
+      N("p4","hiedra","j2",15,null,"⬠"),
+      N("p5","polinizadora","j1",13,null,"⬠"),
+
+      N("pCoreA","nucleoJ","j1",15,null,"PUENTE"),
+      N("pCoreB","nucleoJ","j2",11,null,"PUENTE"),
+      N("pLineA","hiedra","j1",7,null,"LÍNEA"),
+      N("pLineB","vid","j1",9,null,"LÍNEA"),
+
+      N("pTarget","cazador","s2",13,3,"NODO")
+    ],
+    links:[
+      L("p1","p2"),
+      L("p2","p3"),
+      L("p3","p4"),
+      L("p4","p5"),
+      L("p5","p1"),
+
+      L("p1","pCoreA","support"),
+      L("pCoreA","pCoreB","support"),
+      L("pCoreB","pLineB","support"),
+      L("pLineA","pLineB")
+    ]
+  },
+
+  pentaAfterSecond:{
+    nodes:[
+      N("p1","enredadera","j1",3,null,"⬠"),
+      N("p2","guardian","j2",3,null,"⬠"),
+      N("p3","vid","j3",9,null,"⬠"),
+      N("p4","hiedra","j2",15,null,"⬠"),
+      N("p5","polinizadora","j1",13,null,"⬠"),
+
+      N("pCoreA","nucleoJ","j1",15,null,"PUENTE"),
+      N("pCoreB","nucleoJ","j2",11,null,"PUENTE"),
+      N("pLineA","hiedra","j1",7,null,"LÍNEA"),
+      N("pLineB","vid","j1",9,null,"LÍNEA")
+    ],
+    links:[
+      L("p1","p2"),
+      L("p2","p3"),
+      L("p3","p4"),
+      L("p4","p5"),
+      L("p5","p1"),
+
+      L("p1","pCoreA","support"),
+      L("pCoreA","pCoreB","support"),
+      L("pCoreB","pLineB","support"),
+      L("pLineA","pLineB")
+    ]
+  },
+
+  pentaExpanded:{
+    nodes:[
+      N("e1","enredadera","j1",3,null,"⬠+"),
+      N("e2","guardian","j2",3,null,"⬠+"),
+      N("e3","vid","j3",9,null,"⬠+"),
+      N("e4","hiedra","j2",15,null,"⬠+"),
+      N("e5","polinizadora","j1",15,null,"⬠+"),
+      N("eInside","raiz","j2",9,null,"INTERIOR"),
+
+      N("ed1","agente","s2",3,null,"LÍNEA"),
+      N("ed2","sabueso","s2",11,null,"LÍNEA"),
+      N("eCore","nucleoS","s1",15,null,"PUENTE"),
+      N("es1","anuladora","s3",7,null,"LÍNEA"),
+      N("es2","cortacircuitos","s3",15,null,"LÍNEA")
+    ],
+    links:[
+      L("e1","e2"),
+      L("e2","e3"),
+      L("e3","e4"),
+      L("e4","e5"),
+      L("e5","e1"),
+
+      L("eInside","e1"),
+      L("eInside","e2"),
+      L("eInside","e5"),
+
+      L("ed1","ed2"),
+      L("ed2","eCore","support"),
+      L("eCore","es2","support"),
+      L("es1","es2")
+    ]
+  }
+};
+
+const ZONES = [
+  ["s1","Sombras · L1"],
+  ["s2","Sombras · L2"],
+  ["s3","Sombras · L3"],
+  ["fr","FRONTERA"],
+  ["j3","Jardín · L3"],
+  ["j2","Jardín · L2"],
+  ["j1","Jardín · L1"]
+];
+
+const STEPS = [
+  {
+    state:"line",
+    sombras:30,jardin:30,
+    attackers:["lineA","lineB"],
+    attackerLabel:"Línea de Naturaleza",
+    title:"Comienza la Fase de Ataque",
+    body:"Jardín Salvaje asigna Hiedra Trepadora y Vid Espinosa a un único escuadrón. Una Línea válida tiene dos nodos y un vínculo directo.",
+    calc:"LÍNEA\n2 nodos + 1 vínculo.\nColor del escuadrón: Naturaleza."
+  },
+  {
+    state:"line",
+    sombras:30,jardin:30,
+    attackers:["lineA","lineB"],
+    attackerLabel:"Línea de Naturaleza",
+    target:"grim-s",
+    targetLabel:"Grimorio de Red de Sombras",
+    title:"Declarar ataque al grimorio",
+    body:"La Línea de Naturaleza declara un ataque directo al grimorio de Sombras. El defensor puede bloquear con un escuadrón, pero decide no hacerlo.",
+    calc:"Daño base de Línea: 1\nD adicional: 0\nNaturaleza: +1 por cada unidad = +2\nDAÑO ATACANTE = 3"
+  },
+  {
+    state:"line",
+    sombras:27,jardin:30,
+    attackers:["lineA","lineB"],
+    spent:["lineA","lineB"],
+    attackerLabel:"Línea de Naturaleza",
+    target:"grim-s",
+    targetLabel:"Grimorio de Red de Sombras",
+    title:"Resolver daño al grimorio",
+    body:"El ataque no fue bloqueado. Cada punto de daño neto contra el grimorio rompe un sello. Este escuadrón ya no puede declarar otro ataque en esta fase.",
+    calc:"DAÑO NETO = 3\nSellos de Sombras: 30 − 3 = 27\nLínea: usada."
+  },
+
+  {
+    state:"monster",
+    sombras:27,jardin:30,
+    attackers:["monsterA","monsterB"],
+    attackerLabel:"Línea de Monstruos",
+    target:"monsterTarget",
+    targetLabel:"Brote Silvestre",
+    title:"Atacar un nodo enemigo",
+    body:"Red de Sombras usa una Línea de Monstruos para atacar a Brote Silvestre. El objetivo es un nodo, no el grimorio.",
+    calc:"Línea: 1\nD de Acechador: +1\nD de Cría Voraz: +1\nDAÑO ATACANTE = 3\nHP de Brote = 1"
+  },
+  {
+    state:"monsterAfter",
+    sombras:27,jardin:28,
+    attackers:["monsterA","monsterB"],
+    spent:["monsterA","monsterB"],
+    attackerLabel:"Línea de Monstruos",
+    title:"Destruir el nodo y aplicar el efecto",
+    body:"Brote Silvestre llega a 0 HP y es destruido. Como Acechador de las Sombras participó en la destrucción del nodo, Jardín pierde además 2 sellos.",
+    calc:"HP de Brote: 1 − 3 = 0\nBrote va al descarte.\nAcechador: Jardín pierde 2 sellos extra.\nSellos de Jardín: 30 − 2 = 28"
+  },
+
+  {
+    state:"counter",
+    sombras:27,jardin:28,
+    attackers:["counterA","counterB"],
+    attackerLabel:"Línea de Naturaleza",
+    target:"spyCounter",
+    targetLabel:"Sombra Infiltrada",
+    title:"Contraespionaje: atacar al espía",
+    body:"Sombra Infiltrada está en territorio de Jardín y vinculada a un nodo enemigo. Jardín puede atacarla directamente mediante Contraespionaje.",
+    calc:"Contraespionaje permite elegir al espía infiltrado.\nNo importa si el espía tuviera Sigilo."
+  },
+  {
+    state:"counter",
+    sombras:27,jardin:28,
+    attackers:["counterA","counterB"],
+    attackerLabel:"Línea de Naturaleza",
+    target:"spyCounter",
+    targetLabel:"Sombra Infiltrada",
+    title:"Resolver Contraespionaje",
+    body:"Sombras no bloquea el ataque contra su espía. La Línea de Naturaleza aplica su daño directamente a Sombra Infiltrada.",
+    calc:"Línea: 1\nNaturaleza: +2\nDAÑO ATACANTE = 3\nHP del espía = 1"
+  },
+  {
+    state:"counterAfter",
+    sombras:27,jardin:28,
+    attackers:["counterA","counterB"],
+    spent:["counterA","counterB"],
+    attackerLabel:"Línea de Naturaleza",
+    title:"El espía es destruido",
+    body:"Sombra Infiltrada llega a 0 HP y va al descarte. Su vínculo de espionaje se disuelve.",
+    calc:"HP: 1 − 3 = 0\nEspía destruido.\nVínculo enemigo disuelto."
+  },
+
+  {
+    state:"intelligence",
+    sombras:27,jardin:28,
+    attackers:["intelA","intelB","intelSpy"],
+    attackerLabel:"Triángulo de Naturaleza parasitado",
+    title:"Triángulo parasitado",
+    body:"Un segundo espía de Sombras integra un Triángulo en territorio de Jardín. Dos de sus tres nodos son Naturaleza, así que el escuadrón sigue siendo de Naturaleza.",
+    calc:"TRIÁNGULO\n3 nodos + 3 vínculos.\nNaturaleza: 2 de 3 cartas.\nEl espía integra el polígono de Jardín."
+  },
+  {
+    state:"intelligence",
+    sombras:27,jardin:28,
+    attackers:["intelA","intelB","intelSpy"],
+    attackerLabel:"Triángulo de Naturaleza parasitado",
+    target:"stealth",
+    targetLabel:"Acechador de las Sombras",
+    invalid:true,
+    title:"Sigilo: objetivo no elegible",
+    body:"Jardín intenta atacar a Acechador de las Sombras, pero no puede hacerlo: Sigilo absoluto impide que sea blanco de un ataque normal.",
+    calc:"OBJETIVO ILEGAL\nAcechador tiene Sigilo absoluto.\nDebe elegirse otro objetivo legal."
+  },
+  {
+    state:"intelligence",
+    sombras:27,jardin:28,
+    attackers:["intelA","intelB","intelSpy"],
+    attackerLabel:"Triángulo de Naturaleza parasitado",
+    target:"intelTarget",
+    targetLabel:"Cazador de Nodos",
+    title:"Inteligencia y ataque a nodo",
+    body:"Jardín escoge Cazador de Nodos como nuevo objetivo. Al declarar ataque, Sombras activa Inteligencia y mira una carta al azar de la mano de Jardín: Kaiju Primordial.",
+    calc:"Triángulo: 2\nD adicional: 0\nNaturaleza: +3\nDAÑO ATACANTE = 5\nHP de Cazador de Nodos = 3"
+  },
+  {
+    state:"intelligenceAfter",
+    sombras:27,jardin:28,
+    attackers:["intelA","intelB","intelSpy"],
+    spent:["intelA","intelB","intelSpy"],
+    attackerLabel:"Triángulo de Naturaleza parasitado",
+    title:"Resolver destrucción sin daño excedente",
+    body:"Cazador de Nodos es destruido. El daño sobrante no se transfiere al Sabueso del Nexo ni al grimorio de Sombras.",
+    calc:"HP: 3 − 5 = 0\nCazador de Nodos destruido.\nNo hay daño excedente transferible."
+  },
+
+  {
+    state:"quad",
+    sombras:27,jardin:28,
+    attackers:["q1","q2","q3","q4"],
+    attackerLabel:"Cuadrilátero básico de Naturaleza",
+    title:"Cuadrilátero básico y pertenencia exclusiva",
+    body:"Jardín forma un Cuadrilátero básico. El Triángulo aliado de apoyo es un escuadrón distinto: ningún nodo puede pertenecer a dos escuadrones durante la misma Fase de Ataque.",
+    calc:"CUADRILÁTERO BÁSICO\n4 nodos perimetrales + 4 vínculos.\nEl Logistrón conecta escuadrones, pero no integra polígonos."
+  },
+  {
+    state:"quad",
+    sombras:27,jardin:28,
+    attackers:["q1","q2","q3","q4"],
+    attackerLabel:"Cuadrilátero básico de Naturaleza",
+    target:"grim-s",
+    targetLabel:"Grimorio de Red de Sombras",
+    title:"Calcular potenciamiento ofensivo",
+    body:"El Triángulo de Naturaleza conectado mediante Núcleo de Enlace está a distancia de red 2. Por ello puede potenciar al Cuadrilátero atacante.",
+    calc:"Cuadrilátero: 3\nD del Guardián: +1\nNaturaleza atacante: +4\nSubtotal: 8\nTriángulo aliado: +3 +3 Naturaleza = +6\nDAÑO ATACANTE = 14"
+  },
+  {
+    state:"quad",
+    sombras:27,jardin:28,
+    attackers:["q1","q2","q3","q4"],
+    defenders:["d1","d2"],
+    attackerLabel:"Cuadrilátero básico de Naturaleza",
+    defenderLabel:"Línea de Saboteadores",
+    target:"grim-s",
+    targetLabel:"Grimorio de Red de Sombras",
+    title:"Sombras declara un bloqueo",
+    body:"Sombras bloquea con su Línea. Un Triángulo aliado está conectado a esa Línea mediante un Logistrón, por lo que añade +1 a la defensa.",
+    calc:"Potenciamiento defensivo: +1\nArmadura: +0\nBonus de defensa: +0\nDEFENSA TOTAL = 1"
+  },
+  {
+    state:"quad",
+    sombras:14,jardin:28,
+    attackers:["q1","q2","q3","q4"],
+    defenders:["d1","d2"],
+    spent:["q1","q2","q3","q4"],
+    attackerLabel:"Cuadrilátero básico de Naturaleza",
+    defenderLabel:"Línea de Saboteadores",
+    target:"grim-s",
+    targetLabel:"Grimorio de Red de Sombras",
+    title:"Aplicar daño neto al grimorio",
+    body:"El bloqueo reduce el daño, pero no lo absorbe. El grimorio de Sombras pierde sellos equivalentes al daño neto.",
+    calc:"DAÑO NETO = 14 − 1 = 13\nSellos de Sombras: 27 − 13 = 14"
+  },
+
+  {
+    state:"absorb",
+    sombras:14,jardin:28,
+    attackers:["absA","absB"],
+    defenders:["absD1","absD2"],
+    attackerLabel:"Línea de Saboteadores",
+    defenderLabel:"Línea de Naturaleza",
+    target:"grim-j",
+    targetLabel:"Grimorio de Jardín Salvaje",
+    title:"Bloqueo que absorbe un ataque",
+    body:"Sombras ataca el grimorio de Jardín con una Línea. Jardín bloquea con otra Línea conectada a un escuadrón aliado mediante un Logistrón.",
+    calc:"Daño atacante de Línea: 1\nDefensa por escuadrón aliado conectado: +1\nDAÑO NETO = 1 − 1 = 0"
+  },
+  {
+    state:"absorb",
+    sombras:14,jardin:28,
+    attackers:["absA","absB"],
+    defenders:["absD1","absD2"],
+    spent:["absA","absB"],
+    attackerLabel:"Línea de Saboteadores",
+    defenderLabel:"Línea de Naturaleza",
+    target:"grim-j",
+    targetLabel:"Grimorio de Jardín Salvaje",
+    title:"Ataque completamente absorbido",
+    body:"Como el daño neto es 0, Jardín no pierde sellos. El escuadrón atacante queda usado aunque no haya causado daño.",
+    calc:"DAÑO NETO ≤ 0\nNo se aplica daño.\nSellos de Jardín: 28"
+  },
+
+  {
+    state:"guard",
+    sombras:14,jardin:28,
+    attackers:["guardA","guardB","guardC"],
+    attackerLabel:"Triángulo de Saboteadores",
+    target:"tree",
+    targetLabel:"Árbol Primigenio",
+    title:"Atacar una carta con Guardaespaldas",
+    body:"Sombras declara un ataque de Triángulo contra Árbol Primigenio. Jardín no bloquea con un escuadrón, pero el Árbol posee Guardaespaldas.",
+    calc:"Triángulo: 2\nD de Anuladora: +1\nD de Saboteadora de Formaciones: +1\nDAÑO NETO CONTRA ÁRBOL = 4"
+  },
+  {
+    state:"guard",
+    sombras:14,jardin:28,
+    attackers:["guardA","guardB","guardC"],
+    attackerLabel:"Triángulo de Saboteadores",
+    target:"tree",
+    redirected:"guardCore",
+    targetLabel:"Árbol Primigenio",
+    title:"Redirigir daño con Guardaespaldas",
+    body:"Árbol Primigenio redirige el daño neto al Núcleo de Enlace directamente vinculado. La flecha violeta muestra el recorrido de la redirección.",
+    calc:"Árbol Primigenio no pierde HP.\nNúcleo de Enlace: HP 2 − 4 = 0\nEl Núcleo es destruido."
+  },
+  {
+    state:"guardAfter",
+    sombras:14,jardin:28,
+    attackers:["guardA","guardB","guardC"],
+    spent:["guardA","guardB","guardC"],
+    attackerLabel:"Triángulo de Saboteadores",
+    title:"Resultado de Guardaespaldas",
+    body:"El Núcleo de Enlace ya no está en el tablero. Árbol Primigenio sobrevive porque el daño neto fue redirigido antes de aplicarse.",
+    calc:"Núcleo destruido.\nÁrbol Primigenio conserva 4 HP.\nTriángulo atacante: usado."
+  },
+
+  {
+    state:"quadExpanded",
+    sombras:14,jardin:28,
+    attackers:["x1","x2","x3","x4","inside"],
+    attackerLabel:"Cuadrilátero ampliado de Naturaleza",
+    title:"Cuadrilátero ampliado",
+    body:"Raíz Madre está dentro del perímetro y se vincula a tres nodos perimetrales. Por eso el escuadrón es un Cuadrilátero ampliado con X = 1.",
+    calc:"Daño base = 3 + X\nX = 1\nBASE DEL CUADRILÁTERO AMPLIADO = 4"
+  },
+  {
+    state:"quadExpanded",
+    sombras:14,jardin:28,
+    attackers:["x1","x2","x3","x4","inside"],
+    attackerLabel:"Cuadrilátero ampliado de Naturaleza",
+    target:"quadTarget",
+    targetLabel:"Cazador de Nodos",
+    title:"Atacar desde el Cuadrilátero ampliado",
+    body:"Jardín ataca a Cazador de Nodos. No hay bloqueo. Las cinco unidades del escuadrón son Naturaleza y aportan +1 cada una al daño.",
+    calc:"Base ampliada: 4\nD del Guardián: +1\nNaturaleza: +5\nDAÑO ATACANTE = 10\nHP objetivo = 3"
+  },
+  {
+    state:"quadExpandedAfter",
+    sombras:14,jardin:28,
+    attackers:["x1","x2","x3","x4","inside"],
+    spent:["x1","x2","x3","x4","inside"],
+    attackerLabel:"Cuadrilátero ampliado de Naturaleza",
+    title:"Destruir el objetivo ampliado",
+    body:"Cazador de Nodos queda destruido. El nodo interno no realiza un ataque propio: mejora el daño base y el potenciamiento del mismo Cuadrilátero.",
+    calc:"HP: 3 − 10 = 0\nObjetivo destruido.\nCuadrilátero ampliado: usado."
+  },
+
+  {
+    state:"penta",
+    sombras:14,jardin:28,
+    attackers:["p1","p2","p3","p4","p5"],
+    attackerLabel:"Pentágono básico de Naturaleza",
+    title:"Pentágono básico",
+    body:"Jardín asigna cinco nodos al Pentágono. Además de su propio ataque, este escuadrón podrá potenciar a otro escuadrón conectado a cualquier distancia.",
+    calc:"PENTÁGONO BÁSICO\n5 nodos + 5 vínculos.\nDaño base propio: 4.\nAlcance de potenciamiento: ilimitado."
+  },
+  {
+    state:"penta",
+    sombras:14,jardin:28,
+    attackers:["p1","p2","p3","p4","p5"],
+    attackerLabel:"Pentágono básico de Naturaleza",
+    target:"giant",
+    targetLabel:"Gigante de Piedra",
+    title:"Primer ataque: atacar al Gigante",
+    body:"El Pentágono ataca a Gigante de Piedra. No hay bloqueo. Éste será el único ataque que ese Pentágono podrá declarar durante esta Fase de Ataque.",
+    calc:"Pentágono: 4\nD del Guardián: +1\nNaturaleza: +5\nDAÑO ATACANTE = 10\nHP del Gigante = 7"
+  },
+  {
+    state:"pentaAfterFirst",
+    sombras:14,jardin:28,
+    spent:["p1","p2","p3","p4","p5"],
+    attackerLabel:"Pentágono básico de Naturaleza",
+    title:"El Pentágono queda usado",
+    body:"Gigante de Piedra es destruido. Aunque el Pentágono ya atacó, sigue conectado a la red y continúa proporcionando su potenciamiento.",
+    calc:"HP: 7 − 10 = 0\nGigante destruido.\nPentágono: usado para atacar,\npero todavía potencia."
+  },
+  {
+    state:"pentaAfterFirst",
+    sombras:14,jardin:28,
+    attackers:["pLineA","pLineB"],
+    spent:["p1","p2","p3","p4","p5"],
+    attackerLabel:"Línea de Naturaleza",
+    target:"pTarget",
+    targetLabel:"Cazador de Nodos",
+    title:"Alcance ilimitado del Pentágono",
+    body:"La Línea de Naturaleza se encuentra a distancia de red 3 del Pentágono, separada por dos Logistrones. Una Línea o Triángulo no alcanzaría tan lejos, pero un Pentágono sí.",
+    calc:"Línea: 1\nNaturaleza de la Línea: +2\nPentágono: +7 +5 Naturaleza = +12\nDAÑO ATACANTE = 15"
+  },
+  {
+    state:"pentaAfterSecond",
+    sombras:14,jardin:28,
+    spent:["p1","p2","p3","p4","p5","pLineA","pLineB"],
+    attackerLabel:"Línea de Naturaleza",
+    title:"Resolver el segundo ataque",
+    body:"Cazador de Nodos es destruido. El orden importa: el Pentágono atacó primero y luego potenció a una Línea que todavía podía declarar su propio ataque.",
+    calc:"HP: 3 − 15 = 0\nCazador destruido.\nLínea: usada."
+  },
+
+  {
+    state:"pentaExpanded",
+    sombras:14,jardin:28,
+    attackers:["e1","e2","e3","e4","e5","eInside"],
+    attackerLabel:"Pentágono ampliado de Naturaleza",
+    title:"Pentágono ampliado",
+    body:"Raíz Madre es un nodo interno vinculado a tres cartas del perímetro. El Pentágono es ampliado con Y = 1.",
+    calc:"Daño base = 4 + 2Y\nY = 1\nBASE DEL PENTÁGONO AMPLIADO = 6"
+  },
+  {
+    state:"pentaExpanded",
+    sombras:14,jardin:28,
+    attackers:["e1","e2","e3","e4","e5","eInside"],
+    defenders:["ed1","ed2"],
+    attackerLabel:"Pentágono ampliado de Naturaleza",
+    defenderLabel:"Línea de Saboteadores",
+    target:"grim-s",
+    targetLabel:"Grimorio de Red de Sombras",
+    title:"Bloquear un Pentágono ampliado",
+    body:"Jardín ataca el grimorio de Sombras. Sombras bloquea con una Línea conectada a otra Línea aliada por un Núcleo de Enlace.",
+    calc:"Ataque: base 6 + D 1 + Naturaleza 6 = 13\nDefensa: +1 por escuadrón aliado conectado\nDAÑO NETO = 13 − 1 = 12"
+  },
+  {
+    state:"pentaExpanded",
+    sombras:2,jardin:28,
+    attackers:["e1","e2","e3","e4","e5","eInside"],
+    defenders:["ed1","ed2"],
+    spent:["e1","e2","e3","e4","e5","eInside"],
+    attackerLabel:"Pentágono ampliado de Naturaleza",
+    defenderLabel:"Línea de Saboteadores",
+    target:"grim-s",
+    targetLabel:"Grimorio de Red de Sombras",
+    title:"Fin de la Fase de Ataque",
+    body:"El Pentágono ampliado rompe 12 sellos. Después de resolver todos los ataques, la partida continuaría con la Fase de Salida.",
+    calc:"Sellos de Sombras: 14 − 12 = 2\nPentágono ampliado: usado.\nSiguiente fase: Salida."
+  }
+];
+
+let current = 0;
+let playback = null;
+
+function getCardClass(card){
+  if(card.side === "espia") return "espia";
+  if(card.side === "logistron") return "logistron";
+  return card.side;
+}
+
+function isIn(list,id){
+  return Array.isArray(list) && list.includes(id);
+}
+
+function getRole(item,step){
+  if(step.invalid && step.target === item.id) return ["NO ELEGIBLE","invalid"];
+  if(step.redirected === item.id) return ["RECIBE DAÑO","redirected"];
+  if(step.target === item.id) return ["OBJETIVO","target"];
+  if(isIn(step.defenders,item.id)) return ["DEFIENDE","defender"];
+  if(isIn(step.attackers,item.id)) return ["ATACA","attacker"];
+  if(isIn(step.spent,item.id)) return ["USADO","spent"];
+  return null;
+}
+
+function getClasses(item,step){
+  const classes = ["card",getCardClass(CARDS[item.card])];
+
+  if(isIn(step.attackers,item.id)) classes.push("attacker");
+  if(isIn(step.defenders,item.id)) classes.push("defender");
+  if(isIn(step.spent,item.id)) classes.push("spent");
+
+  if(step.target === item.id){
+    classes.push("target");
+    if(step.invalid) classes.push("invalid");
+  }
+
+  if(step.redirected === item.id) classes.push("redirected");
+
+  return classes.join(" ");
+}
+
+function buildBoard(stateName,step){
+  const state = STATES[stateName];
+  const canvas = document.getElementById("board-canvas");
+
+  canvas.innerHTML = `
+    <svg class="links" id="links">
+      <defs>
+        <marker id="attack-arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#ffd166"></path>
+        </marker>
+
+        <marker id="invalid-arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#ff7181"></path>
+        </marker>
+
+        <marker id="redirect-arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="#eaa4ff"></path>
+        </marker>
+      </defs>
+    </svg>
+  `;
+
+  for(const [zone,label] of ZONES){
+    const layer = document.createElement("div");
+    layer.className = `layer ${zone === "fr" ? "frontier" : zone}`;
+    layer.dataset.zone = zone;
+    layer.innerHTML = `<span class="layer-label">${label}</span>`;
+    canvas.appendChild(layer);
+  }
+
+  for(const item of state.nodes){
+    const card = CARDS[item.card];
+    const currentHp = item.hp ?? card.hp;
+    const role = getRole(item,step);
+
+    const element = document.createElement("button");
+    element.className = getClasses(item,step);
+    element.dataset.nodeId = item.id;
+    element.style.gridColumn = item.col;
+
+    element.innerHTML = `
+      ${item.badge ? `<span class="card-badge">${item.badge}</span>` : ""}
+      ${role ? `<span class="card-role">${role[0]}</span>` : ""}
+      <div class="card-name">${card.name}</div>
+      <div class="card-stats">HP ${currentHp} · D ${card.d} · V ${card.v}</div>
+    `;
+
+    element.addEventListener("click",() => showCard(item.card));
+
+    canvas
+      .querySelector(`[data-zone="${item.zone}"]`)
+      .appendChild(element);
+  }
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => drawLinks(state,step));
+  });
+}
+
+function centerOf(element,relativeTo){
+  const r = element.getBoundingClientRect();
+
+  return {
+    x:r.left + r.width / 2 - relativeTo.left,
+    y:r.top + r.height / 2 - relativeTo.top
+  };
+}
+
+function drawLinks(state,step){
+  const canvas = document.getElementById("board-canvas");
+  const svg = document.getElementById("links");
+  const svgRect = svg.getBoundingClientRect();
+  const byId = new Map(state.nodes.map(node => [node.id,node]));
+
+  svg.querySelectorAll("line:not(.keep), path:not(.keep)").forEach(el => el.remove());
+
+  for(const relation of state.links){
+    const nodeA = byId.get(relation.a);
+    const nodeB = byId.get(relation.b);
+
+    const aElement = canvas.querySelector(`[data-node-id="${relation.a}"]`);
+    const bElement = canvas.querySelector(`[data-node-id="${relation.b}"]`);
+
+    if(!nodeA || !nodeB || !aElement || !bElement) continue;
+
+    const a = centerOf(aElement,svgRect);
+    const b = centerOf(bElement,svgRect);
+
+    const classes = ["link",relation.type];
+
+    if(
+      isIn(step.attackers,nodeA.id) &&
+      isIn(step.attackers,nodeB.id)
+    ){
+      classes.push("attacking-link");
+    }
+
+    if(
+      isIn(step.defenders,nodeA.id) &&
+      isIn(step.defenders,nodeB.id)
+    ){
+      classes.push("defending-link");
+    }
+
+    const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+    line.setAttribute("x1",a.x);
+    line.setAttribute("y1",a.y);
+    line.setAttribute("x2",b.x);
+    line.setAttribute("y2",b.y);
+    line.setAttribute("class",classes.join(" "));
+    svg.appendChild(line);
+  }
+
+  drawAttackArrow(state,step,svg,svgRect);
+  drawRedirectArrow(step,svg,svgRect);
+}
+
+function drawAttackArrow(state,step,svg,svgRect){
+  if(!step.target || step.target === "grim-s" || step.target === "grim-j") return;
+
+  const canvas = document.getElementById("board-canvas");
+
+  const attackerElements = state.nodes
+    .filter(node => isIn(step.attackers,node.id))
+    .map(node => canvas.querySelector(`[data-node-id="${node.id}"]`))
+    .filter(Boolean);
+
+  const targetElement = canvas.querySelector(`[data-node-id="${step.target}"]`);
+
+  if(!attackerElements.length || !targetElement) return;
+
+  const points = attackerElements.map(el => centerOf(el,svgRect));
+
+  const source = {
+    x:points.reduce((sum,p) => sum + p.x,0) / points.length,
+    y:points.reduce((sum,p) => sum + p.y,0) / points.length
+  };
+
+  const target = centerOf(targetElement,svgRect);
+
+  const arrow = document.createElementNS("http://www.w3.org/2000/svg","line");
+  arrow.setAttribute("x1",source.x);
+  arrow.setAttribute("y1",source.y);
+  arrow.setAttribute("x2",target.x);
+  arrow.setAttribute("y2",target.y);
+  arrow.setAttribute(
+    "class",
+    `attack-arrow ${step.invalid ? "invalid-arrow" : ""}`
+  );
+
+  svg.appendChild(arrow);
+}
+
+function drawRedirectArrow(step,svg,svgRect){
+  if(!step.target || !step.redirected) return;
+
+  const canvas = document.getElementById("board-canvas");
+
+  const from = canvas.querySelector(`[data-node-id="${step.target}"]`);
+  const to = canvas.querySelector(`[data-node-id="${step.redirected}"]`);
+
+  if(!from || !to) return;
+
+  const source = centerOf(from,svgRect);
+  const target = centerOf(to,svgRect);
+
+  const arrow = document.createElementNS("http://www.w3.org/2000/svg","line");
+  arrow.setAttribute("x1",source.x);
+  arrow.setAttribute("y1",source.y);
+  arrow.setAttribute("x2",target.x);
+  arrow.setAttribute("y2",target.y);
+  arrow.setAttribute("class","redirect-arrow");
+
+  svg.appendChild(arrow);
+}
+
+function setGrimoireTarget(target){
+  document
+    .getElementById("sombras-grimoire")
+    .classList.toggle("targeted",target === "grim-s");
+
+  document
+    .getElementById("jardin-grimoire")
+    .classList.toggle("targeted",target === "grim-j");
+}
+
+function renderSummary(step){
+  const summary = document.getElementById("combat-summary");
+  const chunks = [];
+
+  if(step.attackerLabel){
+    chunks.push(`<span class="combat-chip attack">ATACA: ${step.attackerLabel}</span>`);
+  }
+
+  if(step.defenderLabel){
+    chunks.push(`<span class="combat-chip defense">DEFIENDE: ${step.defenderLabel}</span>`);
+  }
+
+  if(step.targetLabel){
+    chunks.push(`<span class="combat-chip target">OBJETIVO: ${step.targetLabel}</span>`);
+  }
+
+  if(!chunks.length){
+    chunks.push(`<span class="combat-chip">Estado preparado para la Fase de Ataque.</span>`);
+  }
+
+  summary.innerHTML = chunks.join("");
+}
+
+function render(){
+  const step = STEPS[current];
+
+  document.getElementById("sombras-seals").textContent = step.sombras;
+  document.getElementById("jardin-seals").textContent = step.jardin;
+
+  document.getElementById("actions-used").textContent = "4 / 4";
+  document.getElementById("actions-left").textContent = "0";
+
+  document.getElementById("step-counter").textContent =
+    `PASO ${current + 1} / ${STEPS.length}`;
+
+  document.getElementById("step-title").textContent = step.title;
+  document.getElementById("step-body").textContent = step.body;
+  document.getElementById("calculation").textContent = step.calc;
+
+  setGrimoireTarget(step.target);
+  renderSummary(step);
+  buildBoard(step.state,step);
+}
+
+function goTo(index){
+  current = Math.max(0,Math.min(STEPS.length - 1,index));
+  render();
+}
+
+function showCard(cardId){
+  const card = CARDS[cardId];
+
+  document.getElementById("modal-name").textContent = card.name;
+
+  document.getElementById("modal-meta").textContent =
+    `${card.faction} · HP ${card.hp} · D ${card.d} · V ${card.v} · ${card.extra}`;
+
+  document.getElementById("modal-ability").textContent = card.ability;
+  document.getElementById("modal-comment").textContent = card.comment;
+
+  document.getElementById("modal").classList.add("open");
+}
+
+function closeModal(){
+  document.getElementById("modal").classList.remove("open");
+}
+
+function stopPlayback(){
+  if(playback){
+    clearInterval(playback);
+    playback = null;
+  }
+
+  document.getElementById("play").textContent =
+    "▶ Reproducir paso a paso";
+}
+
+document.getElementById("previous").addEventListener("click",() => {
+  stopPlayback();
+  goTo(current - 1);
+});
+
+document.getElementById("next").addEventListener("click",() => {
+  stopPlayback();
+  goTo(current + 1);
+});
+
+document.getElementById("restart").addEventListener("click",() => {
+  stopPlayback();
+  goTo(0);
+});
+
+document.getElementById("play").addEventListener("click",() => {
+  if(playback){
+    stopPlayback();
+    return;
+  }
+
+  document.getElementById("play").textContent = "❚❚ Pausar";
+
+  playback = setInterval(() => {
+    if(current >= STEPS.length - 1){
+      stopPlayback();
+      return;
+    }
+
+    goTo(current + 1);
+  },5000);
+});
+
+document.getElementById("modal-close").addEventListener("click",closeModal);
+
+document.getElementById("modal").addEventListener("click",event => {
+  if(event.target.id === "modal") closeModal();
+});
+
+document.getElementById("board").addEventListener("scroll",() => {
+  const step = STEPS[current];
+  drawLinks(STATES[step.state],step);
+});
+
+window.addEventListener("resize",render);
+
+render();
+</script>
+</body>
+</html>
