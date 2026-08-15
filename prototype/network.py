@@ -358,19 +358,31 @@ class Network:
         for start in nodes_list:
             path = [start]
             visited = {start}
-            result = self._dfs_cycle(start, start, path, visited, size, nodes)
+            result = self._dfs_cycle(start, start, path, visited, size, nodes, cards)
             if result:
                 return set(result)
         return None
 
     def _dfs_cycle(self, start: int, current: int, path: list[int],
                    visited: set[int], target_size: int,
-                   valid_nodes: set[int]) -> Optional[list[int]]:
-        """DFS to find a cycle of target_size."""
+                   valid_nodes: set[int],
+                   cards: dict[int, CardInstance]) -> Optional[list[int]]:
+        """DFS to find a cycle of target_size.
+
+        A candidate cycle is only accepted if its cards span at least two
+        board layers. Under layer-based link distances any two same-layer
+        cards are 'corta', so three (or more) cards in a straight line on one
+        layer close a link-graph cycle — but that is geometrically a line, not
+        a polygon. Rejecting it here (and letting DFS backtrack to a real
+        cycle) is what stops the bot from "forming a triangle" that is
+        actually three collinear cards.
+        """
         if len(path) == target_size:
             # Check if last node connects back to start
             if start in self.links.get(current, set()):
-                return path
+                if self._spans_two_layers(path, cards):
+                    return path
+                return None  # same-layer degenerate cycle — keep searching
             return None
 
         if len(path) > target_size:
@@ -381,18 +393,34 @@ class Network:
                 continue
             if neighbor in visited:
                 continue
-            # Prune: can't form a cycle if we can't reach start in remaining steps
-            # (simple optimization - skip for now)
 
             path.append(neighbor)
             visited.add(neighbor)
-            result = self._dfs_cycle(start, neighbor, path, visited, target_size, valid_nodes)
+            result = self._dfs_cycle(start, neighbor, path, visited,
+                                     target_size, valid_nodes, cards)
             if result:
                 return result
             visited.discard(neighbor)
             path.pop()
 
         return None
+
+    @staticmethod
+    def _spans_two_layers(cycle: list[int],
+                          cards: dict[int, CardInstance]) -> bool:
+        """True if the cycle's cards occupy at least two distinct board layers.
+
+        Layer-based link distances made same-layer cycles possible; a polygon
+        (triangle/square/pentagon) must span >=2 layers or it is a straight
+        line. Frontier cards (position[0] == -1) are excluded from squad
+        detection anyway, but skip them defensively.
+        """
+        layers = set()
+        for cid in cycle:
+            card = cards.get(cid)
+            if card and card.position and card.position[0] != -1:
+                layers.add(card.position[1])
+        return len(layers) >= 2
 
     def _find_internal_nodes(self, cycle: set[int], remaining: set[int],
                              cards: dict[int, CardInstance]) -> set[int]:

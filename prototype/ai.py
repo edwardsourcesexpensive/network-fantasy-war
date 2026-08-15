@@ -352,10 +352,17 @@ class BotPlayer:
         link_count = 0
         placed = self._get_positions(game, player)
 
-        # Phase A: Triangle hunt
+        # Phase A: Triangle hunt — a real triangle spans >=2 layers. Three
+        # cards on the SAME layer are a straight line, not a triangle. Under
+        # layer-based distances every same-layer pair is 'corta', so the old
+        # all-corta test would happily link three collinear cards into a fake
+        # triangle. Require at least two distinct layers, then confirm all
+        # three pairwise distances are valid link distances.
         for i, ci in enumerate(placed):
             for j_, cj in enumerate(placed[i + 1:], i + 1):
                 for k_, ck in enumerate(placed[j_ + 1:], j_ + 1):
+                    if len({ci[0], cj[0], ck[0]}) < 2:
+                        continue
                     dist_ij = game.board.spatial_distance(
                         (player, ci[0] + 1, ci[1]),
                         (player, cj[0] + 1, cj[1]),
@@ -368,7 +375,7 @@ class BotPlayer:
                         (player, ck[0] + 1, ck[1]),
                         (player, ci[0] + 1, ci[1]),
                     )
-                    if not (dist_ij == 'corta' and dist_jk == 'corta' and dist_ki == 'corta'):
+                    if not (dist_ij and dist_jk and dist_ki):
                         continue
 
                     cid_i = game.board.cells[player][ci[0]][ci[1]]
