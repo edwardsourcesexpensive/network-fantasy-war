@@ -169,8 +169,18 @@ def serve_tutorial():
     """Serve the guided tutorial HTML from the project root."""
     import os as _os
     from flask import send_file as _send_file
-    tutorial_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))), 
+    tutorial_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
                                   'tutorial-network-fantasy-war.html')
+    return _send_file(tutorial_path, mimetype='text/html')
+
+
+@app.route('/tutorial-ataque')
+def serve_tutorial_ataque():
+    """Serve the attack-phase tutorial HTML from the project root."""
+    import os as _os
+    from flask import send_file as _send_file
+    tutorial_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
+                                  'tutorial-fase-ataque-network-fantasy-war.html')
     return _send_file(tutorial_path, mimetype='text/html')
 
 
